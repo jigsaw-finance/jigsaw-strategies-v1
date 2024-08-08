@@ -1,3 +1,6 @@
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "lib/jigsaw-protocol-v1"]
+	path = lib/jigsaw-protocol-v1
+	url = https://github.com/jigsaw-finance/jigsaw-protocol-v1
