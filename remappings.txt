@@ -1,0 +1,16 @@
+ds-test/=lib/jigsaw-protocol-v1/lib/openzeppelin-contracts/lib/forge-std/lib/ds-test/src/
+erc4626-tests/=lib/jigsaw-protocol-v1/lib/openzeppelin-contracts/lib/erc4626-tests/
+forge-std/=lib/forge-std/src/
+
+@openzeppelin/contracts-upgradeable/=lib/jigsaw-protocol-v1/lib/openzeppelin-contracts-upgradeable/contracts/
+@openzeppelin/contracts/=lib/jigsaw-protocol-v1/lib/openzeppelin-contracts/contracts/
+@uniswap/v3-core/=lib/jigsaw-protocol-v1/lib/v3-core/
+@uniswap/v3-periphery/=lib/jigsaw-protocol-v1/lib/v3-periphery/
+
+openzeppelin-contracts-upgradeable/=lib/jigsaw-protocol-v1/lib/openzeppelin-contracts-upgradeable/
+openzeppelin-contracts/=lib/jigsaw-protocol-v1/lib/openzeppelin-contracts/
+v3-core/=lib/jigsaw-protocol-v1/lib/v3-core/
+v3-periphery/=lib/jigsaw-protocol-v1/lib/v3-periphery/contracts/
+
+jigsaw-protocol-v1/=lib/jigsaw-protocol-v1/
+@jigsaw/=lib/jigsaw-protocol-v1/src/
