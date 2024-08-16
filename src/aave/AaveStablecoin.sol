@@ -334,7 +334,7 @@ contract AaveStablecoin is IStrategy, StrategyBase {
             IHolding(_recipient).transfer({ _token: rewardToken, _to: feeAddr, _amount: tempData.fee });
         }
 
-        emit RewardsClaim({
+        emit Rewards({
             recipient: _recipient,
             rewards: tempData.rewardsResult,
             rewardTokens: tempData.rewardTokensResult
