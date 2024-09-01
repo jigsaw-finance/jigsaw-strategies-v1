@@ -8,7 +8,7 @@ import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IAaveV2LendingPool } from "./interfaces/IAaveV2LendingPool.sol";
-import { IAaveV2RewardsController } from "./interfaces/IAaveV2RewardsController.sol";
+import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 
@@ -104,7 +104,7 @@ contract AaveV2Strategy is IStrategy, StrategyBase {
     /**
      * @notice The Aave Rewards Controller contract.
      */
-    IAaveV2RewardsController public rewardsController;
+    IRewardsController public rewardsController;
 
     /**
      * @notice The number of decimals of the strategy's shares.
@@ -151,7 +151,7 @@ contract AaveV2Strategy is IStrategy, StrategyBase {
         require(_tokenOut != address(0), "3000");
 
         managerContainer = IManagerContainer(_managerContainer);
-        rewardsController = IAaveV2RewardsController(_rewardsController);
+        rewardsController = IRewardsController(_rewardsController);
         lendingPool = IAaveV2LendingPool(_lendingPool);
         rewardToken = rewardsController.REWARD_TOKEN();
         tokenIn = _tokenIn;
@@ -352,7 +352,7 @@ contract AaveV2Strategy is IStrategy, StrategyBase {
      */
     function setRewardsController(address _newAddr) external onlyValidAddress(_newAddr) onlyOwner {
         emit RewardsControllerUpdated({ _old: address(rewardsController), _new: _newAddr });
-        rewardsController = IAaveV2RewardsController(_newAddr);
+        rewardsController = IRewardsController(_newAddr);
         rewardToken = rewardsController.REWARD_TOKEN();
     }
 
