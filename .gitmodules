@@ -4,3 +4,6 @@
 [submodule "lib/jigsaw-protocol-v1"]
 	path = lib/jigsaw-protocol-v1
 	url = https://github.com/jigsaw-finance/jigsaw-protocol-v1
+[submodule "lib/aave-v3-periphery"]
+	path = lib/aave-v3-periphery
+	url = https://github.com/aave/aave-v3-periphery
