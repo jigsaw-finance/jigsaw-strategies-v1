@@ -7,8 +7,20 @@ out/
 /broadcast/*/31337/
 /broadcast/**/dry-run/
 
+coverage
+
 # Docs
 docs/
 
 # Dotenv file
 .env
+
+.vs/*
+.VSCodeCounter/*
+.vscode/*
+
+report
+lcov.info
+out
+
+.DS_Store
