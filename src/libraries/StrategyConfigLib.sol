@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { IReceiptTokenFactory } from "@jigsaw/interfaces/core/IReceiptTokenFactory.sol";
-import { IStrategyManager } from "@jigsaw/interfaces/core/IStrategyManager.sol";
+import { IReceiptTokenFactory } from "@jigsaw/src/interfaces/core/IReceiptTokenFactory.sol";
+import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
 /**
  * @title Strategy Configuration Library
