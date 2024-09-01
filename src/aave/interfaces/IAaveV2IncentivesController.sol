@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 /// @title Interface for the Aave Incentives Controller contract
 /// @author Cosmin Grigore (@gcosmintech)
-interface IAaveIncentivesController {
+interface IAaveV2IncentivesController {
     /**
      * @dev Claims reward for an user, on all the assets of the lending pool, accumulating the pending rewards
      * @param amount Amount of rewards to claim

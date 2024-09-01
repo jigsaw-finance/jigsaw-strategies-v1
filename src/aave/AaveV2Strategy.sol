@@ -7,23 +7,23 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
-import { IAaveIncentivesController } from "./interfaces/IAaveIncentivesController.sol";
-import { IAaveLendingPool } from "./interfaces/IAaveLendingPool.sol";
+import { IAaveV2IncentivesController } from "./interfaces/IAaveV2IncentivesController.sol";
+import { IAaveV2LendingPool } from "./interfaces/IAaveV2LendingPool.sol";
 
-import { IHolding } from "@jigsaw/interfaces/core/IHolding.sol";
+import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 
-import { IManagerContainer } from "@jigsaw/interfaces/core/IManagerContainer.sol";
-import { IReceiptToken } from "@jigsaw/interfaces/core/IReceiptToken.sol";
-import { IStrategy } from "@jigsaw/interfaces/core/IStrategy.sol";
+import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
+import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
+import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
-import { StrategyBase } from "@jigsaw/strategies/StrategyBase.sol";
+import { StrategyBase } from "@jigsaw/src/strategies/StrategyBase.sol";
 
 /**
- * @title AaveStablecoin Strategy.
- * @dev Strategy used for USDC, USDT, DAI, or other stablecoins.
- * @author Cosmin Grigore (@gcosmintech)
+ * @title AaveV2Strategy
+ * @dev Strategy used for Aave lending pool.
+ * @author Hovooo (@hovooo)
  */
-contract AaveStablecoin is IStrategy, StrategyBase {
+contract AaveV2Strategy is IStrategy, StrategyBase {
     using SafeERC20 for IERC20;
 
     // -- Custom types --
@@ -99,12 +99,12 @@ contract AaveStablecoin is IStrategy, StrategyBase {
     /**
      * @notice The Aave Lending Pool contract.
      */
-    IAaveLendingPool public immutable lendingPool;
+    IAaveV2LendingPool public immutable lendingPool;
 
     /**
      * @notice The Aave Incentives Controller contract.
      */
-    IAaveIncentivesController public incentivesController;
+    IAaveV2IncentivesController public incentivesController;
 
     /**
      * @notice The number of decimals of the strategy's shares.
@@ -124,7 +124,7 @@ contract AaveStablecoin is IStrategy, StrategyBase {
     // -- Constructor --
 
     /**
-     * @notice Constructor for the AaveStablecoin strategy.
+     * @notice Constructor for the Aave Strategy.
      *
      * @param _managerContainer The address of the contract that contains the manager contract.
      * @param _lendingPool The address of the Aave Lending Pool.
@@ -151,8 +151,8 @@ contract AaveStablecoin is IStrategy, StrategyBase {
         require(_tokenOut != address(0), "3000");
 
         managerContainer = IManagerContainer(_managerContainer);
-        incentivesController = IAaveIncentivesController(_incentivesController);
-        lendingPool = IAaveLendingPool(_lendingPool);
+        incentivesController = IAaveV2IncentivesController(_incentivesController);
+        lendingPool = IAaveV2LendingPool(_lendingPool);
         rewardToken = incentivesController.REWARD_TOKEN();
         tokenIn = _tokenIn;
         tokenOut = _tokenOut;
@@ -352,7 +352,7 @@ contract AaveStablecoin is IStrategy, StrategyBase {
      */
     function setIncentivesController(address _newAddr) external onlyValidAddress(_newAddr) onlyOwner {
         emit IncentivesControllerUpdated({ _old: address(incentivesController), _new: _newAddr });
-        incentivesController = IAaveIncentivesController(_newAddr);
+        incentivesController = IAaveV2IncentivesController(_newAddr);
         rewardToken = incentivesController.REWARD_TOKEN();
     }
 
