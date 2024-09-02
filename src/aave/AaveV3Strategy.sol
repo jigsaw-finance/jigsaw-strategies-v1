@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
-import { IAaveV2LendingPool } from "./interfaces/IAaveV2LendingPool.sol";
+import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
@@ -200,13 +200,12 @@ contract AaveV2Strategy is IStrategy, StrategyBase {
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
         OperationsLib.safeApprove({ token: _asset, to: address(lendingPool), value: _amount });
-        lendingPool.deposit({ asset: _asset, amount: _amount, onBehalfOf: _recipient, referralCode: refCode });
+        lendingPool.supply({ asset: _asset, amount: _amount, onBehalfOf: _recipient, referralCode: refCode });
         uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
 
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += balanceAfter - balanceBefore;
         totalInvestments += _amount;
-
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
@@ -315,13 +314,20 @@ contract AaveV2Strategy is IStrategy, StrategyBase {
         address[] memory tokens = new address[](1);
         tokens[0] = tokenOut;
 
-        tempData.rewardsBalanceBefore = IERC20(rewardToken).balanceOf(_recipient);
+        tempData.rewardsBalanceBefore = IERC20(tempData.rewardTokensResult[0]).balanceOf(_recipient);
+
         (tempData.success, tempData.returnData) = IHolding(_recipient).genericCall({
             _contract: address(rewardsController),
-            _call: abi.encodeWithSignature("claimRewards(address[],uint256,address)", tokens, type(uint256).max, _recipient)
+            _call: abi.encodeWithSignature(
+                "claimRewards(address[],uint256,address)",
+                tokens,
+                type(uint256).max,
+                _recipient,
+                tempData.rewardTokensResult[0]
+                )
         });
         require(tempData.success, OperationsLib.getRevertMsg(tempData.returnData));
-        tempData.rewardsBalanceAfter = IERC20(rewardToken).balanceOf(_recipient);
+        tempData.rewardsBalanceAfter = IERC20(tempData.rewardTokensResult[0]).balanceOf(_recipient);
         tempData.amount = tempData.rewardsBalanceAfter - tempData.rewardsBalanceBefore;
 
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
@@ -330,8 +336,8 @@ contract AaveV2Strategy is IStrategy, StrategyBase {
         if (tempData.fee > 0) {
             tempData.amount -= tempData.fee;
             address feeAddr = _getManager().feeAddress();
-            emit FeeTaken(rewardToken, feeAddr, tempData.fee);
-            IHolding(_recipient).transfer({ _token: rewardToken, _to: feeAddr, _amount: tempData.fee });
+            emit FeeTaken(tempData.rewardTokensResult[0], feeAddr, tempData.fee);
+            IHolding(_recipient).transfer({ _token: tempData.rewardTokensResult[0], _to: feeAddr, _amount: tempData.fee });
         }
 
         emit Rewards({
