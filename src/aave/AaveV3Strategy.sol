@@ -1,29 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
-import { OperationsLib } from "../libraries/OperationsLib.sol";
-import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
+import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
-
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
-import { StrategyBase } from "@jigsaw/src/strategies/StrategyBase.sol";
+import { OperationsLib } from "../libraries/OperationsLib.sol";
+import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
+
+import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
 /**
  * @title AaveV3Strategy
  * @dev Strategy used for Aave lending pool.
  * @author Hovooo (@hovooo)
  */
-contract AaveV3Strategy is IStrategy, StrategyBase {
+contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
 
     // -- Custom types --
@@ -79,12 +78,12 @@ contract AaveV3Strategy is IStrategy, StrategyBase {
     /**
      * @notice The LP token address.
      */
-    address public immutable override tokenIn;
+    address public override tokenIn;
 
     /**
      * @notice The Aave receipt token address.
      */
-    address public immutable override tokenOut;
+    address public override tokenOut;
 
     /**
      * @notice The reward token offered to users.
@@ -94,12 +93,12 @@ contract AaveV3Strategy is IStrategy, StrategyBase {
     /**
      * @notice The receipt token associated with this strategy.
      */
-    IReceiptToken public immutable override receiptToken;
+    IReceiptToken public override receiptToken;
 
     /**
      * @notice The Aave Lending Pool contract.
      */
-    IAaveV2LendingPool public immutable lendingPool;
+    IPool public lendingPool;
 
     /**
      * @notice The Aave Rewards Controller contract.
@@ -109,7 +108,7 @@ contract AaveV3Strategy is IStrategy, StrategyBase {
     /**
      * @notice The number of decimals of the strategy's shares.
      */
-    uint256 public immutable override sharesDecimals;
+    uint256 public override sharesDecimals;
 
     /**
      * @notice The total investments in the strategy.
@@ -123,8 +122,14 @@ contract AaveV3Strategy is IStrategy, StrategyBase {
 
     // -- Constructor --
 
+    constructor() {
+        _disableInitializers();
+    }
+
+    // -- Initialization --
+
     /**
-     * @notice Constructor for the Aave Strategy.
+     * @notice Initializer for the Aave Strategy.
      *
      * @param _managerContainer The address of the contract that contains the manager contract.
      * @param _lendingPool The address of the Aave Lending Pool.
@@ -134,37 +139,39 @@ contract AaveV3Strategy is IStrategy, StrategyBase {
      * @param _receiptTokenName The name of the receipt token.
      * @param _receiptTokenSymbol The symbol of the receipt token.
      */
-    constructor(
+    function initialize(
         address _owner,
         address _managerContainer,
         address _lendingPool,
         address _rewardsController,
+        address _rewardToken,
         address _tokenIn,
         address _tokenOut,
         string memory _receiptTokenName,
         string memory _receiptTokenSymbol
-    ) StrategyBase(_owner) {
+    ) public initializer {
         require(_managerContainer != address(0), "3065");
         require(_lendingPool != address(0), "3036");
         require(_rewardsController != address(0), "3039");
         require(_tokenIn != address(0), "3000");
         require(_tokenOut != address(0), "3000");
 
+        __StrategyBase_init({ _initialOwner: _owner });
+
         managerContainer = IManagerContainer(_managerContainer);
         rewardsController = IRewardsController(_rewardsController);
-        lendingPool = IAaveV2LendingPool(_lendingPool);
-        rewardToken = rewardsController.REWARD_TOKEN();
+        rewardToken = _rewardToken;
+        lendingPool = IPool(_lendingPool);
         tokenIn = _tokenIn;
         tokenOut = _tokenOut;
         sharesDecimals = IERC20Metadata(_tokenOut).decimals();
-
-        address receiptTokenAddress = StrategyConfigLib.configStrategy({
-            _receiptTokenFactory: _getManager().receiptTokenFactory(),
-            _receiptTokenName: _receiptTokenName,
-            _receiptTokenSymbol: _receiptTokenSymbol
-        });
-
-        receiptToken = IReceiptToken(receiptTokenAddress);
+        receiptToken = IReceiptToken(
+            StrategyConfigLib.configStrategy({
+                _receiptTokenFactory: _getManager().receiptTokenFactory(),
+                _receiptTokenName: _receiptTokenName,
+                _receiptTokenSymbol: _receiptTokenSymbol
+            })
+        );
     }
 
     // -- User-specific Methods --
@@ -356,10 +363,13 @@ contract AaveV3Strategy is IStrategy, StrategyBase {
      * @notice Sets a new Rewards Controller address.
      * @param _newAddr The new Rewards Controller address.
      */
-    function setRewardsController(address _newAddr) external onlyValidAddress(_newAddr) onlyOwner {
+    function setRewardsController(
+        address _newAddr,
+        address _rewardToken
+    ) external onlyValidAddress(_newAddr) onlyOwner {
         emit RewardsControllerUpdated({ _old: address(rewardsController), _new: _newAddr });
         rewardsController = IRewardsController(_newAddr);
-        rewardToken = rewardsController.REWARD_TOKEN();
+        rewardToken = _rewardToken;
     }
 
     // -- Getters --
@@ -371,9 +381,13 @@ contract AaveV3Strategy is IStrategy, StrategyBase {
      * @return The amount of rewards.
      */
     function getRewards(address _recipient) external view override onlyValidAddress(_recipient) returns (uint256) {
-        address[] memory tokens = new address[](1);
-        tokens[0] = tokenOut;
-        return rewardsController.getRewardsBalance(tokens, _recipient);
+        // @todo add implementation
+
+        // address[] memory tokens = new address[](1);
+        // tokens[0] = tokenOut;
+        // return rewardsController.getRewardsBalance(tokens, _recipient);
+
+        return 0;
     }
 
     /**
