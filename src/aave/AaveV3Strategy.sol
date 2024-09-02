@@ -375,19 +375,10 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     // -- Getters --
 
     /**
-     * @notice Returns the rewards for a recipient based on existing balances.
-     * @dev For an updated value, updateRewards() needs to be called by the recipient.
-     * @param _recipient The address of the holder.
-     * @return The amount of rewards.
+     * @notice Not implemented.
      */
     function getRewards(address _recipient) external view override onlyValidAddress(_recipient) returns (uint256) {
-        // @todo add implementation
-
-        // address[] memory tokens = new address[](1);
-        // tokens[0] = tokenOut;
-        // return rewardsController.getRewardsBalance(tokens, _recipient);
-
-        return 0;
+        revert("Not Implemented");
     }
 
     /**
