@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
@@ -12,10 +13,10 @@ import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
 /**
- * @title StrategyBase contract used for any Aave strategy.
- * @author Cosmin Grigore (@gcosmintech)
+ * @title StrategyBase Contract used for common functionality through Jigsaw Strategies .
+ * @author Hovooo (@hovooo)
  */
-abstract contract StrategyBase is Ownable, ReentrancyGuard {
+abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     /**
@@ -53,7 +54,23 @@ abstract contract StrategyBase is Ownable, ReentrancyGuard {
      */
     IManagerContainer public managerContainer;
 
-    constructor(address _owner) Ownable(_owner) { }
+    /**
+     * @notice Initializes the StrategyBase contract.
+     * @param _initialOwner The address of the initial owner of the contract.
+     */
+    function __StrategyBase_init(address _initialOwner) internal initializer {
+        __Ownable_init(_initialOwner);
+        __UUPSUpgradeable_init();
+    }
+
+    /**
+     * @notice Ensures that the caller is authorized to upgrade the contract.
+     * @dev This function is called by the `upgradeToAndCall` function as part of the UUPS upgrade process.
+     * Only the owner of the contract is authorized to perform upgrades, ensuring that only authorized parties
+     * can modify the contract's logic.
+     * @param _newImplementation The address of the new implementation contract.
+     */
+    function _authorizeUpgrade(address _newImplementation) internal override onlyOwner { }
 
     /**
      * @notice Save funds.
