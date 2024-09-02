@@ -19,11 +19,11 @@ import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { StrategyBase } from "@jigsaw/src/strategies/StrategyBase.sol";
 
 /**
- * @title AaveV2Strategy
+ * @title AaveV3Strategy
  * @dev Strategy used for Aave lending pool.
  * @author Hovooo (@hovooo)
  */
-contract AaveV2Strategy is IStrategy, StrategyBase {
+contract AaveV3Strategy is IStrategy, StrategyBase {
     using SafeERC20 for IERC20;
 
     // -- Custom types --
