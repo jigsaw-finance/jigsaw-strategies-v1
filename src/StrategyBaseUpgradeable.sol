@@ -74,8 +74,8 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
 
     /**
      * @notice Save funds.
-     *  @param _token Token address.
-     *  @param _amount Token amount.
+     * @param _token Token address.
+     * @param _amount Token amount.
      */
     function emergencySave(
         address _token,
@@ -105,10 +105,10 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
 
     /**
      * @notice Mints an amount of receipt tokens.
-     *  @param _receiptToken The receipt token contract.
-     *  @param _recipient The recipient of the minted tokens.
-     *  @param _amount The amount of tokens to mint.
-     *  @param _tokenDecimals The decimals of the token.
+     * @param _receiptToken The receipt token contract.
+     * @param _recipient The recipient of the minted tokens.
+     * @param _amount The amount of tokens to mint.
+     * @param _tokenDecimals The decimals of the token.
      */
     function _mint(IReceiptToken _receiptToken, address _recipient, uint256 _amount, uint256 _tokenDecimals) internal {
         uint256 realAmount = _amount;
@@ -123,11 +123,11 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
 
     /**
      * @notice Burns an amount of receipt tokens.
-     *  @param _receiptToken The receipt token contract.
-     *  @param _recipient The recipient whose tokens will be burned.
-     *  @param _shares The amount of shares to burn.
-     *  @param _totalShares The total shares in the system.
-     *  @param _tokenDecimals The decimals of the token.
+     * @param _receiptToken The receipt token contract.
+     * @param _recipient The recipient whose tokens will be burned.
+     * @param _shares The amount of shares to burn.
+     * @param _totalShares The total shares in the system.
+     * @param _tokenDecimals The decimals of the token.
      */
     function _burn(
         IReceiptToken _receiptToken,
