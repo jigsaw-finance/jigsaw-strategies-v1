@@ -375,13 +375,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     // -- Getters --
 
     /**
-     * @notice Not implemented.
-     */
-    function getRewards(address _recipient) external view override onlyValidAddress(_recipient) returns (uint256) {
-        revert("Not Implemented");
-    }
-
-    /**
      * @notice Returns the address of the receipt token.
      */
     function getReceiptTokenAddress() external view override returns (address) {
