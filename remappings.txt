@@ -13,4 +13,7 @@ v3-core/=lib/jigsaw-protocol-v1/lib/v3-core/
 v3-periphery/=lib/jigsaw-protocol-v1/lib/v3-periphery/contracts/
 
 jigsaw-protocol-v1/=lib/jigsaw-protocol-v1/
-@jigsaw/=lib/jigsaw-protocol-v1/src/
+@jigsaw/=lib/jigsaw-protocol-v1/
+
+@aave/v3-periphery/=lib/aave-v3-periphery/contracts/
+@aave/v3-core/=lib/aave-v3-core/contracts/
