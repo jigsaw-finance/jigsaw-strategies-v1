@@ -25,23 +25,6 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
 
-    // -- Custom types --
-
-    /**
-     * @notice Temporary data structure used during the claim rewards process.
-     * @dev This struct holds intermediate variables required for calculating rewards and managing fees.
-     */
-    struct ClaimRewardsTempData {
-        uint256[] rewardsResult; // Array that holds the amounts of rewards claimed.
-        address[] rewardTokensResult; // Array that holds the addresses of the reward tokens.
-        uint256 fee; // The performance fee deducted from the rewards.
-        uint256 amount; // The net amount of rewards after deducting the performance fee.
-        bytes returnData; // The data returned from external contract calls, used for validation and debugging.
-        bool success; // Flag indicating whether the external call to claim rewards was successful.
-        uint256 rewardsBalanceBefore; // The balance of rewards tokens before the claim operation.
-        uint256 rewardsBalanceAfter; // The balance of rewards tokens after the claim operation.
-    }
-
     // -- Events --
 
     /**
@@ -153,6 +136,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         require(_managerContainer != address(0), "3065");
         require(_lendingPool != address(0), "3036");
         require(_rewardsController != address(0), "3039");
+        require(_rewardToken != address(0), "3000");
         require(_tokenIn != address(0), "3000");
         require(_tokenOut != address(0), "3000");
 
@@ -306,55 +290,42 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         bytes calldata
     ) external override onlyStrategyManager nonReentrant returns (uint256[] memory, address[] memory) {
-        ClaimRewardsTempData memory tempData = ClaimRewardsTempData({
-            rewardsResult: new uint256[](1),
-            rewardTokensResult: new address[](1),
-            fee: 0,
-            amount: 0,
-            returnData: "",
-            success: false,
-            rewardsBalanceBefore: 0,
-            rewardsBalanceAfter: 0
-        });
+        // aTokens should be checked for rewards eligibility.
+        address[] memory eligibleTokens = new address[](1);
+        eligibleTokens[0] = tokenOut;
 
-        tempData.rewardTokensResult[0] = rewardToken;
-        address[] memory tokens = new address[](1);
-        tokens[0] = tokenOut;
-
-        tempData.rewardsBalanceBefore = IERC20(tempData.rewardTokensResult[0]).balanceOf(_recipient);
-
-        (tempData.success, tempData.returnData) = IHolding(_recipient).genericCall({
+        // Make the claimAllRewards through the user's Holding.
+        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(rewardsController),
             _call: abi.encodeWithSignature(
-                "claimRewards(address[],uint256,address)",
-                tokens,
-                type(uint256).max,
-                _recipient,
-                tempData.rewardTokensResult[0]
-                )
+                "claimAllRewards(address[],address)",
+                eligibleTokens, // List of assets to check eligible distributions before claiming rewards
+                _recipient // The address that will be receiving the rewards
+            )
         });
-        require(tempData.success, OperationsLib.getRevertMsg(tempData.returnData));
-        tempData.rewardsBalanceAfter = IERC20(tempData.rewardTokensResult[0]).balanceOf(_recipient);
-        tempData.amount = tempData.rewardsBalanceAfter - tempData.rewardsBalanceBefore;
+
+        // Assert the call succeeded.
+        require(success, OperationsLib.getRevertMsg(returnData));
+        (address[] memory rewardsList, uint256[] memory claimedAmounts) = abi.decode(returnData, (address[], uint256[]));
+
+        // Return if no rewards were claimed.
+        if (rewardsList.length == 0) return (claimedAmounts, rewardsList);
 
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        tempData.fee = OperationsLib.getFeeAbsolute(tempData.amount, performanceFee);
+        address feeAddr = _getManager().feeAddress();
 
-        if (tempData.fee > 0) {
-            tempData.amount -= tempData.fee;
-            address feeAddr = _getManager().feeAddress();
-            emit FeeTaken(tempData.rewardTokensResult[0], feeAddr, tempData.fee);
-            IHolding(_recipient).transfer({ _token: tempData.rewardTokensResult[0], _to: feeAddr, _amount: tempData.fee });
+        // Take performance fee for all the rewards.
+        for (uint256 i = 0; i < rewardsList.length; i++) {
+            uint256 fee = OperationsLib.getFeeAbsolute(claimedAmounts[i], performanceFee);
+            if (fee > 0) {
+                claimedAmounts[i] -= fee;
+                emit FeeTaken(rewardsList[i], feeAddr, fee);
+                IHolding(_recipient).transfer({ _token: rewardsList[i], _to: feeAddr, _amount: fee });
+            }
         }
 
-        emit Rewards({
-            recipient: _recipient,
-            rewards: tempData.rewardsResult,
-            rewardTokens: tempData.rewardTokensResult
-        });
-
-        tempData.rewardsResult[0] = tempData.amount;
-        return (tempData.rewardsResult, tempData.rewardTokensResult);
+        emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });
+        return (claimedAmounts, rewardsList);
     }
 
     // -- Administration --
