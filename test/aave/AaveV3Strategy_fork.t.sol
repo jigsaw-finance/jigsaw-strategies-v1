@@ -9,6 +9,7 @@ import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
 import { AaveV3Strategy } from "../../src/aave/AaveV3Strategy.sol";
+import {StakerLight} from "../../src/staker/StakerLight";
 
 contract AaveV3StrategyTest is Test, BasicContractsFixture {
     event Deposit(
@@ -37,12 +38,14 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
+address staker = address(new );
         address strategyImplementation = address(new AaveV3Strategy());
 
         bytes memory data = abi.encodeCall(
             AaveV3Strategy.initialize,
             (
                 OWNER,
+                address(staker),
                 address(managerContainer),
                 lendingPool,
                 rewardsController,
