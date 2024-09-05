@@ -15,6 +15,8 @@ import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
+import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
+
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
 /**
@@ -89,6 +91,11 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     IRewardsController public rewardsController;
 
     /**
+     * @notice The Jigsaw Rewards Controller contract.
+     */
+    IStakerLight public jigsawStaker;
+
+    /**
      * @notice The number of decimals of the strategy's shares.
      */
     uint256 public override sharesDecimals;
@@ -125,6 +132,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     function initialize(
         address _owner,
         address _managerContainer,
+        address _jigsawStaker,
         address _lendingPool,
         address _rewardsController,
         address _rewardToken,
@@ -142,6 +150,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         __StrategyBase_init({ _initialOwner: _owner });
 
         managerContainer = IManagerContainer(_managerContainer);
+        jigsawStaker = IStakerLight(_jigsawStaker);
         rewardsController = IRewardsController(_rewardsController);
         rewardToken = _rewardToken;
         lendingPool = IPool(_lendingPool);
@@ -196,12 +205,15 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += balanceAfter - balanceBefore;
         totalInvestments += _amount;
+
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
             _amount: balanceAfter - balanceBefore,
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
+
+        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
 
         emit Deposit({
             asset: _asset,
@@ -267,6 +279,8 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
             _decimals: IERC20Metadata(tokenOut).decimals()
         });
 
+        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+
         recipients[_recipient].totalShares =
             _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
         recipients[_recipient].investedAmount =
@@ -278,7 +292,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     }
 
     /**
-     * @notice Claims rewards from the strategy.
+     * @notice Claims rewards from the Aave lending pool.
      *
      * @param _recipient The address on behalf of which the rewards are claimed.
      *
