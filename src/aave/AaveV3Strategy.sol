@@ -136,7 +136,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         require(_managerContainer != address(0), "3065");
         require(_lendingPool != address(0), "3036");
         require(_rewardsController != address(0), "3039");
-        require(_rewardToken != address(0), "3000");
         require(_tokenIn != address(0), "3000");
         require(_tokenOut != address(0), "3000");
 
