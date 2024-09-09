@@ -151,6 +151,25 @@ interface IStakerLight {
     function rewards(address participant) external view returns (uint256);
 
     /**
+     * @notice Initializer for the Staker Light contract.
+     *
+     * @param _initialOwner The initial owner of the contract.
+     * @param _holdingManager The address of the contract that contains the Holding manager contract.
+     * @param _tokenIn The address of the token to be staked.
+     * @param _rewardToken The address of the reward token.
+     * @param _strategy The address of the strategy contract.
+     * @param _rewardsDuration The duration of the rewards period, in seconds.
+     */
+    function initialize(
+        address _initialOwner,
+        address _holdingManager,
+        address _tokenIn,
+        address _rewardToken,
+        address _strategy,
+        uint256 _rewardsDuration
+    ) external;
+
+    /**
      * @notice sets the new rewards duration.
      */
     function setRewardsDuration(uint256 _rewardsDuration) external;
