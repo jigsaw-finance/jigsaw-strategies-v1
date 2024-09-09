@@ -16,6 +16,7 @@ import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
+import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
@@ -26,6 +27,24 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
  */
 contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
+
+    // -- Custom types --
+
+    /**
+     * @notice Struct for the initializer params.
+     */
+    struct InitializerParams {
+        address owner; // The address of the initial owner of the Strategy contract
+        address managerContainer; // The address of the contract that contains the manager contract
+        address stakerFactory; // The address of the StakerLightFactory contract
+        address lendingPool; // The address of the Aave Lending Pool
+        address rewardsController; // The address of the Aave Rewards Controller
+        address rewardToken; // The address of the Aave reward token associated with the strategy
+        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
+        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
+        address tokenIn; // The address of the LP token
+        address tokenOut; // The address of the Aave receipt token (aToken)
+    }
 
     // -- Events --
 
@@ -121,47 +140,40 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Initializer for the Aave Strategy.
      *
-     * @param _managerContainer The address of the contract that contains the manager contract.
-     * @param _lendingPool The address of the Aave Lending Pool.
-     * @param _rewardsController The address of the Aave Rewards Controller.
-     * @param _tokenIn The address of the LP token.
-     * @param _tokenOut The address of the Aave receipt token (aToken).
-     * @param _receiptTokenName The name of the receipt token.
-     * @param _receiptTokenSymbol The symbol of the receipt token.
      */
-    function initialize(
-        address _owner,
-        address _managerContainer,
-        address _jigsawStaker,
-        address _lendingPool,
-        address _rewardsController,
-        address _rewardToken,
-        address _tokenIn,
-        address _tokenOut,
-        string memory _receiptTokenName,
-        string memory _receiptTokenSymbol
-    ) public initializer {
-        require(_managerContainer != address(0), "3065");
-        require(_lendingPool != address(0), "3036");
-        require(_rewardsController != address(0), "3039");
-        require(_tokenIn != address(0), "3000");
-        require(_tokenOut != address(0), "3000");
+    function initialize(InitializerParams memory _params) public initializer {
+        require(_params.managerContainer != address(0), "3065");
+        require(_params.lendingPool != address(0), "3036");
+        require(_params.rewardsController != address(0), "3039");
+        require(_params.tokenIn != address(0), "3000");
+        require(_params.tokenOut != address(0), "3000");
 
-        __StrategyBase_init({ _initialOwner: _owner });
+        __StrategyBase_init({ _initialOwner: _params.owner });
 
-        managerContainer = IManagerContainer(_managerContainer);
-        jigsawStaker = IStakerLight(_jigsawStaker);
-        rewardsController = IRewardsController(_rewardsController);
-        rewardToken = _rewardToken;
-        lendingPool = IPool(_lendingPool);
-        tokenIn = _tokenIn;
-        tokenOut = _tokenOut;
-        sharesDecimals = IERC20Metadata(_tokenOut).decimals();
+        managerContainer = IManagerContainer(_params.managerContainer);
+        rewardsController = IRewardsController(_params.rewardsController);
+        rewardToken = _params.rewardToken;
+        lendingPool = IPool(_params.lendingPool);
+        tokenIn = _params.tokenIn;
+        tokenOut = _params.tokenOut;
+        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
-                _receiptTokenName: _receiptTokenName,
-                _receiptTokenSymbol: _receiptTokenSymbol
+                _receiptTokenName: "Aave Strategy Receipt Token",
+                _receiptTokenSymbol: "AaRT"
+            })
+        );
+
+        jigsawStaker = IStakerLight(
+            IStakerLightFactory(_params.stakerFactory).createStakerLight({
+                _initialOwner: _params.owner,
+                _holdingManager: _getManager().holdingManager(),
+                _tokenIn: address(receiptToken),
+                _rewardToken: _params.jigsawRewardToken,
+                _strategy: address(this),
+                _rewardsDuration: _params.jigsawRewardDuration
             })
         );
     }
