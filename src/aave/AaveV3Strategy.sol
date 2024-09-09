@@ -139,7 +139,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
     /**
      * @notice Initializer for the Aave Strategy.
-     *
      */
     function initialize(InitializerParams memory _params) public initializer {
         require(_params.managerContainer != address(0), "3065");

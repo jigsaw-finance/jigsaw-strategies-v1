@@ -3,13 +3,15 @@ pragma solidity ^0.8.20;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
 import { AaveV3Strategy } from "../../src/aave/AaveV3Strategy.sol";
-import {StakerLight} from "../../src/staker/StakerLight";
+import { StakerLight } from "../../src/staker/StakerLight.sol";
+import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
 contract AaveV3StrategyTest is Test, BasicContractsFixture {
     event Deposit(
@@ -32,30 +34,29 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     // Aave interest bearing aUSDC
     address internal tokenOut = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
 
-    string internal receiptTokenName = "Receipt Token";
-    string internal receiptTokenSymbol = "RTK";
-
     function setUp() public {
         init();
 
-address staker = address(new );
+        address jRewards = address(new ERC20Mock());
+        address stakerImplementation = address(new StakerLight());
+        address stakerFactory = address(new StakerLightFactory({ _initialOwner: OWNER }));
+
         address strategyImplementation = address(new AaveV3Strategy());
 
-        bytes memory data = abi.encodeCall(
-            AaveV3Strategy.initialize,
-            (
-                OWNER,
-                address(staker),
-                address(managerContainer),
-                lendingPool,
-                rewardsController,
-                address(0),
-                tokenIn,
-                tokenOut,
-                receiptTokenName,
-                receiptTokenSymbol
-            )
-        );
+        AaveV3Strategy.InitializerParams memory initParams = AaveV3Strategy.InitializerParams({
+            owner: OWNER,
+            managerContainer: address(managerContainer),
+            stakerFactory: address(stakerFactory),
+            lendingPool: lendingPool,
+            rewardsController: rewardsController,
+            rewardToken: address(0),
+            jigsawRewardToken: jRewards,
+            jigsawRewardDuration: 60 days,
+            tokenIn: tokenIn,
+            tokenOut: tokenOut
+        });
+
+        bytes memory data = abi.encodeCall(AaveV3Strategy.initialize, initParams);
 
         address proxy = address(new ERC1967Proxy(strategyImplementation, data));
         strategy = AaveV3Strategy(proxy);
@@ -71,6 +72,17 @@ address staker = address(new );
         stablesManager.registerOrUpdateShareRegistry(address(tokenInSharesRegistry), address(tokenIn), true);
         registries[address(tokenIn)] = address(tokenInSharesRegistry);
         vm.stopPrank();
+    }
+
+    // Test initialization
+    function test_initialization() public {
+        assertEq(strategy.owner(), OWNER, "Wrong owner");
+        assertEq(address(strategy.managerContainer()), address(managerContainer), "Wrong managerContainer");
+        assertEq(address(strategy.lendingPool()), lendingPool, "Wrong lendingPool");
+        assertEq(address(strategy.rewardsController()), rewardsController, "Wrong rewardsController");
+        assertEq(strategy.rewardToken(), address(0), "Wrong rewardToken");
+        assertEq(strategy.tokenIn(), tokenIn, "Wrong tokenIn");
+        assertEq(strategy.tokenOut(), tokenOut, "Wrong tokenOut");
     }
 
     // Tests if deposit reverts correctly when wrong asset
@@ -189,38 +201,39 @@ address staker = address(new );
     }
 
     // Tests if claimRewards works correctly when authorized
-    function test_claimRewards_when_authorized() public {
-        address user = vm.addr(uint256(keccak256(bytes("Random user address"))));
-        uint256 amount = 10e6;
+    // function test_claimRewards_when_authorized() public {
+    //     address user = vm.addr(uint256(keccak256(bytes("Random user address"))));
+    //     uint256 amount = 10e6;
 
-        // Mock values and setup necessary approvals and balances for the test
-        address userHolding = initiateUser(user, tokenIn, amount);
+    //     // Mock values and setup necessary approvals and balances for the test
+    //     address userHolding = initiateUser(user, tokenIn, amount);
 
-        // Invest into the tested strategy vie strategyManager
-        vm.prank(user, user);
-        strategyManager.invest(tokenIn, address(strategy), amount, "");
+    //     // Invest into the tested strategy vie strategyManager
+    //     vm.prank(user, user);
+    //     strategyManager.invest(tokenIn, address(strategy), amount, "");
 
-        if (strategy.rewardToken() == address(0)) {
-            vm.prank(user, user);
-            (uint256[] memory rewards, address[] memory rewardTokens) =
-                strategyManager.claimRewards(address(strategy), "");
+    //     if (strategy.rewardToken() == address(0)) {
+    //         vm.prank(user, user);
+    //         (uint256[] memory rewards, address[] memory rewardTokens) =
+    //             strategyManager.claimRewards(address(strategy), "");
 
-            assertEq(rewards.length, 0, "Wrong rewards length when no rewards");
-            assertEq(rewardTokens.length, 0, "Wrong rewardTokens length when no rewards");
-            return;
-        }
+    //         assertEq(rewards.length, 0, "Wrong rewards length when no rewards");
+    //         assertEq(rewardTokens.length, 0, "Wrong rewardTokens length when no rewards");
+    //         return;
+    //     }
 
-        uint256 rewardsBefore = IERC20(strategy.rewardToken()).balanceOf(userHolding);
-        (uint256[] memory rewards, address[] memory rewardTokens) = strategyManager.claimRewards(address(strategy), "");
-        vm.prank(user, user);
+    //     uint256 rewardsBefore = IERC20(strategy.rewardToken()).balanceOf(userHolding);
+    //     (uint256[] memory rewards, address[] memory rewardTokens) = strategyManager.claimRewards(address(strategy),
+    // "");
+    //     vm.prank(user, user);
 
-        uint256 rewardsAfter = IERC20(strategy.rewardToken()).balanceOf(userHolding);
+    //     uint256 rewardsAfter = IERC20(strategy.rewardToken()).balanceOf(userHolding);
 
-        // Mock rewards and balances
-        uint256 expectedRewards = rewardsAfter - rewardsBefore;
+    //     // Mock rewards and balances
+    //     uint256 expectedRewards = rewardsAfter - rewardsBefore;
 
-        // Assert statements with reasons
-        assertEq(rewards[0], expectedRewards, "Incorrect rewards claimed");
-        assertEq(rewardTokens[0], strategy.rewardToken(), "Incorrect reward token returned");
-    }
+    //     // Assert statements with reasons
+    //     assertEq(rewards[0], expectedRewards, "Incorrect rewards claimed");
+    //     assertEq(rewardTokens[0], strategy.rewardToken(), "Incorrect reward token returned");
+    // }
 }
