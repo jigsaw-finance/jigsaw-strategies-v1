@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
-
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
 
@@ -25,28 +24,28 @@ import { IStakerLight } from "./interfaces/IStakerLight.sol";
  *
  * @author Hovooo (@hovooo)
  */
-contract StakerLight is IStakerLight, Ownable2Step, Pausable, ReentrancyGuard {
+contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     /**
      * @notice Address of the HoldingManager Contract.
      */
-    IHoldingManager public immutable override holdingManager;
+    IHoldingManager public holdingManager;
 
     /**
      * @notice Address of the staking token.
      */
-    address public immutable override tokenIn;
+    address public override tokenIn;
 
     /**
      * @notice Address of the reward token.
      */
-    address public immutable override rewardToken;
+    address public override rewardToken;
 
     /**
      * @notice Address of the corresponding strategy.
      */
-    address public immutable override strategy;
+    address public override strategy;
 
     /**
      * @notice Timestamp indicating when the current reward distribution ends.
@@ -145,17 +144,23 @@ contract StakerLight is IStakerLight, Ownable2Step, Pausable, ReentrancyGuard {
 
     // --- Constructor ---
 
+    constructor() {
+        _disableInitializers();
+    }
+
+    // -- Initializer --
+
     /**
-     * @notice Constructor function for initializing the Staker contract.
+     * @notice Initializer for the Staker Light contract.
      *
-     * @param _initialOwner The initial owner of the contract
-     * @param _holdingManager The address of the contract that contains the manager contract.
-     * @param _tokenIn The address of the token to be staked
-     * @param _rewardToken The address of the reward token
-     * @param _strategy The address of the strategy contract
-     * @param _rewardsDuration The duration of the rewards period, in seconds
+     * @param _initialOwner The initial owner of the contract.
+     * @param _holdingManager The address of the contract that contains the Holding manager contract.
+     * @param _tokenIn The address of the token to be staked.
+     * @param _rewardToken The address of the reward token.
+     * @param _strategy The address of the strategy contract.
+     * @param _rewardsDuration The duration of the rewards period, in seconds.
      */
-    constructor(
+    function initialize(
         address _initialOwner,
         address _holdingManager,
         address _tokenIn,
@@ -163,12 +168,16 @@ contract StakerLight is IStakerLight, Ownable2Step, Pausable, ReentrancyGuard {
         address _strategy,
         uint256 _rewardsDuration
     )
-        Ownable(_initialOwner)
+        public
+        initializer
         validAddress(_tokenIn)
         validAddress(_rewardToken)
         validAddress(_strategy)
         validAmount(_rewardsDuration)
     {
+        __Ownable_init(_initialOwner);
+        __Pausable_init();
+
         holdingManager = IHoldingManager(_holdingManager);
         tokenIn = _tokenIn;
         rewardToken = _rewardToken;
