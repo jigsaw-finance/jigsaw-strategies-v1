@@ -15,6 +15,9 @@ import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
+import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
+import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
+
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
 /**
@@ -28,18 +31,19 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     // -- Custom types --
 
     /**
-     * @notice Temporary data structure used during the claim rewards process.
-     * @dev This struct holds intermediate variables required for calculating rewards and managing fees.
+     * @notice Struct for the initializer params.
      */
-    struct ClaimRewardsTempData {
-        uint256[] rewardsResult; // Array that holds the amounts of rewards claimed.
-        address[] rewardTokensResult; // Array that holds the addresses of the reward tokens.
-        uint256 fee; // The performance fee deducted from the rewards.
-        uint256 amount; // The net amount of rewards after deducting the performance fee.
-        bytes returnData; // The data returned from external contract calls, used for validation and debugging.
-        bool success; // Flag indicating whether the external call to claim rewards was successful.
-        uint256 rewardsBalanceBefore; // The balance of rewards tokens before the claim operation.
-        uint256 rewardsBalanceAfter; // The balance of rewards tokens after the claim operation.
+    struct InitializerParams {
+        address owner; // The address of the initial owner of the Strategy contract
+        address managerContainer; // The address of the contract that contains the manager contract
+        address stakerFactory; // The address of the StakerLightFactory contract
+        address lendingPool; // The address of the Aave Lending Pool
+        address rewardsController; // The address of the Aave Rewards Controller
+        address rewardToken; // The address of the Aave reward token associated with the strategy
+        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
+        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
+        address tokenIn; // The address of the LP token
+        address tokenOut; // The address of the Aave receipt token (aToken)
     }
 
     // -- Events --
@@ -106,6 +110,11 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     IRewardsController public rewardsController;
 
     /**
+     * @notice The Jigsaw Rewards Controller contract.
+     */
+    IStakerLight public jigsawStaker;
+
+    /**
      * @notice The number of decimals of the strategy's shares.
      */
     uint256 public override sharesDecimals;
@@ -130,46 +139,40 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
     /**
      * @notice Initializer for the Aave Strategy.
-     *
-     * @param _managerContainer The address of the contract that contains the manager contract.
-     * @param _lendingPool The address of the Aave Lending Pool.
-     * @param _rewardsController The address of the Aave Rewards Controller.
-     * @param _tokenIn The address of the LP token.
-     * @param _tokenOut The address of the Aave receipt token (aToken).
-     * @param _receiptTokenName The name of the receipt token.
-     * @param _receiptTokenSymbol The symbol of the receipt token.
      */
-    function initialize(
-        address _owner,
-        address _managerContainer,
-        address _lendingPool,
-        address _rewardsController,
-        address _rewardToken,
-        address _tokenIn,
-        address _tokenOut,
-        string memory _receiptTokenName,
-        string memory _receiptTokenSymbol
-    ) public initializer {
-        require(_managerContainer != address(0), "3065");
-        require(_lendingPool != address(0), "3036");
-        require(_rewardsController != address(0), "3039");
-        require(_tokenIn != address(0), "3000");
-        require(_tokenOut != address(0), "3000");
+    function initialize(InitializerParams memory _params) public initializer {
+        require(_params.managerContainer != address(0), "3065");
+        require(_params.lendingPool != address(0), "3036");
+        require(_params.rewardsController != address(0), "3039");
+        require(_params.tokenIn != address(0), "3000");
+        require(_params.tokenOut != address(0), "3000");
 
-        __StrategyBase_init({ _initialOwner: _owner });
+        __StrategyBase_init({ _initialOwner: _params.owner });
 
-        managerContainer = IManagerContainer(_managerContainer);
-        rewardsController = IRewardsController(_rewardsController);
-        rewardToken = _rewardToken;
-        lendingPool = IPool(_lendingPool);
-        tokenIn = _tokenIn;
-        tokenOut = _tokenOut;
-        sharesDecimals = IERC20Metadata(_tokenOut).decimals();
+        managerContainer = IManagerContainer(_params.managerContainer);
+        rewardsController = IRewardsController(_params.rewardsController);
+        rewardToken = _params.rewardToken;
+        lendingPool = IPool(_params.lendingPool);
+        tokenIn = _params.tokenIn;
+        tokenOut = _params.tokenOut;
+        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
-                _receiptTokenName: _receiptTokenName,
-                _receiptTokenSymbol: _receiptTokenSymbol
+                _receiptTokenName: "Aave Strategy Receipt Token",
+                _receiptTokenSymbol: "AaRT"
+            })
+        );
+
+        jigsawStaker = IStakerLight(
+            IStakerLightFactory(_params.stakerFactory).createStakerLight({
+                _initialOwner: _params.owner,
+                _holdingManager: _getManager().holdingManager(),
+                _tokenIn: address(receiptToken),
+                _rewardToken: _params.jigsawRewardToken,
+                _strategy: address(this),
+                _rewardsDuration: _params.jigsawRewardDuration
             })
         );
     }
@@ -213,12 +216,15 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += balanceAfter - balanceBefore;
         totalInvestments += _amount;
+
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
             _amount: balanceAfter - balanceBefore,
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
+
+        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
 
         emit Deposit({
             asset: _asset,
@@ -284,6 +290,8 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
             _decimals: IERC20Metadata(tokenOut).decimals()
         });
 
+        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+
         recipients[_recipient].totalShares =
             _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
         recipients[_recipient].investedAmount =
@@ -295,7 +303,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     }
 
     /**
-     * @notice Claims rewards from the strategy.
+     * @notice Claims rewards from the Aave lending pool.
      *
      * @param _recipient The address on behalf of which the rewards are claimed.
      *
@@ -306,55 +314,42 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         bytes calldata
     ) external override onlyStrategyManager nonReentrant returns (uint256[] memory, address[] memory) {
-        ClaimRewardsTempData memory tempData = ClaimRewardsTempData({
-            rewardsResult: new uint256[](1),
-            rewardTokensResult: new address[](1),
-            fee: 0,
-            amount: 0,
-            returnData: "",
-            success: false,
-            rewardsBalanceBefore: 0,
-            rewardsBalanceAfter: 0
-        });
+        // aTokens should be checked for rewards eligibility.
+        address[] memory eligibleTokens = new address[](1);
+        eligibleTokens[0] = tokenOut;
 
-        tempData.rewardTokensResult[0] = rewardToken;
-        address[] memory tokens = new address[](1);
-        tokens[0] = tokenOut;
-
-        tempData.rewardsBalanceBefore = IERC20(tempData.rewardTokensResult[0]).balanceOf(_recipient);
-
-        (tempData.success, tempData.returnData) = IHolding(_recipient).genericCall({
+        // Make the claimAllRewards through the user's Holding.
+        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(rewardsController),
             _call: abi.encodeWithSignature(
-                "claimRewards(address[],uint256,address)",
-                tokens,
-                type(uint256).max,
-                _recipient,
-                tempData.rewardTokensResult[0]
-                )
+                "claimAllRewards(address[],address)",
+                eligibleTokens, // List of assets to check eligible distributions before claiming rewards
+                _recipient // The address that will be receiving the rewards
+            )
         });
-        require(tempData.success, OperationsLib.getRevertMsg(tempData.returnData));
-        tempData.rewardsBalanceAfter = IERC20(tempData.rewardTokensResult[0]).balanceOf(_recipient);
-        tempData.amount = tempData.rewardsBalanceAfter - tempData.rewardsBalanceBefore;
+
+        // Assert the call succeeded.
+        require(success, OperationsLib.getRevertMsg(returnData));
+        (address[] memory rewardsList, uint256[] memory claimedAmounts) = abi.decode(returnData, (address[], uint256[]));
+
+        // Return if no rewards were claimed.
+        if (rewardsList.length == 0) return (claimedAmounts, rewardsList);
 
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        tempData.fee = OperationsLib.getFeeAbsolute(tempData.amount, performanceFee);
+        address feeAddr = _getManager().feeAddress();
 
-        if (tempData.fee > 0) {
-            tempData.amount -= tempData.fee;
-            address feeAddr = _getManager().feeAddress();
-            emit FeeTaken(tempData.rewardTokensResult[0], feeAddr, tempData.fee);
-            IHolding(_recipient).transfer({ _token: tempData.rewardTokensResult[0], _to: feeAddr, _amount: tempData.fee });
+        // Take performance fee for all the rewards.
+        for (uint256 i = 0; i < rewardsList.length; i++) {
+            uint256 fee = OperationsLib.getFeeAbsolute(claimedAmounts[i], performanceFee);
+            if (fee > 0) {
+                claimedAmounts[i] -= fee;
+                emit FeeTaken(rewardsList[i], feeAddr, fee);
+                IHolding(_recipient).transfer({ _token: rewardsList[i], _to: feeAddr, _amount: fee });
+            }
         }
 
-        emit Rewards({
-            recipient: _recipient,
-            rewards: tempData.rewardsResult,
-            rewardTokens: tempData.rewardTokensResult
-        });
-
-        tempData.rewardsResult[0] = tempData.amount;
-        return (tempData.rewardsResult, tempData.rewardTokensResult);
+        emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });
+        return (claimedAmounts, rewardsList);
     }
 
     // -- Administration --
