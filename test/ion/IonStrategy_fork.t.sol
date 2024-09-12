@@ -84,9 +84,9 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
         assertApproxEqRel(balanceAfter, balanceBefore + amount, 0.01e18, "Wrong balance in ION after stake");
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
+        assertEq(investedAmount, expectedShares, "Recipient invested amount mismatch");
         assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-        assertEq(strategy.totalInvestments(), amount, "Total investments mismatch");
+        assertEq(strategy.totalInvestments(), expectedShares, "Total investments mismatch");
     }
 
     // Tests if withdraw works correctly when authorized
