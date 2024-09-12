@@ -18,11 +18,11 @@ import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.so
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
 /**
- * @title AaveV3Strategy
- * @dev Strategy used for Aave lending pool.
+ * @title IonStrategy
+ * @dev Strategy used for Ion Pool.
  * @author Hovooo (@hovooo)
  */
-contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
+contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
 
     // -- Custom types --
@@ -199,9 +199,9 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         ionPool.supply({ user: _recipient, amount: _amount, proof: new bytes32[](0) });
         uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
 
-        recipients[_recipient].investedAmount += _amount;
+        recipients[_recipient].investedAmount += balanceAfter - balanceBefore;
         recipients[_recipient].totalShares += balanceAfter - balanceBefore;
-        totalInvestments += _amount;
+        totalInvestments += balanceAfter - balanceBefore;
 
         _mint({
             _receiptToken: receiptToken,
@@ -275,6 +275,8 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
                 _shares // amount of underlying to redeem
             )
         });
+        // Assert the call succeeded.
+        require(success, OperationsLib.getRevertMsg(returnData));
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         _extractTokenInRewards({
@@ -305,16 +307,13 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
     /**
      * @notice Claims rewards from the Ion Pool.
-     *
-     * @param _recipient The address on behalf of which the rewards are claimed.
-     *
      * @return The amounts of rewards claimed.
      * @return The addresses of the reward tokens.
      */
     function claimRewards(
-        address _recipient,
+        address,
         bytes calldata
-    ) external override returns (uint256[] memory, address[] memory) {
+    ) external pure override returns (uint256[] memory, address[] memory) {
         revert OperationNotSupported();
     }
 
