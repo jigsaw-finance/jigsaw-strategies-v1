@@ -17,6 +17,8 @@ import {IStakerLightFactory} from "../staker/interfaces/IStakerLightFactory.sol"
 
 import {StrategyBaseUpgradeable} from "../StrategyBaseUpgradeable.sol";
 
+import "forge-std/console.sol";
+
 /**
  * @title SwellV3Strategy
  * @dev Strategy used for Swell vault.
@@ -262,15 +264,22 @@ contract SwellV3Strategy is IStrategy, StrategyBaseUpgradeable {
             (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-            _contract: address(swellVault),
-            _call: abi.encodeWithSignature(
-                "redeem(uint256, address, address)",
-                _shares, // amount of underlying to redeem
-                _recipient, // receiverOfUnderlying
-                address(this)
-            )
-        });
+
+        swellVault.redeem({shares: _shares, receiver: _recipient, owner: address(this)});
+
+//        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+//            _contract: address(swellVault),
+//            _call: abi.encodeWithSignature(
+//                "redeem(uint256, address, address)",
+//                _shares, // amount of underlying to redeem
+//                _recipient, // receiverOfUnderlying
+//                address(this)
+//            )
+//        });
+//
+//        // Assert the call succeeded.
+//        require(success, OperationsLib.getRevertMsg(returnData));
+
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         _extractTokenInRewards({
@@ -354,4 +363,6 @@ interface ISwellVault {
     function redeem(uint256 shares, address receiver, address owner) external returns (uint256);
 
     function deposit(uint256 assets, address receiver) external returns (uint256);
+
+    function maxWithdraw(address owner) external view returns (uint256);
 }
