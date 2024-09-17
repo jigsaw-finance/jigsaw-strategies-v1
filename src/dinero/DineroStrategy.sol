@@ -25,6 +25,9 @@ import {StrategyBaseUpgradeable} from "../StrategyBaseUpgradeable.sol";
 contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
 
+    // Mainnet wETH
+    address internal weth9 = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+
     // -- Custom types --
 
     /**
@@ -174,7 +177,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _asset The token to be invested.
      * @param _amount The amount of the token to be invested.
      * @param _recipient The address on behalf of which the funds are deposited.
-     * @param _data Extra data, e.g., a referral code.
+     * @param _data Extra data (N/A).
      *
      * @return The amount of receipt tokens obtained.
      * @return The amount of the 'tokenIn()' token.
@@ -187,16 +190,14 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        uint16 refCode = 0;
-        if (_data.length > 0) {
-            refCode = abi.decode(_data, (uint16));
-        }
-
         IHolding(_recipient).transfer({_token: _asset, _to: address(this), _amount: _amount});
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
-        OperationsLib.safeApprove({token: _asset, to: address(pirexEth), value: _amount});
-        pirexEth.deposit({receiver: _recipient, shouldCompound: false});
+
+        IWETH9(weth9).withdraw(_amount);
+
+        // OperationsLib.safeApprove({token: _asset, to: address(pirexEth), value: _amount});
+        pirexEth.deposit{value: _amount}({receiver: _recipient, shouldCompound: false});
         uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
 
         recipients[_recipient].investedAmount += balanceAfter - balanceBefore;
@@ -364,10 +365,14 @@ interface IPirexEth {
     */
     function deposit(address receiver, bool shouldCompound) external payable
     returns (uint256 postFeeAmount, uint256 feeAmount);
-
-    /**
-     * @dev Current token balance
-     * @param user to get balance of
-     */
-    function balanceOf(address user) external view returns (uint256);
 }
+
+/// @title Interface for WETH9
+interface IWETH9 is IERC20 {
+    /// @notice Deposit ether to get wrapped ether
+    function deposit() external payable;
+
+    /// @notice Withdraw wrapped ether to get ether
+    function withdraw(uint256) external;
+}
+

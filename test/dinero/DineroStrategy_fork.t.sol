@@ -18,10 +18,10 @@ import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 IPirexEth constant PIREX_ETH = IPirexEth(0xD664b74274DfEB538d9baC494F3a4760828B02b0);
 
 contract DineroStrategyTest is Test, BasicContractsFixture {
-    // TODO: Mainnet PirexEth
-    address internal tokenIn = 0xD664b74274DfEB538d9baC494F3a4760828B02b0;
-    // TODO: Dinero iweETH-wstETH token is the same as the pool due to Vault architecture
-    address internal tokenOut = address(PIREX_ETH);
+    // Mainnet wETH
+    address internal tokenIn = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    // pxETH token
+    address internal tokenOut = 0x04C154b66CB340F3Ae24111CC767e0184Ed00Cc6;
 
     DineroStrategy internal strategy;
 
@@ -60,29 +60,29 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
         vm.stopPrank();
     }
 
-//    // Tests if deposit works correctly when authorized
-//    function test_dinero_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-//        uint256 amount = bound(_amount, 1e18, 10e18);
-//
-//        address userHolding = initiateUser(user, tokenIn, amount);
-//        uint256 balanceBefore = IERC20(tokenOut).balanceOf(userHolding);
-//
-//        // Invest into the tested strategy vie strategyManager
-//        vm.prank(user, user);
-//        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
-//
-//        uint256 balanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-//        uint256 expectedShares = balanceAfter - balanceBefore;
-//        (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
-//
-//        assertApproxEqRel(balanceAfter, balanceBefore + amount, 0.01e18, "Wrong balance in ION after stake");
-//        assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
-//        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-//        assertEq(investedAmount, expectedShares, "Recipient invested amount mismatch");
-//        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-//        assertEq(strategy.totalInvestments(), expectedShares, "Total investments mismatch");
-//    }
-//
+    // Tests if deposit works correctly when authorized
+    function test_dinero_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+        uint256 amount = bound(_amount, 1e18, 10e18);
+
+        address userHolding = initiateUser(user, tokenIn, amount, false);
+        uint256 balanceBefore = IERC20(tokenOut).balanceOf(userHolding);
+
+        // Invest into the tested strategy vie strategyManager
+        vm.prank(user, user);
+        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+
+        uint256 balanceAfter = IERC20(tokenOut).balanceOf(userHolding);
+        uint256 expectedShares = balanceAfter - balanceBefore;
+        (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
+
+        assertApproxEqRel(balanceAfter, balanceBefore + amount, 0.01e18, "Wrong balance in ION after stake");
+        assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
+        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
+        assertEq(investedAmount, expectedShares, "Recipient invested amount mismatch");
+        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
+        assertEq(strategy.totalInvestments(), expectedShares, "Total investments mismatch");
+    }
+
 //    // Tests if withdraw works correctly when authorized
 //    function test_ion_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
 //        uint256 amount = bound(_amount, 1e18, 10e18);

@@ -117,10 +117,14 @@ abstract contract BasicContractsFixture is Test {
     // Utility functions
 
     function initiateUser(address _user, address _token, uint256 _tokenAmount) public returns (address userHolding) {
+        return initiateUser(_user, _token, _tokenAmount, true);
+    }
+
+    function initiateUser(address _user, address _token, uint256 _tokenAmount, bool _adjust) public returns (address userHolding) {
         IERC20Metadata collateralContract = IERC20Metadata(_token);
         vm.startPrank(_user, _user);
 
-        deal(_token, _user, _tokenAmount, true);
+        deal(_token, _user, _tokenAmount, _adjust);
 
         // Create holding for user
         userHolding = holdingManager.createHolding();

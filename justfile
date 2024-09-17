@@ -78,3 +78,5 @@ mt test: && _timer
 mp verbosity path: && _timer
 	forge test -{{verbosity}} --match-path test/{{path}}
 
+mc contract: && _timer
+	forge test -vvvvvv --match-contract {{contract}}
