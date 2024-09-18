@@ -45,7 +45,7 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
 
         bytes memory data = abi.encodeCall(DineroStrategy.initialize, initParams);
         address proxy = address(new ERC1967Proxy(strategyImplementation, data));
-        strategy = DineroStrategy(proxy);
+        strategy = DineroStrategy(payable(proxy));
 
         // Add tested strategy to the StrategyManager for integration testing purposes
         vm.startPrank((OWNER));
