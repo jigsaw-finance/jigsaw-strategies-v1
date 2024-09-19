@@ -267,16 +267,14 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-            _contract: address(pirexEth),
-            _call: abi.encodeWithSignature(
-                "withdraw(address,uint256)",
-                _recipient, // receiverOfUnderlying
-                _shares // amount of underlying to redeem
-            )
-        });
+
+        (uint256 postFeeAmount, uint256 feeAmount) = pirexEth.instantRedeemWithPxEth({assets: _shares, receiver: address(this)});
+        // IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        // weth.deposit();
+
+        // IHolding(address(this)).transfer(tokenOut, _recipient, _shares);
+
         // Assert the call succeeded.
-        require(success, OperationsLib.getRevertMsg(returnData));
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         _extractTokenInRewards({
@@ -375,6 +373,17 @@ interface IPirexEth {
     */
     function deposit(address receiver, bool shouldCompound) external payable
     returns (uint256 postFeeAmount, uint256 feeAmount);
+
+    /**
+    * @notice Instant redeem back ETH using pxETH
+    * @dev    This function burns pxETH, calculates fees, and transfers ETH to the receiver.
+    * @param  assets        uint256   Amount of pxETH to redeem.
+    * @param  receiver      address   Address of the ETH receiver.
+    * @return postFeeAmount  uint256   Post-fee amount for the receiver.
+    * @return feeAmount      uint256  Fee amount sent to the PirexFees.
+    */
+    function instantRedeemWithPxEth(uint256 assets, address receiver)
+    external returns (uint256 postFeeAmount, uint256 feeAmount);
 }
 
 /// @title Interface for WETH9

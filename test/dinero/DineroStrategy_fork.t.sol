@@ -83,41 +83,41 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
         assertEq(strategy.totalInvestments(), expectedShares, "Total investments mismatch");
     }
 
-//    // Tests if withdraw works correctly when authorized
-//    function test_ion_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-//        uint256 amount = bound(_amount, 1e18, 10e18);
-//
-//        // Mock values and setup necessary approvals and balances for the test
-//        address userHolding = initiateUser(user, tokenIn, amount);
-//
-//        // Invest into the tested strategy vie strategyManager
-//        vm.prank(user, user);
-//        strategyManager.invest(tokenIn, address(strategy), amount, "");
-//
-//        (, uint256 totalShares) = strategy.recipients(userHolding);
-//
-//        // Mock the recipient’s shares balance
-//        uint256 balanceBefore = IERC20(tokenIn).balanceOf(userHolding);
-//
-//        vm.prank(user, user);
-//        (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
-//            _holding: userHolding,
-//            _strategy: address(strategy),
-//            _shares: totalShares,
-//            _asset: tokenIn,
-//            _data: ""
-//        });
-//
-//        uint256 balanceAfter = IERC20(tokenIn).balanceOf(userHolding);
-//
-//        uint256 expectedWithdrawal = balanceBefore > balanceAfter ? 0 : balanceAfter - balanceBefore;
-//
-//        (, uint256 totalSharesAfter) = strategy.recipients(userHolding);
-//
-//        // Assert statements with reasons
-//        assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
-//        assertApproxEqAbs(tokenInAmount, expectedWithdrawal, 1, "Incorrect tokenInAmount returned");
-//        assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
-//        assertEq(strategy.totalInvestments(), 0, "Total investments mismatch after withdrawal");
-//    }
+    // Tests if withdraw works correctly when authorized
+    function test_dinero_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+        uint256 amount = bound(_amount, 1e18, 10e18);
+
+        // Mock values and setup necessary approvals and balances for the test
+        address userHolding = initiateUser(user, tokenIn, amount, false);
+
+        // Invest into the tested strategy vie strategyManager
+        vm.prank(user, user);
+        strategyManager.invest(tokenIn, address(strategy), amount, "");
+
+        (, uint256 totalShares) = strategy.recipients(userHolding);
+
+        // Mock the recipient’s shares balance
+        uint256 balanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+
+        vm.prank(user, user);
+        (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
+            _holding: userHolding,
+            _strategy: address(strategy),
+            _shares: totalShares,
+            _asset: tokenIn,
+            _data: ""
+        });
+
+        uint256 balanceAfter = IERC20(tokenIn).balanceOf(userHolding);
+
+        uint256 expectedWithdrawal = balanceBefore > balanceAfter ? 0 : balanceAfter - balanceBefore;
+
+        (, uint256 totalSharesAfter) = strategy.recipients(userHolding);
+
+        // Assert statements with reasons
+        assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
+        assertApproxEqAbs(tokenInAmount, expectedWithdrawal, 1, "Incorrect tokenInAmount returned");
+        assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
+        assertEq(strategy.totalInvestments(), 0, "Total investments mismatch after withdrawal");
+    }
 }
