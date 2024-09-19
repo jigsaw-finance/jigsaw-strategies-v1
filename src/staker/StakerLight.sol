@@ -199,9 +199,6 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
         address _user,
         uint256 _amount
     ) external override onlyStrategy whenNotPaused nonReentrant updateReward(_user) validAmount(_amount) {
-        uint256 rewardBalance = IERC20(rewardToken).balanceOf(address(this));
-        if (rewardBalance == 0) revert NoRewardsToDistribute();
-
         // Ensure that deposit operation will never surpass supply limit
         if (_totalSupply + _amount > totalSupplyLimit) revert DepositSurpassesSupplyLimit(_amount, totalSupplyLimit);
         _totalSupply += _amount;
