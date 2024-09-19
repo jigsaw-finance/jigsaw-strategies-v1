@@ -167,14 +167,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
         address _rewardToken,
         address _strategy,
         uint256 _rewardsDuration
-    )
-        public
-        initializer
-        validAddress(_tokenIn)
-        validAddress(_rewardToken)
-        validAddress(_strategy)
-        validAmount(_rewardsDuration)
-    {
+    ) public initializer validAddress(_tokenIn) validAddress(_rewardToken) validAddress(_strategy) {
         __Ownable_init(_initialOwner);
         __Pausable_init();
 
