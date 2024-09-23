@@ -129,6 +129,12 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      */
     mapping(address => IStrategy.RecipientInfo) public override recipients;
 
+    /**
+     * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
+     * StrategyBaseUpgradeable to use up those slots without affecting the storage layout of child contracts.
+     */
+    uint256[49] __gap;
+
     // -- Constructor --
 
     constructor() {
