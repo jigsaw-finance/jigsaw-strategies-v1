@@ -102,11 +102,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
-     * @notice The total investments in the strategy.
-     */
-    uint256 public totalInvestments;
-
-    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address => IStrategy.RecipientInfo) public override recipients;
@@ -199,7 +194,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
 
         recipients[_recipient].investedAmount += balanceAfter - balanceBefore;
         recipients[_recipient].totalShares += balanceAfter - balanceBefore;
-        totalInvestments += balanceAfter - balanceBefore;
 
         _mint({
             _receiptToken: receiptToken,
@@ -291,8 +285,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
-        totalInvestments =
-            params.balanceAfter - params.balanceBefore > totalInvestments ? 0 : totalInvestments - params.investment;
 
         emit Withdraw({
             asset: _asset,
