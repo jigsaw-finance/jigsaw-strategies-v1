@@ -183,37 +183,37 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
+        uint256 balanceBefore = ionPool.balanceOfUnaccrued(_recipient);
         OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
         ionPool.supply({
             user: _recipient,
             amount: _amount,
             proof: _data.length > 0 ? getBytes32Array(_data) : new bytes32[](0)
         });
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
+        uint256 shares = ionPool.balanceOfUnaccrued(_recipient) - balanceBefore;
 
-        recipients[_recipient].investedAmount += balanceAfter - balanceBefore;
-        recipients[_recipient].totalShares += balanceAfter - balanceBefore;
+        recipients[_recipient].investedAmount += shares;
+        recipients[_recipient].totalShares += shares;
 
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _amount: balanceAfter - balanceBefore,
+            _amount: shares,
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.deposit({ _user: _recipient, _amount: _amount });
+        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
         emit Deposit({
             asset: _asset,
             tokenIn: tokenIn,
             assetAmount: _amount,
             tokenInAmount: _amount,
-            shares: balanceAfter - balanceBefore,
+            shares: shares,
             recipient: _recipient
         });
 
-        return (balanceAfter - balanceBefore, _amount);
+        return (shares, _amount);
     }
 
     /**
@@ -236,7 +236,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
-        require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
+        require(_shares <= ionPool.balanceOfUnaccrued(_recipient), "2002");
 
         WithdrawParams memory params =
             WithdrawParams({ shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0 });
@@ -258,7 +258,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         params.investment =
             (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
-        params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
+        params.balanceBefore = ionPool.balanceOfUnaccrued(_recipient);
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(ionPool),
             _call: abi.encodeWithSignature(
@@ -269,7 +269,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         });
         // Assert the call succeeded.
         require(success, OperationsLib.getRevertMsg(returnData));
-        params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
+        params.balanceAfter = ionPool.balanceOfUnaccrued(_recipient);
 
         _extractTokenInRewards({
             _ratio: params.shareRatio,
@@ -278,7 +278,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             _decimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _amount });
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
 
         recipients[_recipient].totalShares =
             _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
@@ -330,11 +330,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (performanceFee == 0) return;
 
-        if (_ratio > (10 ** _decimals) && _result < recipients[_recipient].investedAmount) return;
-        uint256 rewardAmount = 0;
-        if (_ratio >= (10 ** _decimals)) rewardAmount = _result - recipients[_recipient].investedAmount;
-        if (rewardAmount == 0) return;
-
+        uint256 rewardAmount = _result - _ratio * recipients[_recipient].investedAmount;
         uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
 
         if (fee > 0) {
@@ -392,8 +388,7 @@ interface IIonPool {
     function supply(address user, uint256 amount, bytes32[] calldata proof) external;
 
     /**
-     * @dev Current token balance
-     * @param user to get balance of
+     * @dev Current claim of the underlying token without accounting for interest to be accrued.
      */
-    function balanceOf(address user) external view returns (uint256);
+    function balanceOfUnaccrued(address user) external view returns (uint256);
 }
