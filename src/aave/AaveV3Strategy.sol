@@ -297,10 +297,9 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
             _decimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
 
-        recipients[_recipient].totalShares =
-            _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
+        recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount =
             investment > recipients[_recipient].investedAmount ? 0 : recipients[_recipient].investedAmount - investment;
         totalInvestments = balanceAfter - balanceBefore > totalInvestments ? 0 : totalInvestments - investment;
@@ -382,10 +381,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (performanceFee == 0) return;
 
-        uint256 rewardAmount = 0;
-        if (_ratio >= (10 ** _decimals)) rewardAmount = _result - recipients[_recipient].investedAmount;
-        if (rewardAmount == 0) return;
-
+        uint256 rewardAmount = _result - _ratio * recipients[_recipient].investedAmount;
         uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
 
         if (fee > 0) {
