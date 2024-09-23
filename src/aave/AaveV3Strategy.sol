@@ -218,31 +218,31 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         uint256 balanceBefore = IAToken(tokenOut).scaledBalanceOf(_recipient);
         OperationsLib.safeApprove({ token: _asset, to: address(lendingPool), value: _amount });
         lendingPool.supply({ asset: _asset, amount: _amount, onBehalfOf: _recipient, referralCode: refCode });
-        uint256 balanceAfter = IAToken(tokenOut).scaledBalanceOf(_recipient);
+        uint256 shares = IAToken(tokenOut).scaledBalanceOf(_recipient) - balanceBefore;
 
         recipients[_recipient].investedAmount += _amount;
-        recipients[_recipient].totalShares += balanceAfter - balanceBefore;
+        recipients[_recipient].totalShares += shares;
         totalInvestments += _amount;
 
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _amount: balanceAfter - balanceBefore,
+            _amount: shares,
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
         emit Deposit({
             asset: _asset,
             tokenIn: tokenIn,
             assetAmount: _amount,
             tokenInAmount: _amount,
-            shares: balanceAfter - balanceBefore,
+            shares: shares,
             recipient: _recipient
         });
 
-        return (balanceAfter - balanceBefore, _amount);
+        return (shares, _amount);
     }
 
     /**
