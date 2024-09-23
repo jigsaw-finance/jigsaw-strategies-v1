@@ -101,11 +101,6 @@ interface IStakerLight {
     event RewardPaid(address indexed user, uint256 indexed reward);
 
     /**
-     * @notice returns staking token address.
-     */
-    function tokenIn() external view returns (address);
-
-    /**
      * @notice returns reward token address.
      */
     function rewardToken() external view returns (address);
@@ -155,7 +150,6 @@ interface IStakerLight {
      *
      * @param _initialOwner The initial owner of the contract.
      * @param _holdingManager The address of the contract that contains the Holding manager contract.
-     * @param _tokenIn The address of the token to be staked.
      * @param _rewardToken The address of the reward token.
      * @param _strategy The address of the strategy contract.
      * @param _rewardsDuration The duration of the rewards period, in seconds.
@@ -163,7 +157,6 @@ interface IStakerLight {
     function initialize(
         address _initialOwner,
         address _holdingManager,
-        address _tokenIn,
         address _rewardToken,
         address _strategy,
         uint256 _rewardsDuration

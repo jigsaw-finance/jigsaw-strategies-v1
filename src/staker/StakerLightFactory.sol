@@ -72,7 +72,6 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
         IStakerLight(newStakerLightAddress).initialize({
             _initialOwner: _initialOwner,
             _holdingManager: _holdingManager,
-            _tokenIn: _tokenIn,
             _rewardToken: _rewardToken,
             _strategy: _strategy,
             _rewardsDuration: _rewardsDuration
