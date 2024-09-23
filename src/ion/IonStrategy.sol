@@ -187,16 +187,15 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        uint16 refCode = 0;
-        if (_data.length > 0) {
-            refCode = abi.decode(_data, (uint16));
-        }
-
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
         OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
-        ionPool.supply({ user: _recipient, amount: _amount, proof: new bytes32[](0) });
+        ionPool.supply({
+            user: _recipient,
+            amount: _amount,
+            proof: _data.length > 0 ? getBytes32Array(_data) : new bytes32[](0)
+        });
         uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
 
         recipients[_recipient].investedAmount += balanceAfter - balanceBefore;
@@ -350,6 +349,32 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             emit FeeTaken(tokenIn, feeAddr, fee);
             IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
         }
+    }
+
+    /**
+     * @notice Converts a `bytes` calldata input into a `bytes32[]` memory array.
+     *
+     * @param _data The `bytes` calldata input that is expected to be a multiple of 32 bytes.
+     * @return result A `bytes32[]` memory array containing the converted 32-byte chunks of the input data.
+     *
+     */
+    function getBytes32Array(bytes calldata _data) internal pure returns (bytes32[] memory) {
+        // Ensure the input length is a multiple of 32, as `bytes32` is 32 bytes
+        require(_data.length % 32 == 0, "Invalid input length, must be multiple of 32");
+
+        // Calculate the length of the resulting array
+        uint256 numElements = _data.length / 32;
+
+        // Initialize the bytes32 array
+        bytes32[] memory result = new bytes32[](numElements);
+
+        // Loop through the input data and convert each chunk of 32 bytes into bytes32
+        for (uint256 i = 0; i < numElements; i++) {
+            bytes32 element = abi.decode(_data[i * 32:(i + 1) * 32], (bytes32));
+            result[i] = element;
+        }
+
+        return result;
     }
 }
 
