@@ -64,13 +64,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
 
-    /**
-     * @notice Emitted when the Ion Pool address is updated.
-     * @param _old The old Ion Pool address.
-     * @param _new The new Ion Pool address.
-     */
-    event ionPoolUpdated(address indexed _old, address indexed _new);
-
     // -- State variables --
 
     /**
