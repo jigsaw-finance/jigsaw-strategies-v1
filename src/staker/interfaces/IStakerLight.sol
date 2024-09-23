@@ -101,6 +101,13 @@ interface IStakerLight {
     event RewardPaid(address indexed user, uint256 indexed reward);
 
     /**
+     * @notice Event emitted when a ERC20 is recovered.
+     * @param token The address of the recovered token.
+     * @param amount The amount of the recovered token.
+     */
+    event Recovered(address token, uint256 amount);
+
+    /**
      * @notice returns reward token address.
      */
     function rewardToken() external view returns (address);
@@ -176,6 +183,16 @@ interface IStakerLight {
      * @param _amount The amount of new rewards.
      */
     function addRewards(address _from, uint256 _amount) external;
+
+    /**
+     * This function allows the contract owner to recover ERC20 tokens that might have been
+     * accidentally or otherwise left within the contract. It requires the caller to have the
+     * `onlyOwner` modifier, ensuring that only the owner of the contract can invoke it.
+     *
+     * @param tokenAddress The contract address of the ERC20 token to be recovered.
+     * @param tokenAmount The amount of the specified ERC20 token to be transferred to the owner.
+     */
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external;
 
     /**
      * @notice Triggers stopped state.

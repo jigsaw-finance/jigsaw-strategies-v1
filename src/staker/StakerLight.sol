@@ -275,6 +275,19 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     }
 
     /**
+     * This function allows the contract owner to recover ERC20 tokens that might have been
+     * accidentally or otherwise left within the contract. It requires the caller to have the
+     * `onlyOwner` modifier, ensuring that only the owner of the contract can invoke it.
+     *
+     * @param tokenAddress The contract address of the ERC20 token to be recovered.
+     * @param tokenAmount The amount of the specified ERC20 token to be transferred to the owner.
+     */
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external override onlyOwner {
+        IERC20(tokenAddress).safeTransfer(owner(), tokenAmount);
+        emit Recovered(tokenAddress, tokenAmount);
+    }
+
+    /**
      * @notice Triggers stopped state.
      */
     function pause() external override onlyOwner whenNotPaused {
