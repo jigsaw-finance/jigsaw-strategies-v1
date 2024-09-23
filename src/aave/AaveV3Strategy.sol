@@ -352,21 +352,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         return (claimedAmounts, rewardsList);
     }
 
-    // -- Administration --
-
-    /**
-     * @notice Sets a new Rewards Controller address.
-     * @param _newAddr The new Rewards Controller address.
-     */
-    function setRewardsController(
-        address _newAddr,
-        address _rewardToken
-    ) external onlyValidAddress(_newAddr) onlyOwner {
-        emit RewardsControllerUpdated({ _old: address(rewardsController), _new: _newAddr });
-        rewardsController = IRewardsController(_newAddr);
-        rewardToken = _rewardToken;
-    }
-
     // -- Getters --
 
     /**
