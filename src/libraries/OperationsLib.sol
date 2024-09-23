@@ -8,7 +8,7 @@ library OperationsLib {
 
     /// @notice gets the amount used as a fee
     function getFeeAbsolute(uint256 amount, uint256 fee) internal pure returns (uint256) {
-        return (amount * fee) / FEE_FACTOR;
+        return (amount * fee) / FEE_FACTOR + (amount * fee % FEE_FACTOR == 0 ? 0 : 1);
     }
 
     /// @notice retrieves ratio between 2 numbers
