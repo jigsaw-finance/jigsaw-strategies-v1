@@ -55,6 +55,12 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
     IManagerContainer public managerContainer;
 
     /**
+     * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
+     * StrategyBaseUpgradeable to use up those slots without affecting the storage layout of child contracts.
+     */
+    uint256[49] __gap;
+
+    /**
      * @notice Initializes the StrategyBase contract.
      * @param _initialOwner The address of the initial owner of the contract.
      */
