@@ -342,12 +342,14 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _decimals The number of decimals of the token.
      */
     function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient, uint256 _decimals) internal {
+        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        if (performanceFee == 0) return;
+
         if (_ratio > (10 ** _decimals) && _result < recipients[_recipient].investedAmount) return;
         uint256 rewardAmount = 0;
         if (_ratio >= (10 ** _decimals)) rewardAmount = _result - recipients[_recipient].investedAmount;
         if (rewardAmount == 0) return;
 
-        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
 
         if (fee > 0) {
