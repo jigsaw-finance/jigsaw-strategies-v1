@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
@@ -214,10 +215,10 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
+        uint256 balanceBefore = IAToken(tokenOut).scaledBalanceOf(_recipient);
         OperationsLib.safeApprove({ token: _asset, to: address(lendingPool), value: _amount });
         lendingPool.supply({ asset: _asset, amount: _amount, onBehalfOf: _recipient, referralCode: refCode });
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
+        uint256 balanceAfter = IAToken(tokenOut).scaledBalanceOf(_recipient);
 
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += balanceAfter - balanceBefore;
@@ -264,7 +265,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
-        require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
+        require(_shares <= IAToken(tokenOut).scaledBalanceOf(_recipient), "2002");
 
         uint256 shareRatio = OperationsLib.getRatio({
             numerator: _shares,
@@ -285,9 +286,9 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
         IHolding(_recipient).transfer({ _token: tokenOut, _to: address(this), _amount: _shares });
 
-        uint256 balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
+        uint256 balanceBefore = IAToken(tokenIn).scaledBalanceOf(_recipient);
         lendingPool.withdraw({ asset: _asset, amount: _shares, to: _recipient });
-        uint256 balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
+        uint256 balanceAfter = IAToken(tokenIn).scaledBalanceOf(_recipient);
 
         _extractTokenInRewards({
             _ratio: shareRatio,
@@ -381,7 +382,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (performanceFee == 0) return;
 
-        if (_ratio > (10 ** _decimals) && _result < recipients[_recipient].investedAmount) return;
         uint256 rewardAmount = 0;
         if (_ratio >= (10 ** _decimals)) rewardAmount = _result - recipients[_recipient].investedAmount;
         if (rewardAmount == 0) return;
