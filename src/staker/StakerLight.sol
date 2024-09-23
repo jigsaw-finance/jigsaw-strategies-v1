@@ -5,7 +5,6 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
@@ -20,11 +19,11 @@ import { IStakerLight } from "./interfaces/IStakerLight.sol";
  *
  * @dev This contract is called light due to the fact that it does not actually transfer the receipt tokens from the
  * user and is only used for accounting.
- * @dev This contract inherits functionalities from `Ownable2Step`, `Pausable`, and `ReentrancyGuard`.
+ * @dev This contract inherits functionalities from `Ownable2Step` and `ReentrancyGuard`.
  *
  * @author Hovooo (@hovooo)
  */
-contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable {
+contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     /**
@@ -162,7 +161,6 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
         uint256 _rewardsDuration
     ) public initializer validAddress(_rewardToken) validAddress(_strategy) {
         __Ownable_init(_initialOwner);
-        __Pausable_init();
 
         holdingManager = IHoldingManager(_holdingManager);
         rewardToken = _rewardToken;
@@ -183,7 +181,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     function deposit(
         address _user,
         uint256 _amount
-    ) external override onlyStrategy whenNotPaused nonReentrant updateReward(_user) validAmount(_amount) {
+    ) external override onlyStrategy nonReentrant updateReward(_user) validAmount(_amount) {
         // Ensure that deposit operation will never surpass supply limit
         if (_totalSupply + _amount > totalSupplyLimit) revert DepositSurpassesSupplyLimit(_amount, totalSupplyLimit);
         _totalSupply += _amount;
@@ -202,7 +200,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     function withdraw(
         address _user,
         uint256 _amount
-    ) external override onlyStrategy whenNotPaused nonReentrant updateReward(_user) validAmount(_amount) {
+    ) external override onlyStrategy nonReentrant updateReward(_user) validAmount(_amount) {
         _totalSupply -= _amount;
         _balances[_user] = _balances[_user] - _amount;
         emit Withdrawn(_user, _amount);
@@ -218,7 +216,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     function claimRewards(
         address _holding,
         address _to
-    ) external override whenNotPaused nonReentrant onlyInvestor(_holding) updateReward(_holding) {
+    ) external override nonReentrant onlyInvestor(_holding) updateReward(_holding) {
         uint256 reward = rewards[_holding];
         if (reward == 0) revert NothingToClaim();
 
@@ -285,20 +283,6 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external override onlyOwner {
         IERC20(tokenAddress).safeTransfer(owner(), tokenAmount);
         emit Recovered(tokenAddress, tokenAmount);
-    }
-
-    /**
-     * @notice Triggers stopped state.
-     */
-    function pause() external override onlyOwner whenNotPaused {
-        _pause();
-    }
-
-    /**
-     * @notice Returns to normal state.
-     */
-    function unpause() external override onlyOwner whenPaused {
-        _unpause();
     }
 
     /**
