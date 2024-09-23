@@ -209,7 +209,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        jigsawStaker.deposit({ _user: _recipient, _amount: _amount });
 
         emit Deposit({
             asset: _asset,
@@ -285,7 +285,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             _decimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _amount });
 
         recipients[_recipient].totalShares =
             _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
