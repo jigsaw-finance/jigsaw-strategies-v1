@@ -324,9 +324,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Returns rewards per token.
      */
     function rewardPerToken() public view override returns (uint256) {
-        if (_totalSupply == 0) {
-            return rewardPerTokenStored;
-        }
+        require(_totalSupply != 0, "Zero totalSupply");
 
         return
             rewardPerTokenStored + (((lastTimeRewardApplicable() - lastUpdateTime) * rewardRate * 1e18) / _totalSupply);
