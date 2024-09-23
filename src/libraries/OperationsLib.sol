@@ -6,18 +6,36 @@ pragma solidity ^0.8.20;
 library OperationsLib {
     uint256 internal constant FEE_FACTOR = 10_000;
 
+    enum Rounding {
+        Floor, // Toward negative infinity
+        Ceil // Toward positive infinity
+
+    }
+
     /// @notice gets the amount used as a fee
     function getFeeAbsolute(uint256 amount, uint256 fee) internal pure returns (uint256) {
         return (amount * fee) / FEE_FACTOR + (amount * fee % FEE_FACTOR == 0 ? 0 : 1);
     }
 
     /// @notice retrieves ratio between 2 numbers
-    function getRatio(uint256 numerator, uint256 denominator, uint256 precision) internal pure returns (uint256) {
+    function getRatio(
+        uint256 numerator,
+        uint256 denominator,
+        uint256 precision,
+        Rounding rounding
+    ) internal pure returns (uint256) {
         if (numerator == 0 || denominator == 0) {
             return 0;
         }
+
         uint256 _numerator = numerator * 10 ** (precision + 1);
         uint256 _quotient = ((_numerator / denominator) + 5) / 10;
+
+        // Round up if necessary
+        if (rounding == Rounding.Ceil && _numerator % denominator > 0) {
+            _quotient += 1;
+        }
+
         return (_quotient);
     }
 
