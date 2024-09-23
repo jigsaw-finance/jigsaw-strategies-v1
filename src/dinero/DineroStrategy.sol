@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "forge-std/console.sol";
+
 import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -25,8 +27,9 @@ import {StrategyBaseUpgradeable} from "../StrategyBaseUpgradeable.sol";
 contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
 
+
     // Mainnet wETH
-    address internal WETH9 = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    IWETH9 public weth;
 
     // -- Custom types --
 
@@ -146,6 +149,8 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
 
+        weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
@@ -193,8 +198,9 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
 
-        IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         weth.withdraw(_amount);
+
+        //OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
         pirexEth.deposit{value: _amount}({receiver: _recipient, shouldCompound: false});
 
         uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
@@ -268,11 +274,25 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
-        (uint256 postFeeAmount, uint256 feeAmount) = pirexEth.instantRedeemWithPxEth({assets: _shares, receiver: address(this)});
-        // IWETH9 weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        // weth.deposit();
+        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+            _contract: address(pirexEth),
+            _call: abi.encodeWithSignature(
+                "instantRedeemWithPxEth(uint256,address)",
+                _shares, // amount of underlying to redeem
+                address(this)  // receiverOfUnderlying
+            )
+        });
+        // Assert the call succeeded.
+        require(success, OperationsLib.getRevertMsg(returnData));
 
-        // IHolding(address(this)).transfer(tokenOut, _recipient, _shares);
+        uint256 postFeeAmount = payable(address(this)).balance;
+
+        // Swap ETH back to WETH
+        weth.deposit{value: postFeeAmount}();
+
+        // Transfer WETH to _recipient
+        IERC20(tokenIn).approve(_recipient, postFeeAmount);
+        IERC20(tokenIn).transfer(_recipient, postFeeAmount);
 
         // Assert the call succeeded.
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
@@ -388,6 +408,65 @@ interface IPirexEth {
 
 /// @title Interface for WETH9
 interface IWETH9 is IERC20 {
+    // Events
+    /**
+     * @notice Event emitted when ETH is deposited, minting pxETH, and optionally compounding into the vault.
+     * @dev    Use this event to log details about the deposit, including the caller's address, the receiver's address, whether compounding occurred, the deposited amount, received pxETH amount, and fee amount.
+     * @param  caller          address  indexed  Address of the entity initiating the deposit.
+     * @param  receiver        address  indexed  Address of the receiver of the minted pxETH or apxEth.
+     * @param  shouldCompound  bool     indexed  Boolean indicating whether compounding into the vault occurred.
+     * @param  deposited       uint256           Amount of ETH deposited.
+     * @param  receivedAmount  uint256           Amount of pxETH minted for the receiver.
+     * @param  feeAmount       uint256           Amount of pxETH distributed as fees.
+     */
+    event Deposit(
+        address indexed caller,
+        address indexed receiver,
+        bool indexed shouldCompound,
+        uint256 deposited,
+        uint256 receivedAmount,
+        uint256 feeAmount
+    );
+
+    /**
+     * @notice Event emitted when a redemption is initiated by burning pxETH in return for upxETH.
+     * @dev    Use this event to log details about the redemption initiation, including the redeemed asset amount, post-fee amount, and the receiver's address.
+     * @param  assets         uint256           Amount of pxETH burnt for the redemption.
+     * @param  postFeeAmount  uint256           Amount of pxETH distributed to the receiver after deducting fees.
+     * @param  receiver       address  indexed  Address of the receiver of the upxETH.
+     */
+    event InitiateRedemption(
+        uint256 assets,
+        uint256 postFeeAmount,
+        address indexed receiver
+    );
+
+    /**
+     * @notice Event emitted when ETH is redeemed using UpxETH.
+     * @dev    Use this event to log details about the redemption, including the tokenId, redeemed asset amount, and the receiver's address.
+     * @param  tokenId   uint256           Identifier for the redemption batch.
+     * @param  assets    uint256           Amount of ETH redeemed.
+     * @param  receiver  address  indexed  Address of the receiver of the redeemed ETH.
+     */
+    event RedeemWithUpxEth(
+        uint256 tokenId,
+        uint256 assets,
+        address indexed receiver
+    );
+
+    /**
+     * @notice Event emitted when pxETH is redeemed for ETH with fees.
+     * @dev    Use this event to log details about pxETH redemption, including the redeemed asset amount, post-fee amount, and the receiver's address.
+     * @param  assets         uint256           Amount of pxETH redeemed.
+     * @param  postFeeAmount  uint256           Amount of ETH received by the receiver after deducting fees.
+     * @param  _receiver      address  indexed  Address of the receiver of the redeemed ETH.
+     */
+    event RedeemWithPxEth(
+        uint256 assets,
+        uint256 postFeeAmount,
+        address indexed _receiver
+    );
+
     /// @notice Deposit ether to get wrapped ether
     function deposit() external payable;
 
