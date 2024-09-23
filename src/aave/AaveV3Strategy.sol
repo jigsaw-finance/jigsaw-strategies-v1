@@ -121,11 +121,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
-     * @notice The total investments in the strategy.
-     */
-    uint256 public totalInvestments;
-
-    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address => IStrategy.RecipientInfo) public override recipients;
@@ -222,7 +217,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += shares;
-        totalInvestments += _amount;
 
         _mint({
             _receiptToken: receiptToken,
@@ -302,7 +296,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount =
             investment > recipients[_recipient].investedAmount ? 0 : recipients[_recipient].investedAmount - investment;
-        totalInvestments = balanceAfter - balanceBefore > totalInvestments ? 0 : totalInvestments - investment;
 
         emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: balanceAfter - balanceBefore });
         return (balanceAfter - balanceBefore, investment);
