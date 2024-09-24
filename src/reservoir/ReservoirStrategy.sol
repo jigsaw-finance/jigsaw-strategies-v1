@@ -65,20 +65,6 @@ contract ReservoirStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
 
-    /**
-     * @notice Emitted when the Reservoir's CreditEnforcer address is updated.
-     * @param _old The old CreditEnforcer address.
-     * @param _new The new CreditEnforcer address.
-     */
-    event CreditEnforcerUpdated(address indexed _old, address indexed _new);
-
-    /**
-     * @notice Emitted when the Reservoir's PegStabilityModule address is updated.
-     * @param _old The old PSM address.
-     * @param _new The new PSM address.
-     */
-    event PSMUpdated(address indexed _old, address indexed _new);
-
     // -- State variables --
 
     /**
@@ -122,14 +108,15 @@ contract ReservoirStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
-     * @notice The total investments in the strategy.
-     */
-    uint256 public totalInvestments;
-
-    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address => IStrategy.RecipientInfo) public override recipients;
+
+    /**
+     * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
+     * StrategyBaseUpgradeable to use up those slots without affecting the storage layout of child contracts.
+     */
+    uint256[49] __gap;
 
     // -- Constructor --
 
@@ -204,33 +191,32 @@ contract ReservoirStrategy is IStrategy, StrategyBaseUpgradeable {
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
-        OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
+        OperationsLib.safeApprove({ token: _asset, to: address(creditEnforcer), value: _amount });
         creditEnforcer.mintStablecoin({ to: _recipient, amount: _amount });
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
+        uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
 
-        recipients[_recipient].investedAmount += balanceAfter - balanceBefore;
-        recipients[_recipient].totalShares += balanceAfter - balanceBefore;
-        totalInvestments += balanceAfter - balanceBefore;
+        recipients[_recipient].investedAmount += _amount;
+        recipients[_recipient].totalShares += shares;
 
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _amount: balanceAfter - balanceBefore,
+            _amount: shares,
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
         emit Deposit({
             asset: _asset,
             tokenIn: tokenIn,
             assetAmount: _amount,
             tokenInAmount: _amount,
-            shares: balanceAfter - balanceBefore,
+            shares: shares,
             recipient: _recipient
         });
 
-        return (balanceAfter - balanceBefore, _amount);
+        return (shares, _amount);
     }
 
     /**
@@ -276,35 +262,24 @@ contract ReservoirStrategy is IStrategy, StrategyBaseUpgradeable {
             (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
-        // @note CHANGE SHARES TO 6 DECIMALS HERE
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pegStabilityModule,
             _call: abi.encodeWithSignature(
                 "redeem(address,uint256)",
                 _recipient, // receiverOfUnderlying
-                _shares // amount of underlying to redeem
+                _shares / 10e12 // amount of underlying to redeem converted to 6 decimals for USDC
             )
         });
         // Assert the call succeeded.
         require(success, OperationsLib.getRevertMsg(returnData));
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
-        _extractTokenInRewards({
-            _ratio: params.shareRatio,
-            _result: params.balanceAfter - params.balanceBefore,
-            _recipient: _recipient,
-            _decimals: IERC20Metadata(tokenOut).decimals()
-        });
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
-
-        recipients[_recipient].totalShares =
-            _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
+        recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
-        totalInvestments =
-            params.balanceAfter - params.balanceBefore > totalInvestments ? 0 : totalInvestments - params.investment;
 
         emit Withdraw({
             asset: _asset,
@@ -334,32 +309,6 @@ contract ReservoirStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
-    }
-
-    // -- Utilities --
-
-    /**
-     * @notice Sends tokenIn rewards to the fee address.
-     *
-     * @param _ratio The ratio of the shares to total shares.
-     * @param _result The _result of the balance change.
-     * @param _recipient The address of the recipient.
-     * @param _decimals The number of decimals of the token.
-     */
-    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient, uint256 _decimals) internal {
-        if (_ratio > (10 ** _decimals) && _result < recipients[_recipient].investedAmount) return;
-        uint256 rewardAmount = 0;
-        if (_ratio >= (10 ** _decimals)) rewardAmount = _result - recipients[_recipient].investedAmount;
-        if (rewardAmount == 0) return;
-
-        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
-
-        if (fee > 0) {
-            address feeAddr = _getManager().feeAddress();
-            emit FeeTaken(tokenIn, feeAddr, fee);
-            IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
-        }
     }
 }
 
