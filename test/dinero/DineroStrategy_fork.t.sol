@@ -10,7 +10,7 @@ import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import { IPirexEth } from "../../src/dinero/DineroStrategy.sol";
+import { IPirexEth } from "../../src/dinero/IPirexEth.sol";
 import { DineroStrategy } from "../../src/dinero/DineroStrategy.sol";
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
