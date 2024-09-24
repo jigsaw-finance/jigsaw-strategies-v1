@@ -50,33 +50,12 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     // -- Events --
 
     /**
-     * @notice Emitted when the Rewards Controller address is updated.
-     * @param _old The old Rewards Controller address.
-     * @param _new The new Rewards Controller address.
-     */
-    event RewardsControllerUpdated(address indexed _old, address indexed _new);
-
-    /**
      * @notice Emitted when a performance fee is taken.
      * @param token The token from which the fee is taken.
      * @param feeAddress The address that receives the fee.
      * @param amount The amount of the fee.
      */
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
-
-    /**
-     * @notice Emitted when the Lending Pool address is updated.
-     * @param _old The old Lending Pool address.
-     * @param _new The new Lending Pool address.
-     */
-    event LendingPoolUpdated(address indexed _old, address indexed _new);
-
-    /**
-     * @notice Emitted when the Reward Token address is updated.
-     * @param _old The old Reward Token address.
-     * @param _new The new Reward Token address.
-     */
-    event RewardTokenUpdated(address indexed _old, address indexed _new);
 
     // -- State variables --
 
