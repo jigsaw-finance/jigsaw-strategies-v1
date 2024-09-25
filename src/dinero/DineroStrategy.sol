@@ -153,7 +153,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.pirexEth != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
-        if (_params.shouldStake == true && _params .autoPirexEth != address(0))
+        if (_params.shouldStake == true && _params.autoPirexEth == address(0))
             revert("3000");
 
         __StrategyBase_init({_initialOwner: _params.owner});

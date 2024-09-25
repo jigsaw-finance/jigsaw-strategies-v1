@@ -18,7 +18,7 @@ import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
 IPirexEth constant PIREX_ETH = IPirexEth(0xD664b74274DfEB538d9baC494F3a4760828B02b0);
 
-contract DineroStrategyTest is Test, BasicContractsFixture {
+contract DineroPxStrategyTest is Test, BasicContractsFixture {
     // Mainnet wETH
     address internal tokenIn = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     // pxETH token
