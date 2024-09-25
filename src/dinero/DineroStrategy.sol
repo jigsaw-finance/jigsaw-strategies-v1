@@ -19,6 +19,7 @@ import {IStakerLightFactory} from "../staker/interfaces/IStakerLightFactory.sol"
 
 import {StrategyBaseUpgradeable} from "../StrategyBaseUpgradeable.sol";
 import {IPirexEth} from "./IPirexEth.sol";
+import {IAutoPxEth} from "./IAutoPxEth.sol";
 
 /**
  * @title DineroStrategy
@@ -27,7 +28,6 @@ import {IPirexEth} from "./IPirexEth.sol";
  */
 contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
-
 
     // Mainnet wETH
     IWETH9 public weth;
@@ -42,10 +42,12 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         address managerContainer; // The address of the contract that contains the manager contract
         address stakerFactory; // The address of the StakerLightFactory contract
         address pirexEth; // The address of the PirexEth
+        address autoPirexEth; // The address of the AutoPirexEth
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of the PirexEth receipt token (pxEth)
+        bool shouldStake; // pxETH/apxETH
     }
 
     /**
@@ -101,9 +103,19 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     IReceiptToken public override receiptToken;
 
     /**
+     * @notice If true apxETH token staked, false means pxETH minted.
+     */
+    bool public shouldStake;
+
+    /**
      * @notice The PirexEth contract.
      */
     IPirexEth public pirexEth;
+
+    /**
+     * @notice The PirexEth contract.
+     */
+    IAutoPxEth public autoPirexEth;
 
     /**
      * @notice The Jigsaw Rewards Controller contract.
@@ -141,14 +153,18 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.pirexEth != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
+        if (_params.shouldStake == true && _params .autoPirexEth != address(0))
+            revert("3000");
 
         __StrategyBase_init({_initialOwner: _params.owner});
 
         managerContainer = IManagerContainer(_params.managerContainer);
         pirexEth = IPirexEth(_params.pirexEth);
+        autoPirexEth = IAutoPxEth(_params.autoPirexEth);
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        shouldStake = _params.shouldStake;
 
         weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
@@ -156,7 +172,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             StrategyConfigLib.configStrategy({
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
                 _receiptTokenName: "PirexEth Strategy Receipt Token",
-                _receiptTokenSymbol: "pxEth"
+                _receiptTokenSymbol: "apxEth"
             })
         );
 
@@ -201,8 +217,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
 
         weth.withdraw(_amount);
 
-        //OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
-        pirexEth.deposit{value: _amount}({receiver: _recipient, shouldCompound: false});
+        pirexEth.deposit{value: _amount}({receiver: _recipient, shouldCompound: shouldStake});
 
         uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
 
@@ -275,40 +290,43 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-            _contract: address(pirexEth),
-            _call: abi.encodeWithSignature(
-                "instantRedeemWithPxEth(uint256,address)",
-                _shares, // amount of underlying to redeem
-                address(this)  // receiverOfUnderlying
-            )
-        });
-        // Assert the call succeeded.
-        require(success, OperationsLib.getRevertMsg(returnData));
+        if (!shouldStake)
+        {
+            (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+                _contract: address(pirexEth),
+                _call: abi.encodeWithSignature(
+                    "instantRedeemWithPxEth(uint256,address)",
+                    _shares, // amount of underlying to redeem
+                    address(this)  // receiverOfUnderlying
+                )
+            });
+            // Assert the call succeeded.
+            require(success, OperationsLib.getRevertMsg(returnData));
 
-        uint256 postFeeAmount = payable(address(this)).balance;
+            uint256 postFeeAmount = payable(address(this)).balance;
 
-        // Swap ETH back to WETH
-        weth.deposit{value: postFeeAmount}();
+            // Swap ETH back to WETH
+            weth.deposit{value: postFeeAmount}();
 
-        // Transfer WETH to _recipient
-        IERC20(tokenIn).approve(_recipient, postFeeAmount);
-        IERC20(tokenIn).transfer(_recipient, postFeeAmount);
+            // Transfer WETH to _recipient
+            IERC20(tokenIn).approve(_recipient, postFeeAmount);
+            IERC20(tokenIn).transfer(_recipient, postFeeAmount);
+        }
 
         // Assert the call succeeded.
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
-        _extractTokenInRewards({
-            _ratio: params.shareRatio,
-            _result: params.balanceAfter - params.balanceBefore,
-            _recipient: _recipient,
-            _decimals: IERC20Metadata(tokenOut).decimals()
-        });
+        // there is no tokenIn rewards
+//        _extractTokenInRewards({
+//            _ratio: params.shareRatio,
+//            _result: params.balanceBefore > params.balanceAfter ? 0 : params.balanceAfter - params.balanceBefore,
+//            _recipient: _recipient,
+//            _decimals: IERC20Metadata(tokenOut).decimals()
+//        });
 
         jigsawStaker.withdraw({_user: _recipient, _amount: recipients[_recipient].investedAmount});
 
-        recipients[_recipient].totalShares =
-            _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
+        recipients[_recipient].totalShares = _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;

@@ -11,6 +11,7 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import { IPirexEth } from "../../src/dinero/IPirexEth.sol";
+import { IAutoPxEth } from "../../src/dinero/IAutoPxEth.sol";
 import { DineroStrategy } from "../../src/dinero/DineroStrategy.sol";
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
@@ -37,10 +38,12 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
             managerContainer: address(managerContainer),
             stakerFactory: address(stakerFactory),
             pirexEth: address(PIREX_ETH),
+            autoPirexEth: address(0),
             jigsawRewardToken: jRewards,
             jigsawRewardDuration: 60 days,
             tokenIn: tokenIn,
-            tokenOut: tokenOut
+            tokenOut: tokenOut,
+            shouldStake: false
         });
 
         bytes memory data = abi.encodeCall(DineroStrategy.initialize, initParams);
@@ -61,7 +64,7 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit works correctly when authorized
-    function test_dinero_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+    function test_dinero_px_eth_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e18, 10e18);
 
         address userHolding = initiateUser(user, tokenIn, amount, false);
@@ -75,7 +78,8 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
         uint256 expectedShares = balanceAfter - balanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
 
-        assertApproxEqRel(balanceAfter, balanceBefore + amount, 0.01e18, "Wrong balance in ION after stake");
+//        uint256 sharesReturned = (strategy.autoPirexEth().convertToShares(amount));
+        assertApproxEqRel(balanceAfter, balanceBefore + amount, 0.01e18, "Wrong balance in Dinero after stake");
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
         assertEq(investedAmount, expectedShares, "Recipient invested amount mismatch");
@@ -84,7 +88,7 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if withdraw works correctly when authorized
-    function test_dinero_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+    function test_dinero_px_eth_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e18, 10e18);
 
         // Mock values and setup necessary approvals and balances for the test
@@ -96,11 +100,8 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
 
-        // Mock the recipient’s shares balance
-        uint256 balanceBefore = IERC20(tokenIn).balanceOf(userHolding);
-
         vm.prank(user, user);
-        (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
+        strategyManager.claimInvestment({
             _holding: userHolding,
             _strategy: address(strategy),
             _shares: totalShares,
@@ -110,14 +111,19 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
 
         uint256 balanceAfter = IERC20(tokenIn).balanceOf(userHolding);
 
-        uint256 expectedWithdrawal = balanceBefore > balanceAfter ? 0 : balanceAfter - balanceBefore;
+        uint256 expectedWithdrawal = subtractPercent(totalShares, 5);
 
         (, uint256 totalSharesAfter) = strategy.recipients(userHolding);
 
         // Assert statements with reasons
-        assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
-        assertApproxEqAbs(tokenInAmount, expectedWithdrawal, 1, "Incorrect tokenInAmount returned");
+        assertEq(balanceAfter, expectedWithdrawal, "Incorrect asset amount returned");
         assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
         assertEq(strategy.totalInvestments(), 0, "Total investments mismatch after withdrawal");
+    }
+
+    // percent == 0.1%
+    function subtractPercent(uint256 value, uint256 percent) public pure returns (uint256) {
+        uint256 deduction = (value * percent) / 1000; // 0.5% is 5/1000
+        return value - deduction;
     }
 }
