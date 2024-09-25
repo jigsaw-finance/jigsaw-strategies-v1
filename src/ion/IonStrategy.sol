@@ -183,14 +183,14 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        uint256 balanceBefore = ionPool.balanceOfUnaccrued(_recipient);
+        uint256 balanceBefore = ionPool.normalizedBalanceOf(_recipient);
         OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
         ionPool.supply({
             user: _recipient,
             amount: _amount,
             proof: _data.length > 0 ? getBytes32Array(_data) : new bytes32[](0)
         });
-        uint256 shares = ionPool.balanceOfUnaccrued(_recipient) - balanceBefore;
+        uint256 shares = ionPool.normalizedBalanceOf(_recipient) - balanceBefore;
 
         recipients[_recipient].investedAmount += shares;
         recipients[_recipient].totalShares += shares;
@@ -236,7 +236,11 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
-        require(_shares <= ionPool.balanceOfUnaccrued(_recipient), "2002");
+        uint256 totalSharesBefore = IERC20(tokenOut).normalizedBalanceOf(_recipient);
+        require(_shares <= totalSharesBefore, "2002");
+
+        uint256 totalAssetsBefore = IERC20(tokenOut).balanceOf(_recipient);
+        uint256 assetsToWithdraw = totalSharesBefore * assetsBefore / _shares;
 
         WithdrawParams memory params =
             WithdrawParams({ shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0 });
@@ -258,18 +262,18 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         params.investment =
             (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
-        params.balanceBefore = ionPool.balanceOfUnaccrued(_recipient);
+        params.balanceBefore = ionPool.balanceOf(_recipient);
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(ionPool),
             _call: abi.encodeWithSignature(
                 "withdraw(address,uint256)",
                 _recipient, // receiverOfUnderlying
-                _shares // amount of underlying to redeem
+                assetsToWithdraw // amount of underlying to redeem
             )
         });
         // Assert the call succeeded.
         require(success, OperationsLib.getRevertMsg(returnData));
-        params.balanceAfter = ionPool.balanceOfUnaccrued(_recipient);
+        params.balanceAfter = ionPool.balanceOf(_recipient);
 
         _extractTokenInRewards({
             _ratio: params.shareRatio,
@@ -330,7 +334,10 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (performanceFee == 0) return;
 
-        uint256 rewardAmount = _result - _ratio * recipients[_recipient].investedAmount;
+        uint256 _investment = _ratio * recipients[_recipient].investedAmount;
+        uint256 rewardAmount;
+        if (_result > _investment) rewardAmount = _result - _investment;
+
         uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
 
         if (fee > 0) {
@@ -388,7 +395,8 @@ interface IIonPool {
     function supply(address user, uint256 amount, bytes32[] calldata proof) external;
 
     /**
-     * @dev Current claim of the underlying token without accounting for interest to be accrued.
+     * @dev Accounting is done in normalized balances
+     * @param user to get normalized balance of
      */
-    function balanceOfUnaccrued(address user) external view returns (uint256);
+    function normalizedBalanceOf(address user) external view returns (uint256);
 }
