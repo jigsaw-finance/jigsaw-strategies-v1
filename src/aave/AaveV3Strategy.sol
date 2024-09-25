@@ -353,7 +353,10 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (performanceFee == 0) return;
 
-        uint256 rewardAmount = _result - _ratio * recipients[_recipient].investedAmount;
+        uint256 _investment = _ratio * recipients[_recipient].investedAmount;
+        uint256 rewardAmount;
+        if (_result > _investment) rewardAmount = _result - _investment;
+
         uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
 
         if (fee > 0) {
