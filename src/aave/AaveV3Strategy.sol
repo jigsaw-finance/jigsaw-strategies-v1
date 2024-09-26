@@ -263,12 +263,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         lendingPool.withdraw({ asset: _asset, amount: _shares, to: _recipient });
         uint256 balanceAfter = IAToken(tokenIn).scaledBalanceOf(_recipient);
 
-        _extractTokenInRewards({
-            _ratio: shareRatio,
-            _result: balanceAfter - balanceBefore,
-            _recipient: _recipient,
-            _decimals: IERC20Metadata(tokenOut).decimals()
-        });
+        _extractTokenInRewards({ _ratio: shareRatio, _result: balanceAfter - balanceBefore, _recipient: _recipient });
 
         jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
 
@@ -347,9 +342,8 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      * @param _ratio The ratio of the shares to total shares.
      * @param _result The _result of the balance change.
      * @param _recipient The address of the recipient.
-     * @param _decimals The number of decimals of the token.
      */
-    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient, uint256 _decimals) internal {
+    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient) internal {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (performanceFee == 0) return;
 
