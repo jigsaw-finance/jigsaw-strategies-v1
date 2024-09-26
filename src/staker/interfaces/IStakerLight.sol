@@ -195,16 +195,6 @@ interface IStakerLight {
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external;
 
     /**
-     * @notice Triggers stopped state.
-     */
-    function pause() external;
-
-    /**
-     * @notice Returns to normal state.
-     */
-    function unpause() external;
-
-    /**
      * @notice returns the total tokenIn supply.
      */
     function totalSupply() external view returns (uint256);
