@@ -236,11 +236,11 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
-        uint256 totalSharesBefore = IERC20(tokenOut).normalizedBalanceOf(_recipient);
+        uint256 totalSharesBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
         require(_shares <= totalSharesBefore, "2002");
 
-        uint256 totalAssetsBefore = IERC20(tokenOut).balanceOf(_recipient);
-        uint256 assetsToWithdraw = totalSharesBefore * assetsBefore / _shares;
+        uint256 totalAssetsBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
+        uint256 assetsToWithdraw = totalSharesBefore * totalAssetsBefore / _shares;
 
         WithdrawParams memory params =
             WithdrawParams({ shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0 });
@@ -278,8 +278,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         _extractTokenInRewards({
             _ratio: params.shareRatio,
             _result: params.balanceAfter - params.balanceBefore,
-            _recipient: _recipient,
-            _decimals: IERC20Metadata(tokenOut).decimals()
+            _recipient: _recipient
         });
 
         jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
@@ -328,9 +327,8 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _ratio The ratio of the shares to total shares.
      * @param _result The _result of the balance change.
      * @param _recipient The address of the recipient.
-     * @param _decimals The number of decimals of the token.
      */
-    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient, uint256 _decimals) internal {
+    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient) internal {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (performanceFee == 0) return;
 
@@ -393,6 +391,12 @@ interface IIonPool {
      * @param proof merkle proof that the user is whitelisted.
      */
     function supply(address user, uint256 amount, bytes32[] calldata proof) external;
+
+    /**
+     * @dev Current token balance
+     * @param user to get balance of
+     */
+    function balanceOf(address user) external view returns (uint256);
 
     /**
      * @dev Accounting is done in normalized balances
