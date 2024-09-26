@@ -108,7 +108,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
      * StrategyBaseUpgradeable to use up those slots without affecting the storage layout of child contracts.
      */
-    uint256[49] __gap;
+    uint256[49] __gap_child;
 
     // -- Constructor --
 
