@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.20;
 
-/// @notice common operations
+/**
+ * @title OperationsLib
+ * @notice Provides utility functions for common operations, such as fee calculations, ratios, approvals, and revert
+ * message handling.
+ */
 library OperationsLib {
     uint256 internal constant FEE_FACTOR = 10_000;
 
@@ -12,12 +15,25 @@ library OperationsLib {
 
     }
 
-    /// @notice gets the amount used as a fee
+    /**
+     * @notice Calculate the absolute fee from the given amount and fee percentage.
+     * @dev Rounds the fee amount up to avoid any precision loss vulnerabilities.
+     * @param amount The original amount to apply the fee on.
+     * @param fee The fee percentage to be applied.
+     * @return The calculated fee value.
+     */
     function getFeeAbsolute(uint256 amount, uint256 fee) internal pure returns (uint256) {
         return (amount * fee) / FEE_FACTOR + (amount * fee % FEE_FACTOR == 0 ? 0 : 1);
     }
 
-    /// @notice retrieves ratio between 2 numbers
+    /**
+     * @notice Get the ratio of two numbers with a specified precision and rounding option.
+     * @param numerator The numerator in the ratio calculation.
+     * @param denominator The denominator in the ratio calculation.
+     * @param precision The number of decimals to include in the result.
+     * @param rounding The rounding direction (Ceil or Floor).
+     * @return The calculated ratio.
+     */
     function getRatio(
         uint256 numerator,
         uint256 denominator,
@@ -39,25 +55,34 @@ library OperationsLib {
         return (_quotient);
     }
 
-    /// @notice approves token for spending
+    /**
+     * @notice Safely approve a token for spending by first setting approval to zero and then to the desired value.
+     * @param token The address of the token to approve.
+     * @param to The address to grant approval for spending.
+     * @param value The amount of tokens to approve.
+     */
     function safeApprove(address token, address to, uint256 value) internal {
-        (bool successEmtptyApproval,) =
+        (bool successEmptyApproval,) =
             token.call(abi.encodeWithSelector(bytes4(keccak256("approve(address,uint256)")), to, 0));
-        require(successEmtptyApproval, "OperationsLib::safeApprove: approval reset failed");
+        require(successEmptyApproval, "OperationsLib::safeApprove: approval reset failed");
 
         (bool success, bytes memory data) =
             token.call(abi.encodeWithSelector(bytes4(keccak256("approve(address,uint256)")), to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "OperationsLib::safeApprove: approve failed");
     }
 
-    /// @notice gets the revert message string
+    /**
+     * @notice Decode and return the revert message from a failed transaction.
+     * @param _returnData The return data of a failed external call.
+     * @return The decoded revert message string.
+     */
     function getRevertMsg(bytes memory _returnData) internal pure returns (string memory) {
-        // If the _res length is less than 68, then the transaction failed silently (without a revert message)
+        // If the return data length is less than 68, then the transaction failed without a specific revert message
         if (_returnData.length < 68) return "Transaction reverted silently";
         assembly {
             // Slice the sighash.
             _returnData := add(_returnData, 0x04)
         }
-        return abi.decode(_returnData, (string)); // All that remains is the revert string
+        return abi.decode(_returnData, (string)); // Return the revert string message
     }
 }
