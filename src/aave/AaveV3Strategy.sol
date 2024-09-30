@@ -261,7 +261,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
         uint256 balanceBefore = IERC20¸(tokenIn).balanceOf(_recipient);
         lendingPool.withdraw({ asset: _asset, amount: _shares, to: _recipient });
-        uint256 balanceAfter = IAToken(tokenIn).scaledBalanceOf(_recipient);
+        uint256 balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         _extractTokenInRewards({ _ratio: shareRatio, _result: balanceAfter - balanceBefore, _recipient: _recipient });
 
