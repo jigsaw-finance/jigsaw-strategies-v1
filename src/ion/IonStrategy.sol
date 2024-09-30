@@ -273,7 +273,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         });
         // Assert the call succeeded.
         require(success, OperationsLib.getRevertMsg(returnData));
-        params.balanceAfter = ionPool.balanceOf(_recipient);
+        params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         _extractTokenInRewards({
             _ratio: params.shareRatio,
