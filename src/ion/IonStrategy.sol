@@ -262,7 +262,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         params.investment =
             (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
-        params.balanceBefore = ionPool.balanceOf(_recipient);
+        params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(ionPool),
             _call: abi.encodeWithSignature(
