@@ -239,7 +239,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 totalSharesBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
         require(_shares <= totalSharesBefore, "2002");
 
-        uint256 totalAssetsBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
+        uint256 totalAssetsBefore = IIonPool(tokenOut).balanceOf(_recipient);
         uint256 assetsToWithdraw = totalSharesBefore * totalAssetsBefore / _shares;
 
         WithdrawParams memory params =
