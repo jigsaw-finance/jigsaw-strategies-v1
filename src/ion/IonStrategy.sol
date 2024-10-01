@@ -186,7 +186,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         });
         uint256 shares = ionPool.normalizedBalanceOf(_recipient) - balanceBefore;
 
-        recipients[_recipient].investedAmount += shares;
+        recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += shares;
 
         _mint({
