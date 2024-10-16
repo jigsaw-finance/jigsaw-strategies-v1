@@ -37,25 +37,22 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        address jRewards = address(new ERC20Mock());
-        address stakerFactory = address(new StakerLightFactory({ _initialOwner: OWNER }));
-
         address strategyImplementation = address(new AaveV3Strategy());
-
-        AaveV3Strategy.InitializerParams memory initParams = AaveV3Strategy.InitializerParams({
-            owner: OWNER,
-            managerContainer: address(managerContainer),
-            stakerFactory: address(stakerFactory),
-            lendingPool: lendingPool,
-            rewardsController: rewardsController,
-            rewardToken: address(0),
-            jigsawRewardToken: jRewards,
-            jigsawRewardDuration: 60 days,
-            tokenIn: tokenIn,
-            tokenOut: tokenOut
-        });
-
-        bytes memory data = abi.encodeCall(AaveV3Strategy.initialize, initParams);
+        bytes memory data = abi.encodeCall(
+            AaveV3Strategy.initialize,
+            AaveV3Strategy.InitializerParams({
+                owner: OWNER,
+                managerContainer: address(managerContainer),
+                stakerFactory: address(stakerFactory),
+                lendingPool: lendingPool,
+                rewardsController: rewardsController,
+                rewardToken: address(0),
+                jigsawRewardToken: jRewards,
+                jigsawRewardDuration: 60 days,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut
+            })
+        );
 
         address proxy = address(new ERC1967Proxy(strategyImplementation, data));
         strategy = AaveV3Strategy(proxy);
@@ -85,7 +82,9 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit reverts correctly when wrong asset
-    function test_deposit_when_wrongAsset(address asset) public {
+    function test_deposit_when_wrongAsset(
+        address asset
+    ) public {
         vm.assume(asset != strategy.tokenIn());
         // Invest into the tested strategy vie strategyManager
         vm.prank(address(strategyManager), address(strategyManager));
@@ -144,7 +143,9 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if withdraw reverts correctly when wrong asset
-    function test_withdraw_when_wrongAsset(address asset) public {
+    function test_withdraw_when_wrongAsset(
+        address asset
+    ) public {
         vm.assume(asset != strategy.tokenIn());
         // Invest into the tested strategy vie strategyManager
         vm.prank(address(strategyManager), address(strategyManager));
