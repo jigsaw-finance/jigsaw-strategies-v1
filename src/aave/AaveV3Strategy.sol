@@ -140,7 +140,9 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Initializer for the Aave Strategy.
      */
-    function initialize(InitializerParams memory _params) public initializer {
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
         require(_params.managerContainer != address(0), "3065");
         require(_params.lendingPool != address(0), "3036");
         require(_params.rewardsController != address(0), "3039");
@@ -169,7 +171,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
                 _holdingManager: _getManager().holdingManager(),
-                _tokenIn: address(receiptToken),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration
