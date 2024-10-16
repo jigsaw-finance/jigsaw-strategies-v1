@@ -28,22 +28,20 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        address jRewards = address(new ERC20Mock());
-        address stakerFactory = address(new StakerLightFactory({ _initialOwner: OWNER }));
         address strategyImplementation = address(new IonStrategy());
-
-        IonStrategy.InitializerParams memory initParams = IonStrategy.InitializerParams({
-            owner: OWNER,
-            managerContainer: address(managerContainer),
-            stakerFactory: address(stakerFactory),
-            ionPool: address(ION_POOL),
-            jigsawRewardToken: jRewards,
-            jigsawRewardDuration: 60 days,
-            tokenIn: tokenIn,
-            tokenOut: tokenOut
-        });
-
-        bytes memory data = abi.encodeCall(IonStrategy.initialize, initParams);
+        bytes memory data = abi.encodeCall(
+            IonStrategy.initialize,
+            IonStrategy.InitializerParams({
+                owner: OWNER,
+                managerContainer: address(managerContainer),
+                stakerFactory: address(stakerFactory),
+                ionPool: address(ION_POOL),
+                jigsawRewardToken: jRewards,
+                jigsawRewardDuration: 60 days,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut
+            })
+        );
         address proxy = address(new ERC1967Proxy(strategyImplementation, data));
         strategy = IonStrategy(proxy);
 
@@ -130,16 +128,26 @@ interface IIonPool {
     function supply(address user, uint256 amount, bytes32[] calldata proof) external;
     function owner() external returns (address);
     function whitelist() external returns (address);
-    function updateSupplyCap(uint256 newSupplyCap) external;
+    function updateSupplyCap(
+        uint256 newSupplyCap
+    ) external;
     function updateIlkDebtCeiling(uint8 ilkIndex, uint256 newCeiling) external;
-    function balanceOf(address user) external view returns (uint256);
-    function normalizedBalanceOf(address user) external returns (uint256);
+    function balanceOf(
+        address user
+    ) external view returns (uint256);
+    function normalizedBalanceOf(
+        address user
+    ) external returns (uint256);
     function totalSupply() external view returns (uint256);
     function debt() external view returns (uint256);
     function supplyFactorUnaccrued() external view returns (uint256);
-    function getIlkAddress(uint256 ilkIndex) external view returns (address);
+    function getIlkAddress(
+        uint256 ilkIndex
+    ) external view returns (address);
     function decimals() external view returns (uint8);
-    function balanceOfUnaccrued(address user) external view returns (uint256);
+    function balanceOfUnaccrued(
+        address user
+    ) external view returns (uint256);
 }
 
 interface IWhitelist {
@@ -147,7 +155,9 @@ interface IWhitelist {
      * @notice Approves a protocol controlled address to bypass the merkle proof check.
      * @param addr The address to approve.
      */
-    function approveProtocolWhitelist(address addr) external;
+    function approveProtocolWhitelist(
+        address addr
+    ) external;
 }
 
 contract Errors {

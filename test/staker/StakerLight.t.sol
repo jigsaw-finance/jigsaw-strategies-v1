@@ -32,7 +32,6 @@ contract StakerLightTest is Test, BasicContractsFixture {
         address deployment = factory.createStakerLight({
             _initialOwner: OWNER,
             _holdingManager: address(holdingManager),
-            _tokenIn: tokenIn,
             _rewardToken: jRewards,
             _strategy: STRATEGY,
             _rewardsDuration: 10 days
