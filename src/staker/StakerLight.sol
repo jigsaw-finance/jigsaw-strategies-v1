@@ -90,7 +90,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Modifier to update the reward for a specified account.
      * @param account The account for which the reward needs to be updated.
      */
-    modifier updateReward(address account) {
+    modifier updateReward(
+        address account
+    ) {
         rewardPerTokenStored = rewardPerToken();
         lastUpdateTime = lastTimeRewardApplicable();
         if (account != address(0)) {
@@ -104,7 +106,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Modifier to check if the provided address is valid.
      * @param _address to be checked for validity.
      */
-    modifier validAddress(address _address) {
+    modifier validAddress(
+        address _address
+    ) {
         if (_address == address(0)) revert InvalidAddress();
         _;
     }
@@ -113,7 +117,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Modifier to check if the provided amount is valid.
      * @param _amount to be checked for validity.
      */
-    modifier validAmount(uint256 _amount) {
+    modifier validAmount(
+        uint256 _amount
+    ) {
         if (_amount == 0) revert InvalidAmount();
         _;
     }
@@ -131,7 +137,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Modifier to restrict a function to be called only by the Holding's owner.
      * @notice Reverts the transaction if the msg.sender is not the owner of the Holding.
      */
-    modifier onlyInvestor(address _holding) {
+    modifier onlyInvestor(
+        address _holding
+    ) {
         if (holdingManager.userHolding(msg.sender) != _holding) revert UnauthorizedCaller();
         _;
     }
@@ -231,7 +239,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Sets the duration of each reward period.
      * @param _rewardsDuration The new rewards duration.
      */
-    function setRewardsDuration(uint256 _rewardsDuration) external override onlyOwner {
+    function setRewardsDuration(
+        uint256 _rewardsDuration
+    ) external override onlyOwner {
         if (block.timestamp <= periodFinish) revert PreviousPeriodNotFinished(block.timestamp, periodFinish);
         emit RewardsDurationUpdated(rewardsDuration, _rewardsDuration);
         rewardsDuration = _rewardsDuration;
@@ -249,6 +259,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
         address _from,
         uint256 _amount
     ) external override onlyOwner validAmount(_amount) updateReward(address(0)) {
+        // To mitigate any DOS issues, Admin must deposit 1 wei into the staker contract at the initialization
+        require(_totalSupply != 0, "Zero totalSupply");
+
         // Transfer assets from the user's wallet to this contract.
         IERC20(rewardToken).safeTransferFrom({ from: _from, to: address(this), value: _amount });
 
@@ -306,7 +319,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Returns the total invested amount for an account.
      * @param _account The participant's address.
      */
-    function balanceOf(address _account) external view override returns (uint256) {
+    function balanceOf(
+        address _account
+    ) external view override returns (uint256) {
         return _balances[_account];
     }
 
@@ -321,8 +336,6 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Returns rewards per token.
      */
     function rewardPerToken() public view override returns (uint256) {
-        require(_totalSupply != 0, "Zero totalSupply");
-
         return
             rewardPerTokenStored + (((lastTimeRewardApplicable() - lastUpdateTime) * rewardRate * 1e18) / _totalSupply);
     }
@@ -331,7 +344,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Returns accrued rewards for an account.
      * @param _account The participant's address.
      */
-    function earned(address _account) public view override returns (uint256) {
+    function earned(
+        address _account
+    ) public view override returns (uint256) {
         return
             ((_balances[_account] * (rewardPerToken() - userRewardPerTokenPaid[_account])) / 1e18) + rewards[_account];
     }
