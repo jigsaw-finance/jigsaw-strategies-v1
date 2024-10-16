@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -28,6 +29,9 @@ import { SampleTokenERC20 } from "@jigsaw/test/utils/mocks/SampleTokenERC20.sol"
 import { StrategyWithoutRewardsMock } from "@jigsaw/test/utils/mocks/StrategyWithoutRewardsMock.sol";
 import { wETHMock } from "@jigsaw/test/utils/mocks/wETHMock.sol";
 
+import { StakerLight } from "../../src/staker/StakerLight.sol";
+import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+
 abstract contract BasicContractsFixture is Test {
     address internal constant OWNER = address(uint160(uint256(keccak256("owner"))));
 
@@ -49,6 +53,8 @@ abstract contract BasicContractsFixture is Test {
     StablesManager internal stablesManager;
     StrategyManager internal strategyManager;
     StrategyWithoutRewardsMock internal strategyWithoutRewardsMock;
+    StakerLightFactory internal stakerFactory;
+    address internal jRewards;
 
     // collateral to registry mapping
     mapping(address => address) internal registries;
@@ -111,6 +117,11 @@ abstract contract BasicContractsFixture is Test {
             _receiptTokenSymbol: "RUSDCM"
         });
         strategyManager.addStrategy(address(strategyWithoutRewardsMock));
+
+        jRewards = address(new ERC20Mock());
+        stakerFactory = new StakerLightFactory({ _initialOwner: OWNER });
+        stakerFactory.setStakerLightReferenceImplementation({ _referenceImplementation: address(new StakerLight()) });
+
         vm.stopPrank();
     }
 
@@ -152,7 +163,9 @@ abstract contract BasicContractsFixture is Test {
 
     // Modifiers
 
-    modifier notOwnerNotZero(address _user) {
+    modifier notOwnerNotZero(
+        address _user
+    ) {
         vm.assume(_user != OWNER);
         vm.assume(_user != address(0));
         _;

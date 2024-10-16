@@ -6,13 +6,10 @@ import "forge-std/console.sol";
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import { ReservoirStablecoinStrategy } from "../../src/reservoir/ReservoirStablecoinStrategy.sol";
-import { StakerLight } from "../../src/staker/StakerLight.sol";
-import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
 address constant RESERVOIR_CI = 0x04716DB62C085D9e08050fcF6F7D775A03d07720;
 address constant RESERVOIR_PSM = 0x4809010926aec940b550D34a46A52739f996D75D;
@@ -28,8 +25,6 @@ contract ReservoirStablecoinStrategyTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        address jRewards = address(new ERC20Mock());
-        address stakerFactory = address(new StakerLightFactory({ _initialOwner: OWNER }));
         address strategyImplementation = address(new ReservoirStablecoinStrategy());
         bytes memory data = abi.encodeCall(
             ReservoirStablecoinStrategy.initialize,
@@ -38,7 +33,7 @@ contract ReservoirStablecoinStrategyTest is Test, BasicContractsFixture {
                 managerContainer: address(managerContainer),
                 creditEnforcer: RESERVOIR_CI,
                 pegStabilityModule: RESERVOIR_PSM,
-                stakerFactory: stakerFactory,
+                stakerFactory: address(stakerFactory),
                 jigsawRewardToken: jRewards,
                 jigsawRewardDuration: 60 days,
                 tokenIn: tokenIn,
@@ -112,6 +107,8 @@ contract ReservoirStablecoinStrategyTest is Test, BasicContractsFixture {
 
         assertEq(underlyingAfter - underlyingBefore, withdrawalShares / 1e12, "Withdrawn wrong amount");
         assertEq(totalShares - withdrawalShares, updatedShares, "Shares amount updated wrong");
+
+        if (totalShares - withdrawalShares == 0) return;
 
         // withdraw the rest
         vm.prank(user, user);

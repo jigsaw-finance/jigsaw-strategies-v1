@@ -145,7 +145,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
                 _holdingManager: _getManager().holdingManager(),
-                _tokenIn: address(receiptToken),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration
