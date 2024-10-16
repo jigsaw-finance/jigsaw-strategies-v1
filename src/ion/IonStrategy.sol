@@ -64,13 +64,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
 
-    /**
-     * @notice Emitted when the Ion Pool address is updated.
-     * @param _old The old Ion Pool address.
-     * @param _new The new Ion Pool address.
-     */
-    event ionPoolUpdated(address indexed _old, address indexed _new);
-
     // -- State variables --
 
     /**
@@ -109,11 +102,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
-     * @notice The total investments in the strategy.
-     */
-    uint256 public totalInvestments;
-
-    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address => IStrategy.RecipientInfo) public override recipients;
@@ -129,7 +117,9 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Initializer for the Ion Strategy.
      */
-    function initialize(InitializerParams memory _params) public initializer {
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
         require(_params.managerContainer != address(0), "3065");
         require(_params.ionPool != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
@@ -187,41 +177,39 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        uint16 refCode = 0;
-        if (_data.length > 0) {
-            refCode = abi.decode(_data, (uint16));
-        }
-
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
+        uint256 balanceBefore = ionPool.normalizedBalanceOf(_recipient);
         OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
-        ionPool.supply({ user: _recipient, amount: _amount, proof: new bytes32[](0) });
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
+        ionPool.supply({
+            user: _recipient,
+            amount: _amount,
+            proof: _data.length > 0 ? abi.decode(_data, (bytes32[])) : new bytes32[](0)
+        });
+        uint256 shares = ionPool.normalizedBalanceOf(_recipient) - balanceBefore;
 
-        recipients[_recipient].investedAmount += balanceAfter - balanceBefore;
-        recipients[_recipient].totalShares += balanceAfter - balanceBefore;
-        totalInvestments += balanceAfter - balanceBefore;
+        recipients[_recipient].investedAmount += _amount;
+        recipients[_recipient].totalShares += shares;
 
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _amount: balanceAfter - balanceBefore,
+            _amount: shares,
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
         emit Deposit({
             asset: _asset,
             tokenIn: tokenIn,
             assetAmount: _amount,
             tokenInAmount: _amount,
-            shares: balanceAfter - balanceBefore,
+            shares: shares,
             recipient: _recipient
         });
 
-        return (balanceAfter - balanceBefore, _amount);
+        return (shares, _amount);
     }
 
     /**
@@ -244,7 +232,11 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
-        require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
+        uint256 totalSharesBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
+        require(_shares <= totalSharesBefore, "2002");
+
+        uint256 totalAssetsBefore = IIonPool(tokenOut).balanceOf(_recipient);
+        uint256 assetsToWithdraw = _shares * totalAssetsBefore / totalSharesBefore; // Rounds down
 
         WithdrawParams memory params =
             WithdrawParams({ shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0 });
@@ -272,7 +264,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             _call: abi.encodeWithSignature(
                 "withdraw(address,uint256)",
                 _recipient, // receiverOfUnderlying
-                _shares // amount of underlying to redeem
+                assetsToWithdraw // amount of underlying to redeem
             )
         });
         // Assert the call succeeded.
@@ -282,19 +274,16 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         _extractTokenInRewards({
             _ratio: params.shareRatio,
             _result: params.balanceAfter - params.balanceBefore,
-            _recipient: _recipient,
-            _decimals: IERC20Metadata(tokenOut).decimals()
+            _recipient: _recipient
         });
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
 
         recipients[_recipient].totalShares =
             _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
-        totalInvestments =
-            params.balanceAfter - params.balanceBefore > totalInvestments ? 0 : totalInvestments - params.investment;
 
         emit Withdraw({
             asset: _asset,
@@ -334,15 +323,15 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _ratio The ratio of the shares to total shares.
      * @param _result The _result of the balance change.
      * @param _recipient The address of the recipient.
-     * @param _decimals The number of decimals of the token.
      */
-    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient, uint256 _decimals) internal {
-        if (_ratio > (10 ** _decimals) && _result < recipients[_recipient].investedAmount) return;
-        uint256 rewardAmount = 0;
-        if (_ratio >= (10 ** _decimals)) rewardAmount = _result - recipients[_recipient].investedAmount;
-        if (rewardAmount == 0) return;
-
+    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient) internal {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        if (performanceFee == 0) return;
+
+        uint256 _investment = _ratio * recipients[_recipient].investedAmount;
+        uint256 rewardAmount;
+        if (_result > _investment) rewardAmount = _result - _investment;
+
         uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
 
         if (fee > 0) {
@@ -377,5 +366,15 @@ interface IIonPool {
      * @dev Current token balance
      * @param user to get balance of
      */
-    function balanceOf(address user) external view returns (uint256);
+    function balanceOf(
+        address user
+    ) external view returns (uint256);
+
+    /**
+     * @dev Accounting is done in normalized balances
+     * @param user to get normalized balance of
+     */
+    function normalizedBalanceOf(
+        address user
+    ) external view returns (uint256);
 }
