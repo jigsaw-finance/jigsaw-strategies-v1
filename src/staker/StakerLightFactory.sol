@@ -59,6 +59,9 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
         address _strategy,
         uint256 _rewardsDuration
     ) external override returns (address newStakerLightAddress) {
+        // Assert that referenceImplementation has code in it to protect the system from cloning invalid implementation.
+        require(referenceImplementation.code.length > 0, "Reference implementation has no code");
+
         // Clone the StakerLight contract implementation for the new StakerLight contract.
         newStakerLightAddress = Clones.cloneDeterministic({
             implementation: referenceImplementation,
@@ -72,7 +75,6 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
         IStakerLight(newStakerLightAddress).initialize({
             _initialOwner: _initialOwner,
             _holdingManager: _holdingManager,
-            _tokenIn: _tokenIn,
             _rewardToken: _rewardToken,
             _strategy: _strategy,
             _rewardsDuration: _rewardsDuration
