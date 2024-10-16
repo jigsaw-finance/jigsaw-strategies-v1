@@ -112,12 +112,6 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     mapping(address => IStrategy.RecipientInfo) public override recipients;
 
-    /**
-     * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
-     * StrategyBaseUpgradeable to use up those slots without affecting the storage layout of child contracts.
-     */
-    uint256[49] __gap;
-
     // -- Constructor --
 
     constructor() {
@@ -129,7 +123,9 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Initializer for the Ion Strategy.
      */
-    function initialize(InitializerParams memory _params) public initializer {
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
         require(_params.managerContainer != address(0), "3065");
         require(_params.creditEnforcer != address(0), "3036");
         require(_params.pegStabilityModule != address(0), "3036");
@@ -247,7 +243,8 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         params.shareRatio = OperationsLib.getRatio({
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
-            precision: IERC20Metadata(tokenOut).decimals()
+            precision: IERC20Metadata(tokenOut).decimals(),
+            rounding: OperationsLib.Rounding.Ceil
         });
 
         _burn({
