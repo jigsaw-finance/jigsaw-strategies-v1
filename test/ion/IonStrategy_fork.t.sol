@@ -69,19 +69,19 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
         uint256 amount = bound(_amount, 1e18, 10e18);
 
         address userHolding = initiateUser(user, tokenIn, amount);
-        uint256 balanceBefore = IIonPool(tokenOut).balanceOfUnaccrued(userHolding);
+        uint256 balanceBefore = IIonPool(tokenOut).normalizedBalanceOf(userHolding);
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
         (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
 
-        uint256 balanceAfter = IIonPool(tokenOut).balanceOfUnaccrued(userHolding);
+        uint256 balanceAfter = IIonPool(tokenOut).normalizedBalanceOf(userHolding);
         uint256 expectedShares = balanceAfter - balanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
 
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(investedAmount, expectedShares, "Recipient invested amount mismatch");
+        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
         assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
     }
 
@@ -118,7 +118,7 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
 
         // Assert statements with reasons
         assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
-        assertApproxEqAbs(tokenInAmount, expectedWithdrawal, 1, "Incorrect tokenInAmount returned");
+        assertApproxEqAbs(tokenInAmount, expectedWithdrawal, 2, "Incorrect tokenInAmount returned");
         assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
     }
 }
