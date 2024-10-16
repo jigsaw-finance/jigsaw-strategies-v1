@@ -117,7 +117,9 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Initializer for the Ion Strategy.
      */
-    function initialize(InitializerParams memory _params) public initializer {
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
         require(_params.managerContainer != address(0), "3065");
         require(_params.ionPool != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
@@ -182,7 +184,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         ionPool.supply({
             user: _recipient,
             amount: _amount,
-            proof: _data.length > 0 ? getBytes32Array(_data) : new bytes32[](0)
+            proof: _data.length > 0 ? abi.decode(_data, (bytes32[])) : new bytes32[](0)
         });
         uint256 shares = ionPool.normalizedBalanceOf(_recipient) - balanceBefore;
 
@@ -338,32 +340,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
         }
     }
-
-    /**
-     * @notice Converts a `bytes` calldata input into a `bytes32[]` memory array.
-     *
-     * @param _data The `bytes` calldata input that is expected to be a multiple of 32 bytes.
-     * @return result A `bytes32[]` memory array containing the converted 32-byte chunks of the input data.
-     *
-     */
-    function getBytes32Array(bytes calldata _data) internal pure returns (bytes32[] memory) {
-        // Ensure the input length is a multiple of 32, as `bytes32` is 32 bytes
-        require(_data.length % 32 == 0, "Invalid input length, must be multiple of 32");
-
-        // Calculate the length of the resulting array
-        uint256 numElements = _data.length / 32;
-
-        // Initialize the bytes32 array
-        bytes32[] memory result = new bytes32[](numElements);
-
-        // Loop through the input data and convert each chunk of 32 bytes into bytes32
-        for (uint256 i = 0; i < numElements; i++) {
-            bytes32 element = abi.decode(_data[i * 32:(i + 1) * 32], (bytes32));
-            result[i] = element;
-        }
-
-        return result;
-    }
 }
 
 interface IIonPool {
@@ -390,11 +366,15 @@ interface IIonPool {
      * @dev Current token balance
      * @param user to get balance of
      */
-    function balanceOf(address user) external view returns (uint256);
+    function balanceOf(
+        address user
+    ) external view returns (uint256);
 
     /**
      * @dev Accounting is done in normalized balances
      * @param user to get normalized balance of
      */
-    function normalizedBalanceOf(address user) external view returns (uint256);
+    function normalizedBalanceOf(
+        address user
+    ) external view returns (uint256);
 }
