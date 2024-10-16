@@ -338,7 +338,6 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         return (claimedAmounts, rewardsList);
     }
 
-    // @audit test if doesn't revert if no rewards
     /**
      * @notice Claims rewards from the Pendle's Market.
      * @param _holding Address of the holding to claim rewards for.
