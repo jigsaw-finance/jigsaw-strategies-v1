@@ -5,6 +5,7 @@ import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/exte
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "@pendle/interfaces/IPAllActionV3.sol";
+import { IPMarket, IPYieldToken, IStandardizedYield } from "@pendle/interfaces/IPMarket.sol";
 
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
@@ -41,7 +42,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the Ion receipt token (iToken)
+        address tokenOut; // The address of the Pendle receipt token
     }
 
     /**
@@ -322,44 +323,123 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     }
 
     /**
-     * @notice Claims rewards from the Ion Pool.
-     * @return The amounts of rewards claimed.
-     * @return The addresses of the reward tokens.
+     * @notice Claims rewards from the Pendle Pool.
+     * @return claimedAmounts The amounts of rewards claimed.
+     * @return rewardsList The addresses of the reward tokens.
      */
     function claimRewards(
         address _recipient,
         bytes calldata
-    ) external override returns (uint256[] memory, address[] memory) {
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-            _contract: pendleMarket,
-            _call: abi.encodeWithSignature("redeemRewards(address)", _recipient)
-        });
+    ) external override returns (uint256[] memory claimedAmounts, address[] memory rewardsList) {
+        (uint256[] memory marketRewardAmounts, address[] memory marketRewardTokens) = _claimMarketRewards(_recipient);
 
-        // @audit Adapt for pendle
+        (IStandardizedYield _SY,, IPYieldToken _YT) = IPMarket(pendleMarket).readTokens();
 
-        // // Assert the call succeeded.
-        // require(success, OperationsLib.getRevertMsg(returnData));
-        // (address[] memory rewardsList, uint256[] memory claimedAmounts) = abi.decode(returnData, (address[],
-        // uint256[]));
+        (uint256[] memory ytRewardAmounts, address[] memory ytRewardTokens) = _claimYtRewards(_recipient, _SY, _YT);
 
-        // // Return if no rewards were claimed.
-        // if (rewardsList.length == 0) return (claimedAmounts, rewardsList);
-
-        // (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        // address feeAddr = _getManager().feeAddress();
-
-        // // Take performance fee for all the rewards.
-        // for (uint256 i = 0; i < rewardsList.length; i++) {
-        //     uint256 fee = OperationsLib.getFeeAbsolute(claimedAmounts[i], performanceFee);
-        //     if (fee > 0) {
-        //         claimedAmounts[i] -= fee;
-        //         emit FeeTaken(rewardsList[i], feeAddr, fee);
-        //         IHolding(_recipient).transfer({ _token: rewardsList[i], _to: feeAddr, _amount: fee });
-        //     }
-        // }
+        // @audit call _takeFees with all the reward tokens
 
         // emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });
         // return (claimedAmounts, rewardsList);
+    }
+
+    // @audit test if doesn't revert if no rewards
+    /**
+     * @notice Claims rewards from the Pendle's StandardizedYield Contract.
+     * @return amounts The amounts of rewards claimed.
+     * @return tokens The addresses of the reward tokens.
+     */
+    function _claimYtRewards(
+        address _recipient,
+        IStandardizedYield _SY,
+        IPYieldToken _YT
+    ) private returns (uint256[] memory, address[] memory) {
+        // Call `YieldToken` on StandardizedYield Contract to claim interest and  rewards.
+        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+            _contract: address(_YT),
+            _call: abi.encodeWithSignature("redeemDueInterestAndRewards(address,bool,bool)", _recipient, true, true)
+        });
+
+        // Get reward tokens from StandardizedYield Contract.
+        address[] memory rewardTokens = _SY.getRewardTokens();
+        (uint256 interestOut, uint256[] memory rewardsOut) = abi.decode(returnData, (uint256, uint256[]));
+
+        // If the interest out is not zero, add it to the reward tokens and track its amount
+        if (interestOut != 0) {
+            // Create arrays for reward tokens and amounts with extra space for interest.
+            address[] memory tokens = new address[](rewardTokens.length + 1);
+            address[] memory amounts = new address[](rewardsOut.length + 1);
+
+            // Copy `rewardTokens` and `rewardsOut` directly into the new arrays.
+            for (uint256 i = 0; i < rewardTokens.length; i++) {
+                tokens[i] = rewardTokens[i];
+                amounts[i] = rewardsOut[i];
+            }
+
+            // Append `tokenIn` and `interestOut` at the end of the new arrays.
+            tokens[rewardTokens.length] = tokenIn;
+            amounts[rewardsOut.length] = interestOut;
+
+            return (tokens, amounts);
+        }
+
+        return (rewardsOut, rewardTokens);
+    }
+
+    // @audit test if doesn't revert if no rewards
+    /**
+     * @notice Claims rewards from the Pendle's Market.
+     * @param _holding Address of the holding to claim rewards for.
+     * @return amounts The amounts of rewards claimed.
+     * @return tokens The addresses of the reward tokens.
+     */
+    function _claimMarketRewards(
+        address _holding
+    ) private returns (uint256[] memory amounts, address[] memory tokens) {
+        (bool success, bytes memory returnData) = IHolding(_holding).genericCall({
+            _contract: pendleMarket,
+            _call: abi.encodeWithSignature("redeemRewards(address)", _holding)
+        });
+
+        if (!success) return (amounts, tokens);
+
+        // Get Pendle data.
+        tokens = IPMarket(pendleMarket).getRewardTokens();
+        amounts = abi.decode(returnData, (uint256[]));
+    }
+
+    function _takeFees(address[] memory tokens, uint256[] memory amounts, address _holding) private {
+        // Get fee data.
+        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        address feeAddr = _getManager().feeAddress();
+
+        for (uint256 i = 0; i < amounts.length; i++) {
+            // Take protocol fee for all non zero rewards.
+            if (amounts[i] != 0) {
+                uint256 fee = OperationsLib.getFeeAbsolute(amounts[i], performanceFee);
+                if (fee > 0) {
+                    amounts[i] -= fee;
+                    emit FeeTaken(tokens[i], feeAddr, fee);
+                    IHolding(_holding).transfer({ _token: tokens[i], _to: feeAddr, _amount: fee });
+                }
+            }
+        }
+    }
+
+    function _concat(address[] memory array1, address[] memory array2) internal returns (address[] memory res) {
+        uint256 length1 = array1.length;
+        uint256 length2 = array2.length;
+        res = new address[](length1 + length2);
+
+        // Copy array1.
+        for (uint256 i = 0; i < length1; i++) {
+            res[i] = array1[i];
+        }
+
+        // Copy array2.
+        for (uint256 i = 0; i < length2; i++) {
+            res[length1 + i] = array2[i];
+        }
     }
 
     // -- Getters --
