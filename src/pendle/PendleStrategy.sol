@@ -332,58 +332,10 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override returns (uint256[] memory claimedAmounts, address[] memory rewardsList) {
         (uint256[] memory marketRewardAmounts, address[] memory marketRewardTokens) = _claimMarketRewards(_recipient);
+        _takeFees({ _tokens: marketRewardTokens, _amounts: marketRewardAmounts, _holding: _recipient });
 
-        (IStandardizedYield _SY,, IPYieldToken _YT) = IPMarket(pendleMarket).readTokens();
-
-        (uint256[] memory ytRewardAmounts, address[] memory ytRewardTokens) = _claimYtRewards(_recipient, _SY, _YT);
-
-        // @audit call _takeFees with all the reward tokens
-
-        // emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });
-        // return (claimedAmounts, rewardsList);
-    }
-
-    // @audit test if doesn't revert if no rewards
-    /**
-     * @notice Claims rewards from the Pendle's StandardizedYield Contract.
-     * @return amounts The amounts of rewards claimed.
-     * @return tokens The addresses of the reward tokens.
-     */
-    function _claimYtRewards(
-        address _recipient,
-        IStandardizedYield _SY,
-        IPYieldToken _YT
-    ) private returns (uint256[] memory, address[] memory) {
-        // Call `YieldToken` on StandardizedYield Contract to claim interest and  rewards.
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-            _contract: address(_YT),
-            _call: abi.encodeWithSignature("redeemDueInterestAndRewards(address,bool,bool)", _recipient, true, true)
-        });
-
-        // Get reward tokens from StandardizedYield Contract.
-        address[] memory rewardTokens = _SY.getRewardTokens();
-        (uint256 interestOut, uint256[] memory rewardsOut) = abi.decode(returnData, (uint256, uint256[]));
-
-        // If the interest out is not zero, add it to the reward tokens and track its amount
-        if (interestOut != 0) {
-            // Create arrays for reward tokens and amounts with extra space for interest.
-            address[] memory tokens = new address[](rewardTokens.length + 1);
-            address[] memory amounts = new address[](rewardsOut.length + 1);
-
-            // Copy `rewardTokens` and `rewardsOut` directly into the new arrays.
-            for (uint256 i = 0; i < rewardTokens.length; i++) {
-                tokens[i] = rewardTokens[i];
-                amounts[i] = rewardsOut[i];
-            }
-
-            // Append `tokenIn` and `interestOut` at the end of the new arrays.
-            tokens[rewardTokens.length] = tokenIn;
-            amounts[rewardsOut.length] = interestOut;
-
-            return (tokens, amounts);
-        }
-
-        return (rewardsOut, rewardTokens);
+        emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });
+        return (claimedAmounts, rewardsList);
     }
 
     // @audit test if doesn't revert if no rewards
@@ -408,37 +360,21 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         amounts = abi.decode(returnData, (uint256[]));
     }
 
-    function _takeFees(address[] memory tokens, uint256[] memory amounts, address _holding) private {
+    function _takeFees(address[] memory _tokens, uint256[] memory _amounts, address _holding) private {
         // Get fee data.
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         address feeAddr = _getManager().feeAddress();
 
-        for (uint256 i = 0; i < amounts.length; i++) {
+        for (uint256 i = 0; i < _amounts.length; i++) {
             // Take protocol fee for all non zero rewards.
-            if (amounts[i] != 0) {
-                uint256 fee = OperationsLib.getFeeAbsolute(amounts[i], performanceFee);
+            if (_amounts[i] != 0) {
+                uint256 fee = OperationsLib.getFeeAbsolute(_amounts[i], performanceFee);
                 if (fee > 0) {
-                    amounts[i] -= fee;
-                    emit FeeTaken(tokens[i], feeAddr, fee);
-                    IHolding(_holding).transfer({ _token: tokens[i], _to: feeAddr, _amount: fee });
+                    _amounts[i] -= fee;
+                    emit FeeTaken(_tokens[i], feeAddr, fee);
+                    IHolding(_holding).transfer({ _token: _tokens[i], _to: feeAddr, _amount: fee });
                 }
             }
-        }
-    }
-
-    function _concat(address[] memory array1, address[] memory array2) internal returns (address[] memory res) {
-        uint256 length1 = array1.length;
-        uint256 length2 = array2.length;
-        res = new address[](length1 + length2);
-
-        // Copy array1.
-        for (uint256 i = 0; i < length1; i++) {
-            res[i] = array1[i];
-        }
-
-        // Copy array2.
-        for (uint256 i = 0; i < length2; i++) {
-            res[length1 + i] = array2[i];
         }
     }
 
