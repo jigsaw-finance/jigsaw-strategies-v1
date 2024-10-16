@@ -39,7 +39,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the Ion receipt token (iToken)
+        address tokenOut; // The address of Reservoir's receipt token
     }
 
     /**
@@ -121,7 +121,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializer for the Ion Strategy.
+     * @notice Initializer for the Reservoir Strategy.
      */
     function initialize(
         InitializerParams memory _params
@@ -289,7 +289,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     }
 
     /**
-     * @notice Claims rewards from the Ion Pool.
+     * @notice Claims rewards from the Reservoir Pool.
      * @return The amounts of rewards claimed.
      * @return The addresses of the reward tokens.
      */
