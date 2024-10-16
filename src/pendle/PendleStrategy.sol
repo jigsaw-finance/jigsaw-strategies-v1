@@ -273,7 +273,8 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         params.shareRatio = OperationsLib.getRatio({
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
-            precision: IERC20Metadata(tokenOut).decimals()
+            precision: IERC20Metadata(tokenOut).decimals(),
+            rounding: OperationsLib.Rounding.Ceil
         });
 
         _burn({
