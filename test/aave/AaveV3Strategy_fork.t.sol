@@ -38,7 +38,6 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         init();
 
         address jRewards = address(new ERC20Mock());
-        address stakerImplementation = address(new StakerLight());
         address stakerFactory = address(new StakerLightFactory({ _initialOwner: OWNER }));
 
         address strategyImplementation = address(new AaveV3Strategy());
@@ -75,7 +74,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Test initialization
-    function test_initialization() public {
+    function test_initialization() public view {
         assertEq(strategy.owner(), OWNER, "Wrong owner");
         assertEq(address(strategy.managerContainer()), address(managerContainer), "Wrong managerContainer");
         assertEq(address(strategy.lendingPool()), lendingPool, "Wrong lendingPool");
