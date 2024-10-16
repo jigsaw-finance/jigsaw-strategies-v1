@@ -336,6 +336,8 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      * @notice Returns rewards per token.
      */
     function rewardPerToken() public view override returns (uint256) {
+        if (_totalSupply == 0) return rewardPerTokenStored;
+
         return
             rewardPerTokenStored + (((lastTimeRewardApplicable() - lastUpdateTime) * rewardRate * 1e18) / _totalSupply);
     }
