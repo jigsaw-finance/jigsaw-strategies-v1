@@ -101,9 +101,11 @@ interface IStakerLight {
     event RewardPaid(address indexed user, uint256 indexed reward);
 
     /**
-     * @notice returns staking token address.
+     * @notice Event emitted when a ERC20 is recovered.
+     * @param token The address of the recovered token.
+     * @param amount The amount of the recovered token.
      */
-    function tokenIn() external view returns (address);
+    event Recovered(address token, uint256 amount);
 
     /**
      * @notice returns reward token address.
@@ -155,7 +157,6 @@ interface IStakerLight {
      *
      * @param _initialOwner The initial owner of the contract.
      * @param _holdingManager The address of the contract that contains the Holding manager contract.
-     * @param _tokenIn The address of the token to be staked.
      * @param _rewardToken The address of the reward token.
      * @param _strategy The address of the strategy contract.
      * @param _rewardsDuration The duration of the rewards period, in seconds.
@@ -163,7 +164,6 @@ interface IStakerLight {
     function initialize(
         address _initialOwner,
         address _holdingManager,
-        address _tokenIn,
         address _rewardToken,
         address _strategy,
         uint256 _rewardsDuration
@@ -185,14 +185,14 @@ interface IStakerLight {
     function addRewards(address _from, uint256 _amount) external;
 
     /**
-     * @notice Triggers stopped state.
+     * This function allows the contract owner to recover ERC20 tokens that might have been
+     * accidentally or otherwise left within the contract. It requires the caller to have the
+     * `onlyOwner` modifier, ensuring that only the owner of the contract can invoke it.
+     *
+     * @param tokenAddress The contract address of the ERC20 token to be recovered.
+     * @param tokenAmount The amount of the specified ERC20 token to be transferred to the owner.
      */
-    function pause() external;
-
-    /**
-     * @notice Returns to normal state.
-     */
-    function unpause() external;
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external;
 
     /**
      * @notice returns the total tokenIn supply.
