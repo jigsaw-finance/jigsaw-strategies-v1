@@ -108,6 +108,8 @@ contract ReservoirStablecoinStrategyTest is Test, BasicContractsFixture {
         assertEq(underlyingAfter - underlyingBefore, withdrawalShares / 1e12, "Withdrawn wrong amount");
         assertEq(totalShares - withdrawalShares, updatedShares, "Shares amount updated wrong");
 
+        if (totalShares - withdrawalShares == 0) return;
+
         // withdraw the rest
         vm.prank(user, user);
         strategyManager.claimInvestment(userHolding, address(strategy), totalShares - withdrawalShares, tokenIn, "");
