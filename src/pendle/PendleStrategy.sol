@@ -43,6 +43,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of the Pendle receipt token
+        address rewardToken; // The address of the Pendle primary reward token
     }
 
     /**
@@ -93,7 +94,6 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     address public override tokenOut;
 
-    // @audit What should go here?
     /**
      * @notice The Pendle's reward token offered to users.
      */
@@ -148,6 +148,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.pendleMarket != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
+        require(_params.rewardToken != address(0), "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
@@ -156,6 +157,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         pendleMarket = _params.pendleMarket;
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
+        rewardToken = _params.rewardToken;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
 
         receiptToken = IReceiptToken(
@@ -333,50 +335,35 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         bytes calldata
     ) external override returns (uint256[] memory claimedAmounts, address[] memory rewardsList) {
-        (uint256[] memory marketRewardAmounts, address[] memory marketRewardTokens) = _claimMarketRewards(_recipient);
-        _takeFees({ _tokens: marketRewardTokens, _amounts: marketRewardAmounts, _holding: _recipient });
-
-        emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });
-        return (claimedAmounts, rewardsList);
-    }
-
-    /**
-     * @notice Claims rewards from the Pendle's Market.
-     * @param _holding Address of the holding to claim rewards for.
-     * @return amounts The amounts of rewards claimed.
-     * @return tokens The addresses of the reward tokens.
-     */
-    function _claimMarketRewards(
-        address _holding
-    ) private returns (uint256[] memory amounts, address[] memory tokens) {
-        (bool success, bytes memory returnData) = IHolding(_holding).genericCall({
+        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pendleMarket,
-            _call: abi.encodeWithSignature("redeemRewards(address)", _holding)
+            _call: abi.encodeWithSignature("redeemRewards(address)", _recipient)
         });
 
-        if (!success) return (amounts, tokens);
+        if (!success) revert(OperationsLib.getRevertMsg(returnData));
 
         // Get Pendle data.
-        tokens = IPMarket(pendleMarket).getRewardTokens();
-        amounts = abi.decode(returnData, (uint256[]));
-    }
+        rewardsList = IPMarket(pendleMarket).getRewardTokens();
+        claimedAmounts = abi.decode(returnData, (uint256[]));
 
-    function _takeFees(address[] memory _tokens, uint256[] memory _amounts, address _holding) private {
         // Get fee data.
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         address feeAddr = _getManager().feeAddress();
 
-        for (uint256 i = 0; i < _amounts.length; i++) {
+        for (uint256 i = 0; i < claimedAmounts.length; i++) {
             // Take protocol fee for all non zero rewards.
-            if (_amounts[i] != 0) {
-                uint256 fee = OperationsLib.getFeeAbsolute(_amounts[i], performanceFee);
+            if (claimedAmounts[i] != 0) {
+                uint256 fee = OperationsLib.getFeeAbsolute(claimedAmounts[i], performanceFee);
                 if (fee > 0) {
-                    _amounts[i] -= fee;
-                    emit FeeTaken(_tokens[i], feeAddr, fee);
-                    IHolding(_holding).transfer({ _token: _tokens[i], _to: feeAddr, _amount: fee });
+                    claimedAmounts[i] -= fee;
+                    emit FeeTaken(rewardsList[i], feeAddr, fee);
+                    IHolding(_recipient).transfer({ _token: rewardsList[i], _to: feeAddr, _amount: fee });
                 }
             }
         }
+
+        emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });
+        return (claimedAmounts, rewardsList);
     }
 
     // -- Getters --
