@@ -292,18 +292,20 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: address(pendleRouter), _amount: _shares });
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(pendleRouter),
-            _call: abi.encodeWithSignature(
-                "removeLiquiditySingleToken(address, address, uint256, TokenOutput, LimitOrderData)",
-                _recipient, // receiverOfUnderlying
-                pendleMarket,
-                _shares,
-                params.output,
-                params.limit
+            _call: abi.encodeCall(
+                IPActionAddRemoveLiqV3.removeLiquiditySingleToken,
+                (
+                    _recipient, // receiverOfUnderlying
+                    pendleMarket,
+                    _shares,
+                    params.output,
+                    params.limit
+                )
             )
         });
 
         // Assert the call succeeded.
-        require(success, OperationsLib.getRevertMsg(returnData));
+        if (!success) revert(OperationsLib.getRevertMsg(returnData));
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
