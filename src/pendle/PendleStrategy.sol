@@ -4,13 +4,16 @@ pragma solidity ^0.8.20;
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import "@pendle/interfaces/IPAllActionV3.sol";
+import { IPMarket, IPYieldToken, IStandardizedYield } from "@pendle/interfaces/IPMarket.sol";
+
+import { OperationsLib } from "../libraries/OperationsLib.sol";
+import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
+
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
-
-import { OperationsLib } from "../libraries/OperationsLib.sol";
-import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
@@ -18,11 +21,11 @@ import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.so
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
 /**
- * @title ReservoirStablecoinStrategy
- * @dev Strategy used for Reservoir Stablecoin.
+ * @title PendleStrategy
+ * @dev Strategy used for investments into Pendle strategy.
  * @author Hovooo (@hovooo)
  */
-contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
+contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
 
     // -- Custom types --
@@ -33,13 +36,24 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     struct InitializerParams {
         address owner; // The address of the initial owner of the Strategy contract
         address managerContainer; // The address of the contract that contains the manager contract
-        address creditEnforcer; // The address of the Reservoir's CreditEnforcer contract
-        address pegStabilityModule; // The Reservoir's PegStabilityModule contract.
+        address pendleRouter; // The address of the Pendle's Router contract
+        address pendleMarket; // The Pendle's Router contract.
         address stakerFactory; // The address of the StakerLightFactory contract
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
-        address tokenOut; // The address of Reservoir's receipt token
+        address tokenOut; // The address of the Pendle receipt token
+        address rewardToken; // The address of the Pendle primary reward token
+    }
+
+    /**
+     * @notice Struct containing parameters for a deposit operation.
+     */
+    struct DepositParams {
+        uint256 minLpOut;
+        ApproxParams guessPtReceivedFromSy;
+        TokenInput input;
+        LimitOrderData limit;
     }
 
     /**
@@ -50,7 +64,10 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 investment; // The amount of funds invested by the user.
         uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
         uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
+        TokenOutput output; // Pendle's output param
+        LimitOrderData limit; // Pendle's limit param
     }
+
     // -- Errors --
 
     error OperationNotSupported();
@@ -78,7 +95,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     address public override tokenOut;
 
     /**
-     * @notice The Reservoir's reward token offered to users.
+     * @notice The Pendle's reward token offered to users.
      */
     address public override rewardToken;
 
@@ -88,14 +105,14 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     IReceiptToken public override receiptToken;
 
     /**
-     * @notice The Reservoir's CreditEnforcer contract.
+     * @notice The Pendle's CreditEnforcer contract.
      */
-    ICreditEnforcer public creditEnforcer;
+    IPAllActionV3 public pendleRouter;
 
     /**
-     * @notice The Reservoir's PegStabilityModule contract.
+     * @notice The Pendle's PegStabilityModule contract.
      */
-    address public pegStabilityModule;
+    address public pendleMarket;
 
     /**
      * @notice The Jigsaw Rewards Controller contract.
@@ -121,31 +138,33 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializer for the Reservoir Strategy.
+     * @notice Initializer for the Pendle Strategy.
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
         require(_params.managerContainer != address(0), "3065");
-        require(_params.creditEnforcer != address(0), "3036");
-        require(_params.pegStabilityModule != address(0), "3036");
+        require(_params.pendleRouter != address(0), "3036");
+        require(_params.pendleMarket != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
+        require(_params.rewardToken != address(0), "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
         managerContainer = IManagerContainer(_params.managerContainer);
-        creditEnforcer = ICreditEnforcer(_params.creditEnforcer);
-        pegStabilityModule = _params.pegStabilityModule;
+        pendleRouter = IPAllActionV3(_params.pendleRouter);
+        pendleMarket = _params.pendleMarket;
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
+        rewardToken = _params.rewardToken;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
-                _receiptTokenName: "Reservoir Receipt Token",
-                _receiptTokenSymbol: "ReRT"
+                _receiptTokenName: "Pendle Receipt Token",
+                _receiptTokenSymbol: "PeRT"
             })
         );
 
@@ -165,9 +184,6 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Deposits funds into the strategy.
      *
-     * @dev Some strategies won't return any receipt tokens; in this case, 'tokenOutAmount' will be 0.
-     * @dev 'tokenInAmount' will be equal to '_amount' if '_asset' is the same as the strategy's 'tokenIn()'.
-     *
      * @param _asset The token to be invested.
      * @param _amount The amount of the token to be invested.
      * @param _recipient The address on behalf of which the funds are deposited.
@@ -179,15 +195,31 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         address _asset,
         uint256 _amount,
         address _recipient,
-        bytes calldata
+        bytes calldata _data
     ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
+
+        DepositParams memory params;
+        (params.minLpOut, params.guessPtReceivedFromSy, params.input, params.limit) =
+            abi.decode(_data, (uint256, ApproxParams, TokenInput, LimitOrderData));
+
+        require(params.input.tokenIn == tokenIn, "3001");
+        require(params.input.netTokenIn == _amount, "2001");
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
-        OperationsLib.safeApprove({ token: _asset, to: address(pegStabilityModule), value: _amount });
-        creditEnforcer.mintStablecoin({ to: _recipient, amount: _amount });
+        OperationsLib.safeApprove({ token: _asset, to: address(pendleRouter), value: _amount });
+
+        pendleRouter.addLiquiditySingleToken({
+            receiver: _recipient,
+            market: pendleMarket,
+            minLpOut: params.minLpOut,
+            guessPtReceivedFromSy: params.guessPtReceivedFromSy,
+            input: params.input,
+            limit: params.limit
+        });
+
         uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
 
         recipients[_recipient].investedAmount += _amount;
@@ -231,13 +263,13 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _shares,
         address _recipient,
         address _asset,
-        bytes calldata
+        bytes calldata _data
     ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
-        WithdrawParams memory params =
-            WithdrawParams({ shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0 });
+        WithdrawParams memory params;
+        (params.output, params.limit) = abi.decode(_data, (TokenOutput, LimitOrderData));
 
         params.shareRatio = OperationsLib.getRatio({
             numerator: _shares,
@@ -259,17 +291,23 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
-        IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: pegStabilityModule, _amount: _shares });
+        IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: address(pendleRouter), _amount: _shares });
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-            _contract: pegStabilityModule,
-            _call: abi.encodeWithSignature(
-                "redeem(address,uint256)",
-                _recipient, // receiverOfUnderlying
-                _shares / 1e12 // amount of underlying to redeem converted to 6 decimals for USDC
+            _contract: address(pendleRouter),
+            _call: abi.encodeCall(
+                IPActionAddRemoveLiqV3.removeLiquiditySingleToken,
+                (
+                    _recipient, // receiverOfUnderlying
+                    pendleMarket,
+                    _shares,
+                    params.output,
+                    params.limit
+                )
             )
         });
+
         // Assert the call succeeded.
-        require(success, OperationsLib.getRevertMsg(returnData));
+        if (!success) revert(OperationsLib.getRevertMsg(returnData));
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
@@ -289,15 +327,43 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     }
 
     /**
-     * @notice Claims rewards from the Reservoir Pool.
-     * @return The amounts of rewards claimed.
-     * @return The addresses of the reward tokens.
+     * @notice Claims rewards from the Pendle Pool.
+     * @return claimedAmounts The amounts of rewards claimed.
+     * @return rewardsList The addresses of the reward tokens.
      */
     function claimRewards(
-        address,
+        address _recipient,
         bytes calldata
-    ) external pure override returns (uint256[] memory, address[] memory) {
-        revert OperationNotSupported();
+    ) external override returns (uint256[] memory claimedAmounts, address[] memory rewardsList) {
+        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+            _contract: pendleMarket,
+            _call: abi.encodeWithSignature("redeemRewards(address)", _recipient)
+        });
+
+        if (!success) revert(OperationsLib.getRevertMsg(returnData));
+
+        // Get Pendle data.
+        rewardsList = IPMarket(pendleMarket).getRewardTokens();
+        claimedAmounts = abi.decode(returnData, (uint256[]));
+
+        // Get fee data.
+        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        address feeAddr = _getManager().feeAddress();
+
+        for (uint256 i = 0; i < claimedAmounts.length; i++) {
+            // Take protocol fee for all non zero rewards.
+            if (claimedAmounts[i] != 0) {
+                uint256 fee = OperationsLib.getFeeAbsolute(claimedAmounts[i], performanceFee);
+                if (fee > 0) {
+                    claimedAmounts[i] -= fee;
+                    emit FeeTaken(rewardsList[i], feeAddr, fee);
+                    IHolding(_recipient).transfer({ _token: rewardsList[i], _to: feeAddr, _amount: fee });
+                }
+            }
+        }
+
+        emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });
+        return (claimedAmounts, rewardsList);
     }
 
     // -- Getters --
@@ -308,12 +374,4 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
     }
-}
-
-interface ICreditEnforcer {
-    /**
-     * @notice Issue the stablecoin to a recipient, check the debt cap and solvency
-     * @param amount Transfer amount of the underlying
-     */
-    function mintStablecoin(address to, uint256 amount) external returns (uint256);
 }
