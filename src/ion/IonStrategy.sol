@@ -49,6 +49,8 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 investment; // The amount of funds invested by the user.
         uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
         uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
+        uint256 balanceDiff; // The difference of the balance before and after
+        uint256 performanceFee; // Protocol's performance fee
     }
     // -- Errors --
 
@@ -237,8 +239,14 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 totalAssetsBefore = IIonPool(tokenOut).balanceOf(_recipient);
         uint256 assetsToWithdraw = _shares * totalAssetsBefore / totalSharesBefore; // Rounds down
 
-        WithdrawParams memory params =
-            WithdrawParams({ shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0 });
+        WithdrawParams memory params = WithdrawParams({
+            shareRatio: 0,
+            investment: 0,
+            balanceBefore: 0,
+            balanceAfter: 0,
+            balanceDiff: 0,
+            performanceFee: 0
+        });
 
         params.shareRatio = OperationsLib.getRatio({
             numerator: _shares,
@@ -267,15 +275,23 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
                 assetsToWithdraw // amount of underlying to redeem
             )
         });
+
         // Assert the call succeeded.
         require(success, OperationsLib.getRevertMsg(returnData));
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
-        _extractTokenInRewards({
-            _ratio: params.shareRatio,
-            _result: params.balanceAfter - params.balanceBefore,
-            _recipient: _recipient
-        });
+        // Take protocol's fee.
+        params.balanceDiff = params.balanceAfter - params.balanceBefore;
+        (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        if (params.balanceDiff > params.investment && params.performanceFee != 0) {
+            uint256 rewardAmount = params.balanceDiff - params.investment;
+            uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
+            if (fee > 0) {
+                address feeAddr = _getManager().feeAddress();
+                emit FeeTaken(tokenIn, feeAddr, fee);
+                IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
+            }
+        }
 
         jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
 
@@ -313,32 +329,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
-    }
-
-    // -- Utilities --
-
-    /**
-     * @notice Sends tokenIn rewards to the fee address.
-     *
-     * @param _ratio The ratio of the shares to total shares.
-     * @param _result The _result of the balance change.
-     * @param _recipient The address of the recipient.
-     */
-    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient) internal {
-        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        if (performanceFee == 0) return;
-
-        uint256 _investment = _ratio * recipients[_recipient].investedAmount;
-        uint256 rewardAmount;
-        if (_result > _investment) rewardAmount = _result - _investment;
-
-        uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
-
-        if (fee > 0) {
-            address feeAddr = _getManager().feeAddress();
-            emit FeeTaken(tokenIn, feeAddr, fee);
-            IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
-        }
     }
 }
 
