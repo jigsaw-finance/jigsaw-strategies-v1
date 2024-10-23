@@ -180,12 +180,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if withdraw works correctly when authorized
-    // Is not fuzzy because Aave's withdraw randomly over/under flows due to undetermined reason
-    function test_withdraw_aave_when_authorized(
-        uint256 _amount
-    ) public {
-        address user = vm.addr(uint256(keccak256(bytes("Random user address"))));
-        // uint256 amount = 9_000_624;
+    function test_withdraw_aave_when_authorized(uint256 _amount, address user) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e6, 10e6);
         address userHolding = initiateUser(user, tokenIn, amount);
 
