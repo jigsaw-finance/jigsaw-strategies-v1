@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
@@ -46,14 +47,20 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         address tokenOut; // The address of the Aave receipt token (aToken)
     }
 
-    // -- Events --
-
     /**
-     * @notice Emitted when the Rewards Controller address is updated.
-     * @param _old The old Rewards Controller address.
-     * @param _new The new Rewards Controller address.
+     * @notice Struct containing parameters for a withdrawal operation.
      */
-    event RewardsControllerUpdated(address indexed _old, address indexed _new);
+    struct WithdrawParams {
+        uint256 shareRatio;
+        uint256 assetsToWithdraw;
+        uint256 investment;
+        uint256 balanceBefore;
+        uint256 balanceAfter;
+        uint256 balanceDiff;
+        uint256 performanceFee;
+    }
+
+    // -- Events --
 
     /**
      * @notice Emitted when a performance fee is taken.
@@ -62,20 +69,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      * @param amount The amount of the fee.
      */
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
-
-    /**
-     * @notice Emitted when the Lending Pool address is updated.
-     * @param _old The old Lending Pool address.
-     * @param _new The new Lending Pool address.
-     */
-    event LendingPoolUpdated(address indexed _old, address indexed _new);
-
-    /**
-     * @notice Emitted when the Reward Token address is updated.
-     * @param _old The old Reward Token address.
-     * @param _new The new Reward Token address.
-     */
-    event RewardTokenUpdated(address indexed _old, address indexed _new);
 
     // -- State variables --
 
@@ -118,11 +111,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      * @notice The number of decimals of the strategy's shares.
      */
     uint256 public override sharesDecimals;
-
-    /**
-     * @notice The total investments in the strategy.
-     */
-    uint256 public totalInvestments;
 
     /**
      * @notice A mapping that stores participant details by address.
@@ -183,9 +171,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Deposits funds into the strategy.
      *
-     * @dev Some strategies won't return any receipt tokens; in this case, 'tokenOutAmount' will be 0.
-     * @dev 'tokenInAmount' will be equal to '_amount' if '_asset' is the same as the strategy's 'tokenIn()'.
-     *
      * @param _asset The token to be invested.
      * @param _amount The amount of the token to be invested.
      * @param _recipient The address on behalf of which the funds are deposited.
@@ -201,49 +186,43 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata _data
     ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
-
-        uint16 refCode = 0;
-        if (_data.length > 0) {
-            refCode = abi.decode(_data, (uint16));
-        }
+        uint256 balanceBefore = IAToken(tokenOut).scaledBalanceOf(_recipient);
+        uint16 refCode = _data.length > 0 ? abi.decode(_data, (uint16)) : 0;
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
+        // Supply to the Aave Lending Pool on behalf of the `_recipient`.
         OperationsLib.safeApprove({ token: _asset, to: address(lendingPool), value: _amount });
         lendingPool.supply({ asset: _asset, amount: _amount, onBehalfOf: _recipient, referralCode: refCode });
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
 
+        uint256 shares = IAToken(tokenOut).scaledBalanceOf(_recipient) - balanceBefore;
         recipients[_recipient].investedAmount += _amount;
-        recipients[_recipient].totalShares += balanceAfter - balanceBefore;
-        totalInvestments += _amount;
+        recipients[_recipient].totalShares += shares;
 
+        // Mint Strategy's receipt tokens to allow later withdrawal.
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _amount: balanceAfter - balanceBefore,
+            _amount: shares,
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        // Register `_recipient`'s deposit operation to generate jigsaw rewards.
+        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
         emit Deposit({
             asset: _asset,
             tokenIn: tokenIn,
             assetAmount: _amount,
             tokenInAmount: _amount,
-            shares: balanceAfter - balanceBefore,
+            shares: shares,
             recipient: _recipient
         });
-
-        return (balanceAfter - balanceBefore, _amount);
+        return (shares, _amount);
     }
 
     /**
      * @notice Withdraws deposited funds from the strategy.
-     *
-     * @dev Some strategies will only allow the tokenIn to be withdrawn.
-     * @dev 'assetAmount' will be equal to 'tokenInAmount' if '_asset' is the same as the strategy's 'tokenIn()'.
      *
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
@@ -259,15 +238,27 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
-        require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
+        require(_shares <= IAToken(tokenOut).scaledBalanceOf(_recipient), "2002");
 
-        uint256 shareRatio = OperationsLib.getRatio({
+        WithdrawParams memory params = WithdrawParams({
+            shareRatio: 0,
+            assetsToWithdraw: 0,
+            investment: 0,
+            balanceBefore: 0,
+            balanceAfter: 0,
+            balanceDiff: 0,
+            performanceFee: 0
+        });
+
+        // Calculate the ratio between all user's shares and the amount of shares used for withdrawal.
+        params.shareRatio = OperationsLib.getRatio({
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
             precision: IERC20Metadata(tokenOut).decimals(),
             rounding: OperationsLib.Rounding.Ceil
         });
 
+        // Burn Strategy's receipt tokens used for withdrawal.
         _burn({
             _receiptToken: receiptToken,
             _recipient: _recipient,
@@ -276,32 +267,54 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        uint256 investment =
-            (recipients[_recipient].investedAmount * shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
+        // Since Aave generates yield in the same token as the tokenOut, we must calculate the amount of tokenOut
+        // (including both the initial deposit and accrued yield) to be withdrawn. To achieve this, we apply the
+        // percentage of the user's total shares to be withdrawn relative to their entire shareholding to the available
+        // balance of aTokens in the Aave pool, ensuring the correct proportion of assets is withdrawn.
+        params.assetsToWithdraw =
+            IAToken(tokenOut).balanceOf(_recipient) * params.shareRatio / (10 ** IERC20Metadata(tokenOut).decimals());
 
-        IHolding(_recipient).transfer({ _token: tokenOut, _to: address(this), _amount: _shares });
+        // To accurately compute the protocol's fees from the yield generated by the strategy, we first need to
+        // determine the percentage of the initial investment being withdrawn. This allows us to assess whether any
+        // yield has been generated beyond the initial investment.
+        params.investment =
+            (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
-        uint256 balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
-        lendingPool.withdraw({ asset: _asset, amount: _shares, to: _recipient });
-        uint256 balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
+        params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
-        _extractTokenInRewards({
-            _ratio: shareRatio,
-            _result: balanceAfter - balanceBefore,
-            _recipient: _recipient,
-            _decimals: IERC20Metadata(tokenOut).decimals()
+        // Perform the withdrawal operation from user's holding address.
+        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+            _contract: address(lendingPool),
+            _call: abi.encodeCall(IPool.withdraw, (_asset, params.assetsToWithdraw, _recipient))
         });
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        // Assert the call succeeded.
+        require(success, OperationsLib.getRevertMsg(returnData));
+        params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
-        recipients[_recipient].totalShares =
-            _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
-        recipients[_recipient].investedAmount =
-            investment > recipients[_recipient].investedAmount ? 0 : recipients[_recipient].investedAmount - investment;
-        totalInvestments = balanceAfter - balanceBefore > totalInvestments ? 0 : totalInvestments - investment;
+        // Take protocol's fee if any.
+        params.balanceDiff = params.balanceAfter - params.balanceBefore;
+        (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        if (params.balanceDiff > params.investment && params.performanceFee != 0) {
+            uint256 rewardAmount = params.balanceDiff - params.investment;
+            uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
+            if (fee > 0) {
+                address feeAddr = _getManager().feeAddress();
+                emit FeeTaken(tokenIn, feeAddr, fee);
+                IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
+            }
+        }
 
-        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: balanceAfter - balanceBefore });
-        return (balanceAfter - balanceBefore, investment);
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+
+        recipients[_recipient].totalShares -= _shares;
+        recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
+            ? 0
+            : recipients[_recipient].investedAmount - params.investment;
+
+        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
+        return (params.balanceDiff, params.investment);
     }
 
     /**
@@ -354,21 +367,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         return (claimedAmounts, rewardsList);
     }
 
-    // -- Administration --
-
-    /**
-     * @notice Sets a new Rewards Controller address.
-     * @param _newAddr The new Rewards Controller address.
-     */
-    function setRewardsController(
-        address _newAddr,
-        address _rewardToken
-    ) external onlyValidAddress(_newAddr) onlyOwner {
-        emit RewardsControllerUpdated({ _old: address(rewardsController), _new: _newAddr });
-        rewardsController = IRewardsController(_newAddr);
-        rewardToken = _rewardToken;
-    }
-
     // -- Getters --
 
     /**
@@ -386,15 +384,15 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      * @param _ratio The ratio of the shares to total shares.
      * @param _result The _result of the balance change.
      * @param _recipient The address of the recipient.
-     * @param _decimals The number of decimals of the token.
      */
-    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient, uint256 _decimals) internal {
-        if (_ratio > (10 ** _decimals) && _result < recipients[_recipient].investedAmount) return;
-        uint256 rewardAmount = 0;
-        if (_ratio >= (10 ** _decimals)) rewardAmount = _result - recipients[_recipient].investedAmount;
-        if (rewardAmount == 0) return;
-
+    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient) internal {
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        if (performanceFee == 0) return;
+
+        uint256 _investment = _ratio * recipients[_recipient].investedAmount;
+        uint256 rewardAmount;
+        if (_result > _investment) rewardAmount = _result - _investment;
+
         uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
 
         if (fee > 0) {

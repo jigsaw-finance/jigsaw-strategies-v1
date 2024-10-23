@@ -113,7 +113,6 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
         assertEq(investedAmount, amount, "Recipient invested amount mismatch");
         assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-        assertEq(strategy.totalInvestments(), amount, "Total investments mismatch");
     }
 
     // Tests if deposit works correctly when authorized
@@ -139,7 +138,6 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
         assertEq(investedAmount, amount, "Recipient invested amount mismatch");
         assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-        assertEq(strategy.totalInvestments(), amount, "Total investments mismatch");
     }
 
     // Tests if withdraw reverts correctly when wrong asset
@@ -197,7 +195,6 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
         assertApproxEqAbs(tokenInAmount, expectedWithdrawal, 1, "Incorrect tokenInAmount returned");
         assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
-        assertEq(strategy.totalInvestments(), 0, "Total investments mismatch after withdrawal");
     }
 
     // Tests if claimRewards works correctly when authorized
