@@ -28,22 +28,20 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        address jRewards = address(new ERC20Mock());
-        address stakerFactory = address(new StakerLightFactory({ _initialOwner: OWNER }));
         address strategyImplementation = address(new IonStrategy());
-
-        IonStrategy.InitializerParams memory initParams = IonStrategy.InitializerParams({
-            owner: OWNER,
-            managerContainer: address(managerContainer),
-            stakerFactory: address(stakerFactory),
-            ionPool: address(ION_POOL),
-            jigsawRewardToken: jRewards,
-            jigsawRewardDuration: 60 days,
-            tokenIn: tokenIn,
-            tokenOut: tokenOut
-        });
-
-        bytes memory data = abi.encodeCall(IonStrategy.initialize, initParams);
+        bytes memory data = abi.encodeCall(
+            IonStrategy.initialize,
+            IonStrategy.InitializerParams({
+                owner: OWNER,
+                managerContainer: address(managerContainer),
+                stakerFactory: address(stakerFactory),
+                ionPool: address(ION_POOL),
+                jigsawRewardToken: jRewards,
+                jigsawRewardDuration: 60 days,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut
+            })
+        );
         address proxy = address(new ERC1967Proxy(strategyImplementation, data));
         strategy = IonStrategy(proxy);
 
@@ -69,41 +67,61 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
     // Tests if deposit works correctly when authorized
     function test_ion_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e18, 10e18);
-
         address userHolding = initiateUser(user, tokenIn, amount);
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 ionBalanceBefore = IIonPool(tokenOut).normalizedBalanceOf(userHolding);
 
-        // Invest into the tested strategy vie strategyManager
+        // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
         (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
 
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-        uint256 expectedShares = balanceAfter - balanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
+        uint256 expectedShares = IIonPool(tokenOut).normalizedBalanceOf(userHolding) - ionBalanceBefore;
 
-        assertApproxEqRel(balanceAfter, balanceBefore + amount, 0.01e18, "Wrong balance in ION after stake");
+        /**
+         * Expected changes after deposit
+         * 1. Holding tokenIn balance =  balance - amount
+         * 2. Holding tokenOut balance += ~amount
+         * 3. Balance in ion += ~amount
+         * 4. Staker receiptTokens balance += shares
+         * 5. Strategy's invested amount  += amount
+         * 6. Strategy's total shares  += shares
+         */
+        // 1.
+        assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
+        // 2. and 3.
+        assertApproxEqAbs(IIonPool(tokenOut).balanceOfUnaccrued(userHolding), amount, 2, "Holding ion balance wrong");
+        // 4.
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            expectedShares,
+            "Incorrect receipt tokens minted"
+        );
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
-        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(investedAmount, expectedShares, "Recipient invested amount mismatch");
+        // 5.
+        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
+        // 6.
         assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-        assertEq(strategy.totalInvestments(), expectedShares, "Total investments mismatch");
+        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
     }
 
     // Tests if withdraw works correctly when authorized
     function test_ion_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e18, 10e18);
-
-        // Mock values and setup necessary approvals and balances for the test
         address userHolding = initiateUser(user, tokenIn, amount);
 
-        // Invest into the tested strategy vie strategyManager
+        // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
         strategyManager.invest(tokenIn, address(strategy), amount, "");
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        (uint256 investedAmountBefore,) = strategy.recipients(userHolding);
 
-        // Mock the recipient’s shares balance
-        uint256 balanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        skip(100 days);
+
+        uint256 fee =
+            getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
 
         vm.prank(user, user);
         (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
@@ -114,17 +132,44 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
             _data: ""
         });
 
-        uint256 balanceAfter = IERC20(tokenIn).balanceOf(userHolding);
+        (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
+        uint256 tokenInBalanceAfter = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 expectedWithdrawal = tokenInBalanceAfter - tokenInBalanceBefore;
 
-        uint256 expectedWithdrawal = balanceBefore > balanceAfter ? 0 : balanceAfter - balanceBefore;
-
-        (, uint256 totalSharesAfter) = strategy.recipients(userHolding);
-
-        // Assert statements with reasons
-        assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
-        assertApproxEqAbs(tokenInAmount, expectedWithdrawal, 1, "Incorrect tokenInAmount returned");
+        /**
+         * Expected changes after withdrawal
+         * 1. Holding's tokenIn balance += (totalInvested + yield) * shareRatio
+         * 2. Holding's tokenOut balance -= shares
+         * 3. Balance in ion -= (totalInvested + yield) * shareRatio
+         * 4. Staker receiptTokens balance -= shares
+         * 5. Strategy's invested amount  -= totalInvested * shareRatio
+         * 6. Strategy's total shares  -= shares
+         * 7. Fee address fee amount += yield * performanceFee
+         */
+        // 1.
+        assertEq(tokenInBalanceAfter, assetAmount - fee, "Holding balance after withdraw is wrong");
+        // 2. and 3.
+        assertEq(IIonPool(tokenOut).balanceOfUnaccrued(userHolding), 0, "Holding ion balance wrong");
+        // 4.
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            0,
+            "Incorrect receipt tokens after withdraw"
+        );
+        // 5.
+        assertEq(investedAmount, 0, "Recipient invested amount mismatch");
+        // 6.
         assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
-        assertEq(strategy.totalInvestments(), 0, "Total investments mismatch after withdrawal");
+        // 7.
+        assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
+
+        // Additional checks
+        assertEq(assetAmount - fee, expectedWithdrawal, "Incorrect asset amount returned");
+        assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
+    }
+
+    function getFeeAbsolute(uint256 amount, uint256 fee) internal pure returns (uint256) {
+        return (amount * fee) / 10_000 + (amount * fee % 10_000 == 0 ? 0 : 1);
     }
 }
 
@@ -133,15 +178,26 @@ interface IIonPool {
     function supply(address user, uint256 amount, bytes32[] calldata proof) external;
     function owner() external returns (address);
     function whitelist() external returns (address);
-    function updateSupplyCap(uint256 newSupplyCap) external;
+    function updateSupplyCap(
+        uint256 newSupplyCap
+    ) external;
     function updateIlkDebtCeiling(uint8 ilkIndex, uint256 newCeiling) external;
-    function balanceOf(address user) external view returns (uint256);
-    function normalizedBalanceOf(address user) external returns (uint256);
+    function balanceOf(
+        address user
+    ) external view returns (uint256);
+    function normalizedBalanceOf(
+        address user
+    ) external returns (uint256);
     function totalSupply() external view returns (uint256);
     function debt() external view returns (uint256);
     function supplyFactorUnaccrued() external view returns (uint256);
-    function getIlkAddress(uint256 ilkIndex) external view returns (address);
+    function getIlkAddress(
+        uint256 ilkIndex
+    ) external view returns (address);
     function decimals() external view returns (uint8);
+    function balanceOfUnaccrued(
+        address user
+    ) external view returns (uint256);
 }
 
 interface IWhitelist {
@@ -149,7 +205,9 @@ interface IWhitelist {
      * @notice Approves a protocol controlled address to bypass the merkle proof check.
      * @param addr The address to approve.
      */
-    function approveProtocolWhitelist(address addr) external;
+    function approveProtocolWhitelist(
+        address addr
+    ) external;
 }
 
 contract Errors {

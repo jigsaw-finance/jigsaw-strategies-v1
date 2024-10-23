@@ -17,3 +17,5 @@ jigsaw-protocol-v1/=lib/jigsaw-protocol-v1/
 
 @aave/v3-periphery/=lib/aave-v3-periphery/contracts/
 @aave/v3-core/=lib/aave-v3-core/contracts/
+
+@pendle/=lib/pendle-core-v2-public/contracts/
