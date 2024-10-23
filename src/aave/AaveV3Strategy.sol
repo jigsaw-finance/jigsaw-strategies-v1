@@ -375,30 +375,4 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
     }
-
-    // -- Utilities --
-
-    /**
-     * @notice Sends tokenIn rewards to the fee address.
-     *
-     * @param _ratio The ratio of the shares to total shares.
-     * @param _result The _result of the balance change.
-     * @param _recipient The address of the recipient.
-     */
-    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient) internal {
-        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        if (performanceFee == 0) return;
-
-        uint256 _investment = _ratio * recipients[_recipient].investedAmount;
-        uint256 rewardAmount;
-        if (_result > _investment) rewardAmount = _result - _investment;
-
-        uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
-
-        if (fee > 0) {
-            address feeAddr = _getManager().feeAddress();
-            emit FeeTaken(tokenIn, feeAddr, fee);
-            IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
-        }
-    }
 }
