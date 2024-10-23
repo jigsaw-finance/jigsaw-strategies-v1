@@ -6,6 +6,7 @@ import "../fixtures/BasicContractsFixture.t.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
+import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
@@ -93,26 +94,45 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit works correctly when authorized
-    function test_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+    function test_aave_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e6, 10e6);
-        // Mock values and setup necessary approvals and balances for the test
         address userHolding = initiateUser(user, tokenIn, amount);
-        // Mock expected behaviors and balances before deposit
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 tokenOutBalanceBefore = IAToken(tokenOut).scaledBalanceOf(userHolding);
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
         (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
 
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-        uint256 expectedShares = balanceAfter - balanceBefore;
+        uint256 expectedShares = IAToken(tokenOut).scaledBalanceOf(userHolding) - tokenOutBalanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
+
+        /**
+         * Expected changes after deposit
+         * 1. Holding tokenIn balance =  balance - amount
+         * 2. Holding tokenOut balance += amount
+         * 3. Staker receiptTokens balance += shares
+         * 4. Strategy's invested amount  += amount
+         * 5. Strategy's total shares  += shares
+         */
+        // 1.
+        assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
+        // 2.
+        assertApproxEqAbs(IERC20(tokenOut).balanceOf(userHolding), amount, 1, "Holding token out balance wrong");
+        // 3.
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            expectedShares * 10 ** 12,
+            "Incorrect receipt tokens minted"
+        );
+        //4.
+        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
+        //5.
+        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
 
         // Assert statements with reasons
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
-        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
     }
 
     // Tests if deposit works correctly when authorized
