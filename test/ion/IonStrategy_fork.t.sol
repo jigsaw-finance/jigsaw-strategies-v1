@@ -121,7 +121,7 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
         skip(100 days);
 
         uint256 fee =
-            getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
+            _getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
 
         vm.prank(user, user);
         (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
@@ -166,10 +166,6 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
         // Additional checks
         assertEq(assetAmount - fee, expectedWithdrawal, "Incorrect asset amount returned");
         assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
-    }
-
-    function getFeeAbsolute(uint256 amount, uint256 fee) internal pure returns (uint256) {
-        return (amount * fee) / 10_000 + (amount * fee % 10_000 == 0 ? 0 : 1);
     }
 }
 

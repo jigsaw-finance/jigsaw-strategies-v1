@@ -161,6 +161,10 @@ abstract contract BasicContractsFixture is Test {
         }
     }
 
+    function _getFeeAbsolute(uint256 amount, uint256 fee) internal pure returns (uint256) {
+        return (amount * fee) / 10_000 + (amount * fee % 10_000 == 0 ? 0 : 1);
+    }
+
     // Modifiers
 
     modifier notOwnerNotZero(
