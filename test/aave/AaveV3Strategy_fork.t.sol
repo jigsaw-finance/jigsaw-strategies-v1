@@ -135,31 +135,6 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
     }
 
-    // Tests if deposit works correctly when authorized
-    function test_deposit_when_referral() public {
-        address user = address(uint160(uint256(keccak256(bytes("ADMIN")))));
-        uint256 amount = 100e6;
-        // Mock values and setup necessary approvals and balances for the test
-        address userHolding = initiateUser(user, tokenIn, amount);
-        // Mock expected behaviors and balances before deposit
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(userHolding);
-
-        // Invest into the tested strategy vie strategyManager
-        vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) =
-            strategyManager.invest(tokenIn, address(strategy), amount, abi.encode("random ref"));
-
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-        uint256 expectedShares = balanceAfter - balanceBefore;
-        (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
-
-        // Assert statements with reasons
-        assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
-        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
-        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-    }
-
     // Tests if withdraw reverts correctly when wrong asset
     function test_withdraw_when_wrongAsset(
         address asset
@@ -186,7 +161,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        strategyManager.invest(tokenIn, address(strategy), amount, "");
+        strategyManager.invest(tokenIn, address(strategy), amount, abi.encode("random ref"));
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
