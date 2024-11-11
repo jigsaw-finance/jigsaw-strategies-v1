@@ -5,6 +5,9 @@ libs = ["lib"]
 ffi = true
 fs_permissions = [{ access = "read-write", path = "./" }]
 evm_version = "shanghai"
+ast = true
+build_info = true
+extra_output = ["storageLayout"]
 
 [fmt]
 bracket_spacing = true
