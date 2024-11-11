@@ -77,7 +77,8 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
     function test_pendle_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e18, 100_000e18);
         address userHolding = initiateUser(user, tokenIn, amount);
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
@@ -99,16 +100,39 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
             )
         );
 
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-        uint256 expectedShares = balanceAfter - balanceBefore;
-
+        uint256 tokenOutbalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
+        uint256 expectedShares = tokenOutbalanceAfter - tokenOutBalanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
 
-        assertEq(balanceAfter, balanceBefore + totalShares, "Wrong LP balance in Pendle after mint");
+        /**
+         * Expected changes after deposit
+         * 1. Holding tokenIn balance =  balance - amount
+         * 2. Holding tokenOut balance += amount
+         * 3. Staker receiptTokens balance += shares
+         * 4. Strategy's invested amount  += amount
+         * 5. Strategy's total shares  += shares
+         */
+        // 1.
+        assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
+        // 2.
+        assertApproxEqRel(
+            IERC20(tokenOut).balanceOf(userHolding), amount / 2, 0.05e18, "Holding token out balance wrong"
+        );
+        // 3.
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            expectedShares,
+            "Incorrect receipt tokens minted"
+        );
+        //4.
+        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
+        //5.
+        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
+
+        // Additional checks
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
-        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
+        assertEq(tokenOutbalanceAfter, tokenOutBalanceBefore + totalShares, "Wrong LP balance in Pendle after mint");
     }
 
     // Tests if withdrawal works correctly when authorized
@@ -118,7 +142,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        strategyManager.invest(
+        (uint256 investedAmountBefore, uint256 tokenInAmount) = strategyManager.invest(
             tokenIn,
             address(strategy),
             amount,
@@ -138,8 +162,9 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 withdrawalShares = bound(totalShares, 1, totalShares);
-        uint256 underlyingBefore = IERC20(tokenIn).balanceOf(userHolding);
-        uint256 expectedUnderlyingAfter = amount * withdrawalShares / totalShares;
+        uint256 expectedTokenInBalanceMin = amount * withdrawalShares / totalShares;
+
+        skip(100 days);
 
         vm.prank(user, user);
         strategyManager.claimInvestment(
@@ -159,25 +184,64 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
             )
         );
 
-        uint256 underlyingAfter = IERC20(tokenIn).balanceOf(userHolding);
         (, uint256 updatedShares) = strategy.recipients(userHolding);
 
-        assertApproxEqRel(
-            underlyingAfter - underlyingBefore, expectedUnderlyingAfter, 0.001e18, "Withdraw amount wrong"
-        ); // 0.1% approximation is allowed
-        assertEq(totalShares - withdrawalShares, updatedShares, "Shares amount updated wrong");
+        assertGe(IERC20(tokenIn).balanceOf(userHolding), expectedTokenInBalanceMin, "Withdraw amount wrong");
+        assertEq(updatedShares, totalShares - withdrawalShares, "Shares amount updated wrong");
 
-        if (totalShares - withdrawalShares == 0) return;
+        (uint256 investedAmountAfterFirstWithdraw,) = strategy.recipients(userHolding);
+
+        if (totalShares - withdrawalShares == 0) {
+            assertEq(IERC20(tokenOut).balanceOf(userHolding), 0, "Wrong token out amount after first withdraw");
+            assertEq(
+                IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+                0,
+                "Incorrect receipt tokens after first withdraw"
+            );
+            assertEq(investedAmountAfterFirstWithdraw, 0, "Recipient invested amount mismatch after first withdraw");
+            assertGt(
+                IERC20(tokenIn).balanceOf(manager.feeAddress()), 0, "Fee address fee amount wrong after first withdraw"
+            );
+
+            return;
+        }
 
         // withdraw the rest
         vm.prank(user, user);
         strategyManager.claimInvestment(userHolding, address(strategy), totalShares - withdrawalShares, tokenIn, "");
-        (, uint256 finalShares) = strategy.recipients(userHolding);
+        (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
 
-        assertApproxEqRel(IERC20(tokenIn).balanceOf(userHolding), amount, 0.001e18, "Withdrawn wrong amount"); // 0.1%
-            // approximation is allowed
+        uint256 fee =
+            _getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
+
+        /**
+         * Expected changes after withdrawal
+         * 1. Holding's tokenIn balance += (totalInvested + yield) * shareRatio
+         * 2. Holding's tokenOut balance -= shares
+         * 3. Staker receiptTokens balance -= shares
+         * 4. Strategy's invested amount  -= totalInvested * shareRatio
+         * 5. Strategy's total shares  -= shares
+         * 6. Fee address fee amount += yield * performanceFee
+         */
+        //1.
+        assertGe(IERC20(tokenIn).balanceOf(userHolding), amount, "Withdraw amount wrong");
+        // 2.
         assertEq(IERC20(tokenOut).balanceOf(userHolding), 0, "Wrong token out  amount");
-        assertEq(finalShares, 0, "Shares amount updated wrong");
+        // 3.
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            0,
+            "Incorrect receipt tokens after withdraw"
+        );
+        // 4.
+        assertEq(investedAmount, 0, "Recipient invested amount mismatch");
+        // 5.
+        assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
+        // 6.
+        assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
+
+        // Additional checks
+        assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
     }
 
     function test_pendle_claimRewards_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
