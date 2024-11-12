@@ -297,11 +297,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         // Perform the withdrawal operation from user's holding address.
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(ionPool),
-            _call: abi.encodeWithSignature(
-                "withdraw(address,uint256)",
-                _recipient, // receiverOfUnderlying
-                params.assetsToWithdraw // amount of underlying to redeem
-            )
+            _call: abi.encodeCall(IIonPool.withdraw, (_recipient, params.assetsToWithdraw))
         });
 
         // Assert the call succeeded.
