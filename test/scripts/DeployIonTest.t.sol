@@ -7,7 +7,8 @@ import "forge-std/console.sol";
 import "../fixtures/BasicContractsFixture.t.sol";
 
 import { DeployStaker } from "script/deployment/0_DeployStaker.s.sol";
-import { DeployIonStrategy } from "script/deployment/1_DeployIonStrategy.s.sol";
+import { DeployIonImpl } from "script/deployment/ion/1_DeployIonImpl.s.sol";
+import { DeployIonProxy } from "script/deployment/ion/2_DeployIonProxy.s.sol";
 
 import { IonStrategy } from "../../src/ion/IonStrategy.sol";
 
@@ -18,9 +19,8 @@ import { IStakerLight } from "../../src/staker/interfaces/IStakerLight.sol";
 IIonPool constant ION_POOL = IIonPool(0x0000000000eaEbd95dAfcA37A39fd09745739b78);
 IWhitelist constant ION_WHITELIST = IWhitelist(0x7E317f99aA313669AaCDd8dB3927ff3aCB562dAD);
 
-contract IonStrategyForkTest is Test, BasicContractsFixture {
-    DeployIonStrategy internal ionDeployer;
-
+contract DeployIonTest is Test, BasicContractsFixture {
+    DeployIonProxy internal ionDeployer;
     // Mainnet wstETH
     address internal tokenIn = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
     // Ion iweETH-wstETH token is the same as the pool due to Vault architecture
@@ -32,16 +32,16 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
         init();
 
         DeployStaker stakerDeployer = new DeployStaker();
-        (StakerLightFactory stakerFactory,) = stakerDeployer.run();
+        (StakerLightFactory factory,) = stakerDeployer.run();
 
-        console.log("OWNER", OWNER);
-        console.log("CONT", address(managerContainer));
-        console.log("REWARDS", address(jRewards));
-        console.log("FACTORY", address(stakerFactory));
+        DeployIonImpl implDeployer = new DeployIonImpl();
+        address implementation = implDeployer.run("my salt");
 
-        ionDeployer = new DeployIonStrategy();
+        ionDeployer = new DeployIonProxy();
         strategy = IonStrategy(
             ionDeployer.run({
+                _implementation: implementation,
+                _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040,
                 _ionPool: address(ION_POOL),
                 _rewardDuration: 60 days,
                 _tokenIn: tokenIn,
@@ -69,6 +69,7 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
     }
 
     function test_ion_initialValues() public view {
+        assertEq(address(strategy), 0x0000000028cBB2FFf79c9f1F028FD90575eBCc97, "Expected create2 address is wrong");
         assertEq(address(strategy.owner()), ionDeployer.OWNER(), "Owner initialized wrong");
         assertEq(
             address(strategy.managerContainer()), ionDeployer.MANAGER_CONTAINER(), "Manager Container initialized wrong"
