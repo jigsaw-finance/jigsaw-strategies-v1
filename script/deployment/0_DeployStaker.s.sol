@@ -7,9 +7,11 @@ import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
 contract DeployStaker is CommonStrategyScriptBase {
-    function run() external returns (StakerLightFactory stakerFactory, StakerLight stakerImplementation) {
-        vm.startBroadcast(vm.envUint("DEPLOYER_PRIVATE_KEY"));
-
+    function run()
+        external
+        broadcast(vm.envUint("DEPLOYER_PRIVATE_KEY"))
+        returns (StakerLightFactory stakerFactory, StakerLight stakerImplementation)
+    {
         // Deploy StakerFactory contract
         stakerFactory = new StakerLightFactory(OWNER);
 
@@ -18,7 +20,5 @@ contract DeployStaker is CommonStrategyScriptBase {
 
         // Set StakerLight implementation in StakerFactory
         stakerFactory.setStakerLightReferenceImplementation(address(stakerImplementation));
-
-        vm.stopBroadcast();
     }
 }

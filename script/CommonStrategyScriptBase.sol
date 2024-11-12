@@ -9,9 +9,17 @@ import { Script, stdJson as StdJson } from "forge-std/Script.sol";
 contract CommonStrategyScriptBase is Script {
     using StdJson for string;
 
+    modifier broadcast(
+        uint256 _pk
+    ) {
+        vm.startBroadcast(_pk);
+        _;
+        vm.stopBroadcast();
+    }
     /**
      * @notice Address of the owner
      */
+
     address public OWNER = 0x3412d07beF5d0DcDb942aC1765D0b8f19D8CA2C4;
 
     /**
