@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
@@ -19,11 +19,11 @@ import { IStakerLight } from "./interfaces/IStakerLight.sol";
  *
  * @dev This contract is called light due to the fact that it does not actually transfer the receipt tokens from the
  * user and is only used for accounting.
- * @dev This contract inherits functionalities from `Ownable2Step` and `ReentrancyGuard`.
+ * @dev This contract inherits functionalities from `Ownable2StepUpgradeable` and `ReentrancyGuard`.
  *
  * @author Hovooo (@hovooo)
  */
-contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     /**

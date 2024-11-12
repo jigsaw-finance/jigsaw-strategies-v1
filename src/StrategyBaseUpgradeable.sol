@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -16,7 +16,7 @@ import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.s
  * @title StrategyBase Contract used for common functionality through Jigsaw Strategies .
  * @author Hovooo (@hovooo)
  */
-abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
+abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     /**
