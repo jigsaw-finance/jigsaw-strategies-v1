@@ -27,6 +27,7 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
     constructor(address _initialOwner, address _referenceImplementation) Ownable(_initialOwner) {
         // Assert that referenceImplementation has code in it to protect the system from cloning invalid implementation.
         require(_referenceImplementation.code.length > 0, "Reference implementation has no code");
+        emit StakerLightImplementationUpdated(_referenceImplementation);
         referenceImplementation = _referenceImplementation;
     }
 
@@ -40,6 +41,7 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
         address _referenceImplementation
     ) external override onlyOwner {
         require(_referenceImplementation.code.length > 0, "Reference implementation has no code");
+        emit StakerLightImplementationUpdated(_referenceImplementation);
         referenceImplementation = _referenceImplementation;
     }
 
