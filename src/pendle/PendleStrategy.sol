@@ -198,7 +198,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount,
         address _recipient,
         bytes calldata _data
-    ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
         DepositParams memory params;
@@ -266,7 +266,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata _data
-    ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 

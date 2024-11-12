@@ -184,7 +184,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount,
         address _recipient,
         bytes calldata _data
-    ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         uint256 balanceBefore = IAToken(tokenOut).scaledBalanceOf(_recipient);
         uint16 refCode = _data.length > 0 ? abi.decode(_data, (uint16)) : 0;
@@ -236,7 +236,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IAToken(tokenOut).scaledBalanceOf(_recipient), "2002");
 
@@ -328,7 +328,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     function claimRewards(
         address _recipient,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256[] memory, address[] memory) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256[] memory, address[] memory) {
         // aTokens should be checked for rewards eligibility.
         address[] memory eligibleTokens = new address[](1);
         eligibleTokens[0] = tokenOut;

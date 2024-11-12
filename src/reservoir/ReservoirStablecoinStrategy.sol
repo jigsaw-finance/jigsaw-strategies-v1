@@ -180,7 +180,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount,
         address _recipient,
         bytes calldata
-    ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
@@ -232,7 +232,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 

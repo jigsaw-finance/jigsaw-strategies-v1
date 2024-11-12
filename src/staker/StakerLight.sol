@@ -190,7 +190,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
     function deposit(
         address _user,
         uint256 _amount
-    ) external override onlyStrategy nonReentrant updateReward(_user) validAmount(_amount) {
+    ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
         // Ensure that deposit operation will never surpass supply limit
         if (_totalSupply + _amount > totalSupplyLimit) revert DepositSurpassesSupplyLimit(_amount, totalSupplyLimit);
         _totalSupply += _amount;
@@ -209,7 +209,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
     function withdraw(
         address _user,
         uint256 _amount
-    ) external override onlyStrategy nonReentrant updateReward(_user) validAmount(_amount) {
+    ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
         _totalSupply -= _amount;
         _balances[_user] = _balances[_user] - _amount;
         emit Withdrawn(_user, _amount);

@@ -173,7 +173,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount,
         address _recipient,
         bytes calldata _data
-    ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override onlyValidAmount(_amount) nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
         uint256 balanceBefore = ionPool.normalizedBalanceOf(_recipient);
@@ -227,7 +227,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         uint256 totalSharesBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
         require(_shares <= totalSharesBefore, "2002");
