@@ -270,6 +270,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
         if (duration == 0) revert ZeroRewardsDuration();
         if (block.timestamp >= periodFinish) {
             rewardRate = _amount / duration;
+            periodFinish = block.timestamp + duration;
         } else {
             uint256 remaining = periodFinish - block.timestamp;
             uint256 leftover = remaining * rewardRate;
@@ -282,7 +283,6 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
         if (rewardRate > (balance / duration)) revert RewardRateTooBig();
 
         lastUpdateTime = block.timestamp;
-        periodFinish = block.timestamp + duration;
         emit RewardAdded(_amount);
     }
 
