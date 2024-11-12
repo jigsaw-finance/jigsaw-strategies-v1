@@ -21,12 +21,14 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
     // -- Constructor --
 
     /**
-     * @notice Creates a new StablesManager contract.
+     * @notice Creates a new StakerLightFactory contract.
      * @param _initialOwner The initial owner of the contract.
+     * @param _referenceImplementation The StakerLight reference implementation for used for cloning.
      */
     constructor(address _initialOwner, address _referenceImplementation) Ownable(_initialOwner) {
         // Assert that referenceImplementation has code in it to protect the system from cloning invalid implementation.
         require(_referenceImplementation.code.length > 0, "Reference implementation has no code");
+
         emit StakerLightImplementationUpdated(_referenceImplementation);
         referenceImplementation = _referenceImplementation;
     }
@@ -40,7 +42,9 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
     function setStakerLightReferenceImplementation(
         address _referenceImplementation
     ) external override onlyOwner {
+        // Assert that referenceImplementation has code in it to protect the system from cloning invalid implementation.
         require(_referenceImplementation.code.length > 0, "Reference implementation has no code");
+
         emit StakerLightImplementationUpdated(_referenceImplementation);
         referenceImplementation = _referenceImplementation;
     }

@@ -19,7 +19,7 @@ import { IStakerLight } from "./interfaces/IStakerLight.sol";
  *
  * @dev This contract is called light due to the fact that it does not actually transfer the receipt tokens from the
  * user and is only used for accounting.
- * @dev This contract inherits functionalities from `Ownable2StepUpgradeable` and `ReentrancyGuard`.
+ * @dev This contract inherits functionalities from `Ownable2StepUpgradeable` and `ReentrancyGuardUpgradeable`.
  *
  * @author Hovooo (@hovooo)
  */
@@ -125,8 +125,8 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
     }
 
     /**
-     * @notice Modifier to restrict a function to be called only by the staking manager.
-     * @notice Reverts the transaction if the caller is not the staking manager.
+     * @notice Modifier to restrict a function to be called only by the `strategy` contract.
+     * @notice Reverts the transaction if the caller is not the `strategy`.
      */
     modifier onlyStrategy() {
         if (msg.sender != strategy) revert UnauthorizedCaller();
