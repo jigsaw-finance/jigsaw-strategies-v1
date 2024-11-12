@@ -167,7 +167,14 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
         address _rewardToken,
         address _strategy,
         uint256 _rewardsDuration
-    ) public initializer validAddress(_rewardToken) validAddress(_strategy) {
+    )
+        public
+        initializer
+        validAddress(_holdingManager)
+        validAddress(_rewardToken)
+        validAddress(_strategy)
+        validAmount(_rewardsDuration)
+    {
         __Ownable_init(_initialOwner);
         __ReentrancyGuard_init();
 
@@ -242,7 +249,7 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
      */
     function setRewardsDuration(
         uint256 _rewardsDuration
-    ) external override onlyOwner {
+    ) external override onlyOwner validAmount(_rewardsDuration) {
         if (block.timestamp <= periodFinish) revert PreviousPeriodNotFinished(block.timestamp, periodFinish);
         emit RewardsDurationUpdated(rewardsDuration, _rewardsDuration);
         rewardsDuration = _rewardsDuration;
