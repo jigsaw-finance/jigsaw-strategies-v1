@@ -64,8 +64,11 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      * @notice Initializes the StrategyBase contract.
      * @param _initialOwner The address of the initial owner of the contract.
      */
-    function __StrategyBase_init(address _initialOwner) internal initializer {
+    function __StrategyBase_init(
+        address _initialOwner
+    ) internal initializer {
         __Ownable_init(_initialOwner);
+        __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
     }
 
@@ -76,7 +79,9 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      * can modify the contract's logic.
      * @param _newImplementation The address of the new implementation contract.
      */
-    function _authorizeUpgrade(address _newImplementation) internal override onlyOwner { }
+    function _authorizeUpgrade(
+        address _newImplementation
+    ) internal override onlyOwner { }
 
     /**
      * @notice Save funds.
@@ -176,7 +181,9 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      * @dev Reverts with "2001" if the amount is 0 or less.
      * @param _amount The amount to validate.
      */
-    modifier onlyValidAmount(uint256 _amount) {
+    modifier onlyValidAmount(
+        uint256 _amount
+    ) {
         require(_amount > 0, "2001");
         _;
     }
@@ -186,7 +193,9 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      * @dev Reverts with "3000" if the address is the zero address.
      * @param _addr The address to validate.
      */
-    modifier onlyValidAddress(address _addr) {
+    modifier onlyValidAddress(
+        address _addr
+    ) {
         require(_addr != address(0), "3000");
         _;
     }
