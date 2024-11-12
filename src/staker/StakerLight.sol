@@ -169,6 +169,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
         uint256 _rewardsDuration
     ) public initializer validAddress(_rewardToken) validAddress(_strategy) {
         __Ownable_init(_initialOwner);
+        __ReentrancyGuard_init();
 
         holdingManager = IHoldingManager(_holdingManager);
         rewardToken = _rewardToken;
