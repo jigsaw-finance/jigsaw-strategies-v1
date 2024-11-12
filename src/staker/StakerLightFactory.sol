@@ -83,4 +83,11 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
             _rewardsDuration: _rewardsDuration
         });
     }
+
+    /**
+     * @dev Renounce ownership override to avoid losing contract's ownership.
+     */
+    function renounceOwnership() public pure virtual override {
+        revert("1000");
+    }
 }
