@@ -251,20 +251,18 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
     /**
      * @notice Adds more rewards to the contract.
      *
-     * @dev Prior approval is required for this contract to transfer rewards from `_from` address.
+     * @dev Prior approval is required for this contract to transfer rewards from `owner`'s address.
      *
-     * @param _from address to transfer rewards from.
      * @param _amount The amount of new rewards.
      */
     function addRewards(
-        address _from,
         uint256 _amount
     ) external override onlyOwner validAmount(_amount) updateReward(address(0)) {
         // To mitigate any DOS issues, Admin must deposit 1 wei into the staker contract at the initialization
         require(_totalSupply != 0, "Zero totalSupply");
 
-        // Transfer assets from the user's wallet to this contract.
-        IERC20(rewardToken).safeTransferFrom({ from: _from, to: address(this), value: _amount });
+        // Transfer assets from the owner's wallet to this contract.
+        IERC20(rewardToken).safeTransferFrom({ from: msg.sender, to: address(this), value: _amount });
 
         uint256 duration = rewardsDuration;
         if (duration == 0) revert ZeroRewardsDuration();
