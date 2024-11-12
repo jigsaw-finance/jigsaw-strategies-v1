@@ -9,7 +9,6 @@ import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/Saf
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
-import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
 /**
