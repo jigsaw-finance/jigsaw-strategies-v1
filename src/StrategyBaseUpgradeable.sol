@@ -66,7 +66,7 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      */
     function __StrategyBase_init(
         address _initialOwner
-    ) internal initializer {
+    ) internal onlyInitializing {
         __Ownable_init(_initialOwner);
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
