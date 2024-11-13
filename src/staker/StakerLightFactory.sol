@@ -21,12 +21,17 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
     // -- Constructor --
 
     /**
-     * @notice Creates a new StablesManager contract.
+     * @notice Creates a new StakerLightFactory contract.
      * @param _initialOwner The initial owner of the contract.
+     * @param _referenceImplementation The StakerLight reference implementation for used for cloning.
      */
-    constructor(
-        address _initialOwner
-    ) Ownable(_initialOwner) { }
+    constructor(address _initialOwner, address _referenceImplementation) Ownable(_initialOwner) {
+        // Assert that referenceImplementation has code in it to protect the system from cloning invalid implementation.
+        require(_referenceImplementation.code.length > 0, "Reference implementation has no code");
+
+        emit StakerLightImplementationUpdated(_referenceImplementation);
+        referenceImplementation = _referenceImplementation;
+    }
 
     // -- Administration --
 
@@ -37,7 +42,10 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
     function setStakerLightReferenceImplementation(
         address _referenceImplementation
     ) external override onlyOwner {
-        require(_referenceImplementation != address(0), "3000");
+        // Assert that referenceImplementation has code in it to protect the system from cloning invalid implementation.
+        require(_referenceImplementation.code.length > 0, "Reference implementation has no code");
+
+        emit StakerLightImplementationUpdated(_referenceImplementation);
         referenceImplementation = _referenceImplementation;
     }
 
@@ -61,9 +69,6 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
         address _strategy,
         uint256 _rewardsDuration
     ) external override returns (address newStakerLightAddress) {
-        // Assert that referenceImplementation has code in it to protect the system from cloning invalid implementation.
-        require(referenceImplementation.code.length > 0, "Reference implementation has no code");
-
         // Clone the StakerLight contract implementation for the new StakerLight contract.
         newStakerLightAddress = Clones.cloneDeterministic({
             implementation: referenceImplementation,
@@ -81,5 +86,12 @@ contract StakerLightFactory is IStakerLightFactory, Ownable2Step {
             _strategy: _strategy,
             _rewardsDuration: _rewardsDuration
         });
+    }
+
+    /**
+     * @dev Renounce ownership override to avoid losing contract's ownership.
+     */
+    function renounceOwnership() public pure virtual override {
+        revert("1000");
     }
 }

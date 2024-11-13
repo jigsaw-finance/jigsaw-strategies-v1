@@ -121,8 +121,8 @@ abstract contract BasicContractsFixture is Test {
         strategyManager.addStrategy(address(strategyWithoutRewardsMock));
 
         jRewards = address(new ERC20Mock());
-        stakerFactory = new StakerLightFactory({ _initialOwner: OWNER });
-        stakerFactory.setStakerLightReferenceImplementation({ _referenceImplementation: address(new StakerLight()) });
+        stakerFactory =
+            new StakerLightFactory({ _initialOwner: OWNER, _referenceImplementation: address(new StakerLight()) });
 
         vm.stopPrank();
     }

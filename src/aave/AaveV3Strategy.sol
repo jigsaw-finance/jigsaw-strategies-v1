@@ -115,7 +115,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice A mapping that stores participant details by address.
      */
-    mapping(address => IStrategy.RecipientInfo) public override recipients;
+    mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
 
     // -- Constructor --
 
@@ -126,7 +126,30 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializer for the Aave Strategy.
+     * @notice Initializes the Aave Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.lendingPool` must be valid (`"3036"` error code if invalid).
+     * - `_params.rewardsController` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters:
+     * - owner: The address of the initial owner of the Strategy contract.
+     * - managerContainer: The address of the contract that contains the manager contract.
+     * - stakerFactory: The address of the StakerLightFactory contract.
+     * - lendingPool: The address of the Aave Lending Pool.
+     * - rewardsController: The address of the Aave Rewards Controller
+     * - rewardToken: The address of the Aave reward token associated with the strategy
+     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
+     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
+     * - tokenIn: The address of the LP token used as input for the strategy.
+     * - tokenOut: The address of the Aave receipt token (aToken).
      */
     function initialize(
         InitializerParams memory _params
@@ -149,6 +172,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
                 _receiptTokenName: "Aave Strategy Receipt Token",
                 _receiptTokenSymbol: "AaRT"
@@ -184,7 +208,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount,
         address _recipient,
         bytes calldata _data
-    ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         uint256 balanceBefore = IAToken(tokenOut).scaledBalanceOf(_recipient);
         uint16 refCode = _data.length > 0 ? abi.decode(_data, (uint16)) : 0;
@@ -236,7 +260,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IAToken(tokenOut).scaledBalanceOf(_recipient), "2002");
 
@@ -328,7 +352,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     function claimRewards(
         address _recipient,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256[] memory, address[] memory) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256[] memory, address[] memory) {
         // aTokens should be checked for rewards eligibility.
         address[] memory eligibleTokens = new address[](1);
         eligibleTokens[0] = tokenOut;
@@ -336,11 +360,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         // Make the claimAllRewards through the user's Holding.
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(rewardsController),
-            _call: abi.encodeWithSignature(
-                "claimAllRewards(address[],address)",
-                eligibleTokens, // List of assets to check eligible distributions before claiming rewards
-                _recipient // The address that will be receiving the rewards
-            )
+            _call: abi.encodeCall(IRewardsController.claimAllRewards, (eligibleTokens, _recipient))
         });
 
         // Assert the call succeeded.
