@@ -145,12 +145,16 @@ interface IStakerLight {
     /**
      * @notice rewards paid to participants so far.
      */
-    function userRewardPerTokenPaid(address participant) external view returns (uint256);
+    function userRewardPerTokenPaid(
+        address participant
+    ) external view returns (uint256);
 
     /**
      * @notice accrued rewards per participant.
      */
-    function rewards(address participant) external view returns (uint256);
+    function rewards(
+        address participant
+    ) external view returns (uint256);
 
     /**
      * @notice Initializer for the Staker Light contract.
@@ -172,17 +176,20 @@ interface IStakerLight {
     /**
      * @notice sets the new rewards duration.
      */
-    function setRewardsDuration(uint256 _rewardsDuration) external;
+    function setRewardsDuration(
+        uint256 _rewardsDuration
+    ) external;
 
     /**
      * @notice Adds more rewards to the contract.
      *
-     * @dev Prior approval is required for this contract to transfer rewards from `_from` address.
+     * @dev Prior approval is required for this contract to transfer rewards from `owner`'s address.
      *
-     * @param _from address to transfer rewards from.
      * @param _amount The amount of new rewards.
      */
-    function addRewards(address _from, uint256 _amount) external;
+    function addRewards(
+        uint256 _amount
+    ) external;
 
     /**
      * This function allows the contract owner to recover ERC20 tokens that might have been
@@ -203,7 +210,9 @@ interface IStakerLight {
      * @notice returns total invested amount for an account.
      * @param _account participant address
      */
-    function balanceOf(address _account) external view returns (uint256);
+    function balanceOf(
+        address _account
+    ) external view returns (uint256);
 
     /**
      * @notice returns the last time rewards were applicable.
@@ -219,7 +228,9 @@ interface IStakerLight {
      * @notice rewards accrued rewards for account.
      *  @param _account participant's address
      */
-    function earned(address _account) external view returns (uint256);
+    function earned(
+        address _account
+    ) external view returns (uint256);
 
     /**
      * @notice returns reward amount for a specific time range.

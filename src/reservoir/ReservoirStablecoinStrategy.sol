@@ -14,6 +14,8 @@ import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
+import { ICreditEnforcer } from "./interfaces/ICreditEnforcer.sol";
+import { IPegStabilityModule } from "./interfaces/IPegStabilityModule.sol";
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
@@ -110,7 +112,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice A mapping that stores participant details by address.
      */
-    mapping(address => IStrategy.RecipientInfo) public override recipients;
+    mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
 
     // -- Constructor --
 
@@ -121,7 +123,29 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializer for the Reservoir Strategy.
+     * @notice Initializes the Reservoir Stablecoin Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.creditEnforcer` must be valid (`"3036"` error code if invalid).
+     * - `_params.pegStabilityModule` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters:
+     * - owner: The address of the initial owner of the Strategy contract.
+     * - managerContainer: The address of the contract that contains the manager contract.
+     * - creditEnforcer: The address of the Reservoir's CreditEnforcer contract.
+     * - pegStabilityModule:  The Reservoir's PegStabilityModule contract.
+     * - stakerFactory: The address of the StakerLightFactory contract.
+     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
+     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
+     * - tokenIn: The address of the LP token used as input for the strategy.
+     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
      */
     function initialize(
         InitializerParams memory _params
@@ -143,6 +167,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
                 _receiptTokenName: "Reservoir Receipt Token",
                 _receiptTokenSymbol: "ReRT"
@@ -180,7 +205,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount,
         address _recipient,
         bytes calldata
-    ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
@@ -232,7 +257,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
@@ -262,10 +287,12 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: pegStabilityModule, _amount: _shares });
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pegStabilityModule,
-            _call: abi.encodeWithSignature(
-                "redeem(address,uint256)",
-                _recipient, // receiverOfUnderlying
-                _shares / 1e12 // amount of underlying to redeem converted to 6 decimals for USDC
+            _call: abi.encodeCall(
+                IPegStabilityModule.redeem,
+                (
+                    _recipient,
+                    _shares / 1e12 // converted to 6 decimals for USDC
+                )
             )
         });
         // Assert the call succeeded.
@@ -308,12 +335,4 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
     }
-}
-
-interface ICreditEnforcer {
-    /**
-     * @notice Issue the stablecoin to a recipient, check the debt cap and solvency
-     * @param amount Transfer amount of the underlying
-     */
-    function mintStablecoin(address to, uint256 amount) external returns (uint256);
 }

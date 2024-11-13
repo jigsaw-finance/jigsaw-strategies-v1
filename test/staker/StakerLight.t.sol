@@ -21,13 +21,8 @@ contract StakerLightTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
         tokenIn = address(usdc);
-        address jRewards = address(new ERC20Mock());
 
-        address staker_impl = address(new StakerLight());
-        factory = new StakerLightFactory({ _initialOwner: OWNER });
-
-        vm.prank(OWNER, OWNER);
-        factory.setStakerLightReferenceImplementation(staker_impl);
+        factory = new StakerLightFactory({ _initialOwner: OWNER, _referenceImplementation: address(new StakerLight()) });
 
         address deployment = factory.createStakerLight({
             _initialOwner: OWNER,

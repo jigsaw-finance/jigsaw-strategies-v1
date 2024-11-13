@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
@@ -19,11 +19,11 @@ import { IStakerLight } from "./interfaces/IStakerLight.sol";
  *
  * @dev This contract is called light due to the fact that it does not actually transfer the receipt tokens from the
  * user and is only used for accounting.
- * @dev This contract inherits functionalities from `Ownable2Step` and `ReentrancyGuard`.
+ * @dev This contract inherits functionalities from `Ownable2StepUpgradeable` and `ReentrancyGuardUpgradeable`.
  *
  * @author Hovooo (@hovooo)
  */
-contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     /**
@@ -69,20 +69,20 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
     /**
      * @notice Mapping of user addresses to the amount of rewards already paid to them.
      */
-    mapping(address => uint256) public override userRewardPerTokenPaid;
+    mapping(address user => uint256 amountPaid) public override userRewardPerTokenPaid;
 
     /**
      * @notice Mapping of user addresses to their accrued rewards.
      */
-    mapping(address => uint256) public override rewards;
+    mapping(address user => uint256 amountAccrued) public override rewards;
 
     /**
      * @notice Total supply limit of the staking token.
      */
-    uint256 public constant totalSupplyLimit = 1e34;
+    uint256 public constant TOTAL_SUPPLY_LIMIT = 1e34;
 
     uint256 private _totalSupply;
-    mapping(address => uint256) private _balances;
+    mapping(address user => uint256 amount) private _balances;
 
     // --- Modifiers ---
 
@@ -125,8 +125,8 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
     }
 
     /**
-     * @notice Modifier to restrict a function to be called only by the staking manager.
-     * @notice Reverts the transaction if the caller is not the staking manager.
+     * @notice Modifier to restrict a function to be called only by the `strategy` contract.
+     * @notice Reverts the transaction if the caller is not the `strategy`.
      */
     modifier onlyStrategy() {
         if (msg.sender != strategy) revert UnauthorizedCaller();
@@ -167,8 +167,16 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
         address _rewardToken,
         address _strategy,
         uint256 _rewardsDuration
-    ) public initializer validAddress(_rewardToken) validAddress(_strategy) {
+    )
+        public
+        initializer
+        validAddress(_holdingManager)
+        validAddress(_rewardToken)
+        validAddress(_strategy)
+        validAmount(_rewardsDuration)
+    {
         __Ownable_init(_initialOwner);
+        __ReentrancyGuard_init();
 
         holdingManager = IHoldingManager(_holdingManager);
         rewardToken = _rewardToken;
@@ -189,9 +197,11 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
     function deposit(
         address _user,
         uint256 _amount
-    ) external override onlyStrategy nonReentrant updateReward(_user) validAmount(_amount) {
+    ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
         // Ensure that deposit operation will never surpass supply limit
-        if (_totalSupply + _amount > totalSupplyLimit) revert DepositSurpassesSupplyLimit(_amount, totalSupplyLimit);
+        if (_totalSupply + _amount > TOTAL_SUPPLY_LIMIT) {
+            revert DepositSurpassesSupplyLimit(_amount, TOTAL_SUPPLY_LIMIT);
+        }
         _totalSupply += _amount;
 
         _balances[_user] += _amount;
@@ -208,7 +218,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
     function withdraw(
         address _user,
         uint256 _amount
-    ) external override onlyStrategy nonReentrant updateReward(_user) validAmount(_amount) {
+    ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
         _totalSupply -= _amount;
         _balances[_user] = _balances[_user] - _amount;
         emit Withdrawn(_user, _amount);
@@ -241,7 +251,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
      */
     function setRewardsDuration(
         uint256 _rewardsDuration
-    ) external override onlyOwner {
+    ) external override onlyOwner validAmount(_rewardsDuration) {
         if (block.timestamp <= periodFinish) revert PreviousPeriodNotFinished(block.timestamp, periodFinish);
         emit RewardsDurationUpdated(rewardsDuration, _rewardsDuration);
         rewardsDuration = _rewardsDuration;
@@ -250,25 +260,24 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
     /**
      * @notice Adds more rewards to the contract.
      *
-     * @dev Prior approval is required for this contract to transfer rewards from `_from` address.
+     * @dev Prior approval is required for this contract to transfer rewards from `owner`'s address.
      *
-     * @param _from address to transfer rewards from.
      * @param _amount The amount of new rewards.
      */
     function addRewards(
-        address _from,
         uint256 _amount
     ) external override onlyOwner validAmount(_amount) updateReward(address(0)) {
         // To mitigate any DOS issues, Admin must deposit 1 wei into the staker contract at the initialization
         require(_totalSupply != 0, "Zero totalSupply");
 
-        // Transfer assets from the user's wallet to this contract.
-        IERC20(rewardToken).safeTransferFrom({ from: _from, to: address(this), value: _amount });
+        // Transfer assets from the owner's wallet to this contract.
+        IERC20(rewardToken).safeTransferFrom({ from: msg.sender, to: address(this), value: _amount });
 
         uint256 duration = rewardsDuration;
         if (duration == 0) revert ZeroRewardsDuration();
         if (block.timestamp >= periodFinish) {
             rewardRate = _amount / duration;
+            periodFinish = block.timestamp + duration;
         } else {
             uint256 remaining = periodFinish - block.timestamp;
             uint256 leftover = remaining * rewardRate;
@@ -281,7 +290,6 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, ReentrancyGuardUpgrade
         if (rewardRate > (balance / duration)) revert RewardRateTooBig();
 
         lastUpdateTime = block.timestamp;
-        periodFinish = block.timestamp + duration;
         emit RewardAdded(_amount);
     }
 

@@ -130,7 +130,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         //5.
         assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
 
-        // Assert statements with reasons
+        // Additional checks
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
     }

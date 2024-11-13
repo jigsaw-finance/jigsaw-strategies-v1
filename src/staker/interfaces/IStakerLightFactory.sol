@@ -3,6 +3,13 @@ pragma solidity ^0.8.20;
 
 interface IStakerLightFactory {
     /**
+     * @notice Emitted when StakerLight reference implementation is updated.
+     *
+     * @param newStakerLightImplementationAddress Address of the newly created StakerLight contract.
+     */
+    event StakerLightImplementationUpdated(address indexed newStakerLightImplementationAddress);
+
+    /**
      * @notice Emitted when a new StakerLight contract is created.
      *
      * @param newStakerLightAddress Address of the newly created StakerLight contract.

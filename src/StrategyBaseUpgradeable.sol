@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -9,14 +9,13 @@ import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/Saf
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
-import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
 /**
  * @title StrategyBase Contract used for common functionality through Jigsaw Strategies .
  * @author Hovooo (@hovooo)
  */
-abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
+abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     /**
@@ -55,6 +54,11 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
     IManagerContainer public managerContainer;
 
     /**
+     * @notice Default decimals used for computations.
+     */
+    uint256 constant DEFAULT_DECIMALS = 18;
+
+    /**
      * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
      * StrategyBaseUpgradeable to use up those slots without affecting the storage layout of child contracts.
      */
@@ -64,8 +68,11 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      * @notice Initializes the StrategyBase contract.
      * @param _initialOwner The address of the initial owner of the contract.
      */
-    function __StrategyBase_init(address _initialOwner) internal initializer {
+    function __StrategyBase_init(
+        address _initialOwner
+    ) internal onlyInitializing {
         __Ownable_init(_initialOwner);
+        __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
     }
 
@@ -76,7 +83,9 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      * can modify the contract's logic.
      * @param _newImplementation The address of the new implementation contract.
      */
-    function _authorizeUpgrade(address _newImplementation) internal override onlyOwner { }
+    function _authorizeUpgrade(
+        address _newImplementation
+    ) internal override onlyOwner { }
 
     /**
      * @notice Save funds.
@@ -118,10 +127,10 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      */
     function _mint(IReceiptToken _receiptToken, address _recipient, uint256 _amount, uint256 _tokenDecimals) internal {
         uint256 realAmount = _amount;
-        if (_tokenDecimals > 18) {
-            realAmount = _amount / (10 ** (_tokenDecimals - 18));
+        if (_tokenDecimals > DEFAULT_DECIMALS) {
+            realAmount = _amount / (10 ** (_tokenDecimals - DEFAULT_DECIMALS));
         } else {
-            realAmount = _amount * (10 ** (18 - _tokenDecimals));
+            realAmount = _amount * (10 ** (DEFAULT_DECIMALS - _tokenDecimals));
         }
         _receiptToken.mint(_recipient, realAmount);
         emit ReceiptTokensMinted(_recipient, realAmount);
@@ -145,10 +154,10 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
         uint256 burnAmount = _shares > _totalShares ? _totalShares : _shares;
 
         uint256 realAmount = burnAmount;
-        if (_tokenDecimals > 18) {
-            realAmount = burnAmount / (10 ** (_tokenDecimals - 18));
+        if (_tokenDecimals > DEFAULT_DECIMALS) {
+            realAmount = burnAmount / (10 ** (_tokenDecimals - DEFAULT_DECIMALS));
         } else {
-            realAmount = burnAmount * (10 ** (18 - _tokenDecimals));
+            realAmount = burnAmount * (10 ** (DEFAULT_DECIMALS - _tokenDecimals));
         }
 
         _receiptToken.burnFrom(_recipient, realAmount);
@@ -176,7 +185,9 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      * @dev Reverts with "2001" if the amount is 0 or less.
      * @param _amount The amount to validate.
      */
-    modifier onlyValidAmount(uint256 _amount) {
+    modifier onlyValidAmount(
+        uint256 _amount
+    ) {
         require(_amount > 0, "2001");
         _;
     }
@@ -186,7 +197,9 @@ abstract contract StrategyBaseUpgradeable is OwnableUpgradeable, ReentrancyGuard
      * @dev Reverts with "3000" if the address is the zero address.
      * @param _addr The address to validate.
      */
-    modifier onlyValidAddress(address _addr) {
+    modifier onlyValidAddress(
+        address _addr
+    ) {
         require(_addr != address(0), "3000");
         _;
     }

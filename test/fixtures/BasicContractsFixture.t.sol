@@ -33,7 +33,7 @@ import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
 abstract contract BasicContractsFixture is Test {
-    address internal constant OWNER = address(uint160(uint256(keccak256("owner"))));
+    address internal constant OWNER = 0x3412d07beF5d0DcDb942aC1765D0b8f19D8CA2C4;
 
     using Math for uint256;
 
@@ -62,6 +62,8 @@ abstract contract BasicContractsFixture is Test {
     function init() public {
         vm.startPrank(OWNER);
         vm.createSelectFork(vm.envString("MAINNET_RPC_URL"));
+
+        deal(OWNER, 100_000e18);
 
         usdc = new SampleTokenERC20("USDC", "USDC", 0);
         usdcOracle = new SampleOracle();
@@ -119,8 +121,8 @@ abstract contract BasicContractsFixture is Test {
         strategyManager.addStrategy(address(strategyWithoutRewardsMock));
 
         jRewards = address(new ERC20Mock());
-        stakerFactory = new StakerLightFactory({ _initialOwner: OWNER });
-        stakerFactory.setStakerLightReferenceImplementation({ _referenceImplementation: address(new StakerLight()) });
+        stakerFactory =
+            new StakerLightFactory({ _initialOwner: OWNER, _referenceImplementation: address(new StakerLight()) });
 
         vm.stopPrank();
     }

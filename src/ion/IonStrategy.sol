@@ -14,6 +14,7 @@ import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
+import { IIonPool } from "./interfaces/IIonPool.sol";
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
@@ -107,7 +108,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice A mapping that stores participant details by address.
      */
-    mapping(address => IStrategy.RecipientInfo) public override recipients;
+    mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
 
     // -- Constructor --
 
@@ -118,7 +119,27 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializer for the Ion Strategy.
+     * @notice Initializes the Ion Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.ionPool` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters:
+     * - owner: The address of the initial owner of the Strategy contract.
+     * - managerContainer: The address of the contract that contains the manager contract.
+     * - stakerFactory: The address of the StakerLightFactory contract.
+     * - ionPool: The address of the Ion Pool where tokens will be pooled.
+     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
+     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
+     * - tokenIn: The address of the LP token used as input for the strategy.
+     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
      */
     function initialize(
         InitializerParams memory _params
@@ -138,6 +159,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
                 _receiptTokenName: "Ion Strategy Receipt Token",
                 _receiptTokenSymbol: "IoRT"
@@ -173,7 +195,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount,
         address _recipient,
         bytes calldata _data
-    ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override onlyValidAmount(_amount) nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
         uint256 balanceBefore = ionPool.normalizedBalanceOf(_recipient);
@@ -227,7 +249,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         uint256 totalSharesBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
         require(_shares <= totalSharesBefore, "2002");
@@ -277,11 +299,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         // Perform the withdrawal operation from user's holding address.
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(ionPool),
-            _call: abi.encodeWithSignature(
-                "withdraw(address,uint256)",
-                _recipient, // receiverOfUnderlying
-                params.assetsToWithdraw // amount of underlying to redeem
-            )
+            _call: abi.encodeCall(IIonPool.withdraw, (_recipient, params.assetsToWithdraw))
         });
 
         // Assert the call succeeded.
@@ -339,41 +357,4 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
     }
-}
-
-interface IIonPool {
-    /**
-     * @dev Allows lenders to redeem their interest-bearing position for the
-     * underlying asset. It is possible that dust amounts more of the position
-     * are burned than the underlying received due to rounding.
-     * @param receiverOfUnderlying the address to which the redeemed underlying
-     * asset should be sent to.
-     * @param amount of underlying to redeem.
-     */
-    function withdraw(address receiverOfUnderlying, uint256 amount) external;
-
-    /**
-     * @dev Allows lenders to deposit their underlying asset into the pool and
-     * earn interest on it.
-     * @param user the address to receive credit for the position.
-     * @param amount of underlying asset to use to create the position.
-     * @param proof merkle proof that the user is whitelisted.
-     */
-    function supply(address user, uint256 amount, bytes32[] calldata proof) external;
-
-    /**
-     * @dev Current token balance
-     * @param user to get balance of
-     */
-    function balanceOf(
-        address user
-    ) external view returns (uint256);
-
-    /**
-     * @dev Accounting is done in normalized balances
-     * @param user to get normalized balance of
-     */
-    function normalizedBalanceOf(
-        address user
-    ) external view returns (uint256);
 }
