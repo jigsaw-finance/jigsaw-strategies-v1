@@ -6,22 +6,25 @@ import { console } from "forge-std/console.sol";
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
+import { StakerLight } from "../../src/staker/StakerLight.sol";
+import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+
 import { DeployStaker } from "script/deployment/0_DeployStaker.s.sol";
 
 contract DeployStakerTest is Test, BasicContractsFixture {
     DeployStaker internal stakerDeployer;
 
+    StakerLight internal staker;
+    StakerLightFactory internal factory;
+
     function setUp() public {
         init();
-
         stakerDeployer = new DeployStaker();
-
-        console.log("OWNER", OWNER);
-        console.log("CONT", address(managerContainer));
-        console.log("REWARDS", address(jRewards));
+        (staker, factory) = stakerDeployer.run();
     }
 
     function test_deployStaker() public {
-        stakerDeployer.run();
+        vm.assertEq(factory.owner(), OWNER, "Owner in factory is wrong");
+        vm.assertEq(factory.referenceImplementation(), address(staker), "ReferenceImplementation in factory wrong");
     }
 }

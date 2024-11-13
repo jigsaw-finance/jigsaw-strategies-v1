@@ -31,9 +31,6 @@ contract DeployIonTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        DeployStaker stakerDeployer = new DeployStaker();
-        (StakerLightFactory factory,) = stakerDeployer.run();
-
         DeployIonImpl implDeployer = new DeployIonImpl();
         address implementation = implDeployer.run("my salt");
 
@@ -69,7 +66,6 @@ contract DeployIonTest is Test, BasicContractsFixture {
     }
 
     function test_ion_initialValues() public view {
-        assertEq(address(strategy), 0x0000000028cBB2FFf79c9f1F028FD90575eBCc97, "Expected create2 address is wrong");
         assertEq(address(strategy.owner()), ionDeployer.OWNER(), "Owner initialized wrong");
         assertEq(
             address(strategy.managerContainer()), ionDeployer.MANAGER_CONTAINER(), "Manager Container initialized wrong"

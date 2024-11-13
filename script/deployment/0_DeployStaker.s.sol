@@ -10,11 +10,10 @@ contract DeployStaker is CommonStrategyScriptBase {
     function run()
         external
         broadcast(vm.envUint("DEPLOYER_PRIVATE_KEY"))
-        returns (StakerLightFactory stakerFactory, StakerLight stakerImplementation)
+        returns (StakerLight stakerImplementation, StakerLightFactory stakerFactory)
     {
-        // Deploy StkaerLight implementation
+        // Deploy StakerLight implementation
         stakerImplementation = new StakerLight();
-
         // Deploy StakerFactory contract
         stakerFactory =
             new StakerLightFactory({ _initialOwner: OWNER, _referenceImplementation: address(stakerImplementation) });

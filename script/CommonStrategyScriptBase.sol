@@ -9,17 +9,9 @@ import { Script, stdJson as StdJson } from "forge-std/Script.sol";
 contract CommonStrategyScriptBase is Script {
     using StdJson for string;
 
-    modifier broadcast(
-        uint256 _pk
-    ) {
-        vm.startBroadcast(_pk);
-        _;
-        vm.stopBroadcast();
-    }
     /**
      * @notice Address of the owner
      */
-
     address public OWNER = 0x3412d07beF5d0DcDb942aC1765D0b8f19D8CA2C4;
 
     /**
@@ -30,10 +22,18 @@ contract CommonStrategyScriptBase is Script {
     /**
      * @notice Address of the Staker Factory Contract
      */
-    address public STAKER_FACTORY = 0xE41fCFCe505457DB0DF31aD6D3D20606D8Fb1c6E;
+    address public STAKER_FACTORY = 0x0F73f18308A1F07A8760B34dc46aC0c04F6B34cF;
 
     /**
      * @notice Address of Jigsaw's reward tokens
      */
     address public jREWARDS = 0x371BC93e9661d445fC046918231483faDF1Dbd96;
+
+    modifier broadcast(
+        uint256 _pk
+    ) {
+        vm.startBroadcast(_pk);
+        _;
+        vm.stopBroadcast();
+    }
 }
