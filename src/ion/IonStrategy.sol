@@ -158,6 +158,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
                 _receiptTokenName: "Ion Strategy Receipt Token",
                 _receiptTokenSymbol: "IoRT"
