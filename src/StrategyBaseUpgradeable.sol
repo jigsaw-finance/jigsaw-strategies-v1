@@ -54,6 +54,11 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
     IManagerContainer public managerContainer;
 
     /**
+     * @notice Default decimals used for computations.
+     */
+    uint256 constant DEFAULT_DECIMALS = 18;
+
+    /**
      * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
      * StrategyBaseUpgradeable to use up those slots without affecting the storage layout of child contracts.
      */
@@ -122,10 +127,10 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
      */
     function _mint(IReceiptToken _receiptToken, address _recipient, uint256 _amount, uint256 _tokenDecimals) internal {
         uint256 realAmount = _amount;
-        if (_tokenDecimals > 18) {
-            realAmount = _amount / (10 ** (_tokenDecimals - 18));
+        if (_tokenDecimals > DEFAULT_DECIMALS) {
+            realAmount = _amount / (10 ** (_tokenDecimals - DEFAULT_DECIMALS));
         } else {
-            realAmount = _amount * (10 ** (18 - _tokenDecimals));
+            realAmount = _amount * (10 ** (DEFAULT_DECIMALS - _tokenDecimals));
         }
         _receiptToken.mint(_recipient, realAmount);
         emit ReceiptTokensMinted(_recipient, realAmount);
@@ -149,10 +154,10 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
         uint256 burnAmount = _shares > _totalShares ? _totalShares : _shares;
 
         uint256 realAmount = burnAmount;
-        if (_tokenDecimals > 18) {
-            realAmount = burnAmount / (10 ** (_tokenDecimals - 18));
+        if (_tokenDecimals > DEFAULT_DECIMALS) {
+            realAmount = burnAmount / (10 ** (_tokenDecimals - DEFAULT_DECIMALS));
         } else {
-            realAmount = burnAmount * (10 ** (18 - _tokenDecimals));
+            realAmount = burnAmount * (10 ** (DEFAULT_DECIMALS - _tokenDecimals));
         }
 
         _receiptToken.burnFrom(_recipient, realAmount);
