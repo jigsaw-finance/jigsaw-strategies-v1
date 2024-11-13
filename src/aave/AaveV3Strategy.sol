@@ -360,11 +360,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         // Make the claimAllRewards through the user's Holding.
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(rewardsController),
-            _call: abi.encodeWithSignature(
-                "claimAllRewards(address[],address)",
-                eligibleTokens, // List of assets to check eligible distributions before claiming rewards
-                _recipient // The address that will be receiving the rewards
-            )
+            _call: abi.encodeCall(IRewardsController.claimAllRewards, (eligibleTokens, _recipient))
         });
 
         // Assert the call succeeded.

@@ -285,10 +285,12 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: pegStabilityModule, _amount: _shares });
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pegStabilityModule,
-            _call: abi.encodeWithSignature(
-                "redeem(address,uint256)",
-                _recipient, // receiverOfUnderlying
-                _shares / 1e12 // amount of underlying to redeem converted to 6 decimals for USDC
+            _call: abi.encodeCall(
+                IPegStabilityModule.redeem,
+                (
+                    _recipient,
+                    _shares / 1e12 // converted to 6 decimals for USDC
+                )
             )
         });
         // Assert the call succeeded.
@@ -339,4 +341,14 @@ interface ICreditEnforcer {
      * @param amount Transfer amount of the underlying
      */
     function mintStablecoin(address to, uint256 amount) external returns (uint256);
+}
+
+interface IPegStabilityModule {
+    /**
+     * @notice Redeem the underlying to the sender for stablecoin
+     *
+     * @param to Receiver address
+     * @param amount Underlying amount
+     */
+    function redeem(address to, uint256 amount) external;
 }
