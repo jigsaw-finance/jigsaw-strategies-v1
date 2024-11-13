@@ -14,6 +14,8 @@ import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
+import { ICreditEnforcer } from "./interfaces/ICreditEnforcer.sol";
+import { IPegStabilityModule } from "./interfaces/IPegStabilityModule.sol";
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
@@ -333,22 +335,4 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
     }
-}
-
-interface ICreditEnforcer {
-    /**
-     * @notice Issue the stablecoin to a recipient, check the debt cap and solvency
-     * @param amount Transfer amount of the underlying
-     */
-    function mintStablecoin(address to, uint256 amount) external returns (uint256);
-}
-
-interface IPegStabilityModule {
-    /**
-     * @notice Redeem the underlying to the sender for stablecoin
-     *
-     * @param to Receiver address
-     * @param amount Underlying amount
-     */
-    function redeem(address to, uint256 amount) external;
 }
