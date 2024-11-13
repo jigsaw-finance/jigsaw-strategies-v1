@@ -69,12 +69,12 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
     /**
      * @notice Mapping of user addresses to the amount of rewards already paid to them.
      */
-    mapping(address => uint256) public override userRewardPerTokenPaid;
+    mapping(address user => uint256 amountPaid) public override userRewardPerTokenPaid;
 
     /**
      * @notice Mapping of user addresses to their accrued rewards.
      */
-    mapping(address => uint256) public override rewards;
+    mapping(address user => uint256 amountAccrued) public override rewards;
 
     /**
      * @notice Total supply limit of the staking token.
@@ -82,7 +82,7 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
     uint256 public constant totalSupplyLimit = 1e34;
 
     uint256 private _totalSupply;
-    mapping(address => uint256) private _balances;
+    mapping(address user => uint256 amount) private _balances;
 
     // --- Modifiers ---
 

@@ -129,7 +129,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice A mapping that stores participant details by address.
      */
-    mapping(address => IStrategy.RecipientInfo) public override recipients;
+    mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
 
     // -- Constructor --
 
