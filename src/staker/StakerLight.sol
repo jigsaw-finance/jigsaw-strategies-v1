@@ -79,7 +79,7 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
     /**
      * @notice Total supply limit of the staking token.
      */
-    uint256 public constant totalSupplyLimit = 1e34;
+    uint256 public constant TOTAL_SUPPLY_LIMIT = 1e34;
 
     uint256 private _totalSupply;
     mapping(address user => uint256 amount) private _balances;
@@ -199,7 +199,9 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
         uint256 _amount
     ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
         // Ensure that deposit operation will never surpass supply limit
-        if (_totalSupply + _amount > totalSupplyLimit) revert DepositSurpassesSupplyLimit(_amount, totalSupplyLimit);
+        if (_totalSupply + _amount > TOTAL_SUPPLY_LIMIT) {
+            revert DepositSurpassesSupplyLimit(_amount, TOTAL_SUPPLY_LIMIT);
+        }
         _totalSupply += _amount;
 
         _balances[_user] += _amount;
