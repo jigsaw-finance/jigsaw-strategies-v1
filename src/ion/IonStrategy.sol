@@ -125,7 +125,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      *
      * @dev This function is only callable once due to the `initializer` modifier.
      *
-     * @notice Ensures all provided addresses are non-zero to prevent misconfiguration:
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
      * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
      * - `_params.ionPool` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).

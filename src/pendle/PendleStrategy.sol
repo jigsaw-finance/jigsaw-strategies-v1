@@ -140,7 +140,31 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializer for the Pendle Strategy.
+     * @notice Initializes the Ion Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.pendleRouter` must be valid (`"3036"` error code if invalid).
+     * - `_params.pendleMarket` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     * - `_params.rewardToken` must be valid (`"3036"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters:
+     * - owner: The address of the initial owner of the Strategy contract.
+     * - managerContainer: The address of the contract that contains the manager contract.
+     * - pendleRouter:  The address of the Pendle's Router contract.
+     * - pendleMarket:  The Pendle's Router contract.
+     * - stakerFactory: The address of the StakerLightFactory contract.
+     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
+     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
+     * - tokenIn: The address of the LP token used as input for the strategy.
+     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
+     * - rewardToken: The address of the Pendle primary reward token.
      */
     function initialize(
         InitializerParams memory _params
