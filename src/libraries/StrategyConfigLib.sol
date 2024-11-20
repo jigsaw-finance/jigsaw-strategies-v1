@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 import { IReceiptTokenFactory } from "@jigsaw/src/interfaces/core/IReceiptTokenFactory.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
