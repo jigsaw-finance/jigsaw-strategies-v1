@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 /**
  * @title OperationsLib
@@ -76,7 +76,9 @@ library OperationsLib {
      * @param _returnData The return data of a failed external call.
      * @return The decoded revert message string.
      */
-    function getRevertMsg(bytes memory _returnData) internal pure returns (string memory) {
+    function getRevertMsg(
+        bytes memory _returnData
+    ) internal pure returns (string memory) {
         // If the return data length is less than 68, then the transaction failed without a specific revert message
         if (_returnData.length < 68) return "Transaction reverted silently";
         assembly {
