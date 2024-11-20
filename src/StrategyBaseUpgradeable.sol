@@ -72,6 +72,7 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
         address _initialOwner
     ) internal onlyInitializing {
         __Ownable_init(_initialOwner);
+        __Ownable2Step_init();
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
     }
