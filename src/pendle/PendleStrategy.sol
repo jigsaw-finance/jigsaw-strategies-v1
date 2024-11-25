@@ -372,7 +372,13 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     function claimRewards(
         address _recipient,
         bytes calldata
-    ) external override onlyStrategyManager returns (uint256[] memory claimedAmounts, address[] memory rewardsList) {
+    )
+        external
+        override
+        nonReentrant
+        onlyStrategyManager
+        returns (uint256[] memory claimedAmounts, address[] memory rewardsList)
+    {
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pendleMarket,
             _call: abi.encodeCall(IPMarket.redeemRewards, _recipient)
