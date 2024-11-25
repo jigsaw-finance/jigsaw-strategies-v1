@@ -42,7 +42,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         address rewardsController; // The address of the Aave Rewards Controller
         address rewardToken; // The address of the Aave reward token associated with the strategy
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
+        uint256 jigsawRewardDuration; // Initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of the Aave receipt token (aToken)
     }
@@ -157,6 +157,8 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.managerContainer != address(0), "3065");
         require(_params.lendingPool != address(0), "3036");
         require(_params.rewardsController != address(0), "3039");
+        require(_params.jigsawRewardToken != address(0), "3000");
+        require(_params.jigsawRewardDuration != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
 
