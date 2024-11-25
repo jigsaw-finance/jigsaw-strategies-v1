@@ -172,6 +172,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.managerContainer != address(0), "3065");
         require(_params.pendleRouter != address(0), "3036");
         require(_params.pendleMarket != address(0), "3036");
+        require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
         require(_params.rewardToken != address(0), "3000");
