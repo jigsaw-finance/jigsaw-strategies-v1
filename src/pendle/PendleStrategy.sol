@@ -302,7 +302,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
             precision: IERC20Metadata(tokenOut).decimals(),
-            rounding: OperationsLib.Rounding.Ceil
+            rounding: OperationsLib.Rounding.Floor
         });
 
         _burn({
