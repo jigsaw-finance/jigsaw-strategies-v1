@@ -145,7 +145,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
      * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
      * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
      * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
+     * - tokenOut: The address of the receipt token received as output from the strategy.
      */
     function initialize(
         InitializerParams memory _params
@@ -153,6 +153,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.managerContainer != address(0), "3065");
         require(_params.creditEnforcer != address(0), "3036");
         require(_params.pegStabilityModule != address(0), "3036");
+        require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
 
@@ -268,7 +269,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
             precision: IERC20Metadata(tokenOut).decimals(),
-            rounding: OperationsLib.Rounding.Ceil
+            rounding: OperationsLib.Rounding.Floor
         });
 
         _burn({
@@ -299,8 +300,6 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         require(success, OperationsLib.getRevertMsg(returnData));
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
-
         recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
@@ -312,6 +311,9 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
             shares: _shares,
             amount: params.balanceAfter - params.balanceBefore
         });
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+
         return (params.balanceAfter - params.balanceBefore, params.investment);
     }
 
