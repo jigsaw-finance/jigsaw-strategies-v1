@@ -70,10 +70,6 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         LimitOrderData limit; // Pendle's limit param.
     }
 
-    // -- Errors --
-
-    error OperationNotSupported();
-
     // -- Events --
 
     /**
