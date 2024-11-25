@@ -140,7 +140,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializes the Ion Strategy contract with necessary parameters.
+     * @notice Initializes the Pendle Strategy contract with necessary parameters.
      *
      * @dev Configures core components such as manager, tokens, pools, and reward systems
      * needed for the strategy to operate.
@@ -163,7 +163,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
      * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
      * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
+     * - tokenOut: The address of the Pendle receipt token received as output from the strategy.
      * - rewardToken: The address of the Pendle primary reward token.
      */
     function initialize(
