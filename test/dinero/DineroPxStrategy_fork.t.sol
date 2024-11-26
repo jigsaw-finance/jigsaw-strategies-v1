@@ -10,9 +10,10 @@ import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import { IPirexEth } from "../../src/dinero/IPirexEth.sol";
-import { IAutoPxEth } from "../../src/dinero/IAutoPxEth.sol";
 import { DineroStrategy } from "../../src/dinero/DineroStrategy.sol";
+import { IAutoPxEth } from "../../src/dinero/IAutoPxEth.sol";
+import { IPirexEth } from "../../src/dinero/IPirexEth.sol";
+
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
@@ -29,10 +30,7 @@ contract DineroPxStrategyTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        address jRewards = address(new ERC20Mock());
-        address stakerFactory = address(new StakerLightFactory({ _initialOwner: OWNER }));
         address strategyImplementation = address(new DineroStrategy());
-
         DineroStrategy.InitializerParams memory initParams = DineroStrategy.InitializerParams({
             owner: OWNER,
             managerContainer: address(managerContainer),
@@ -78,7 +76,7 @@ contract DineroPxStrategyTest is Test, BasicContractsFixture {
         uint256 expectedShares = balanceAfter - balanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
 
-//        uint256 sharesReturned = (strategy.autoPirexEth().convertToShares(amount));
+        //        uint256 sharesReturned = (strategy.autoPirexEth().convertToShares(amount));
         assertApproxEqRel(balanceAfter, balanceBefore + amount, 0.01e18, "Wrong balance in Dinero after stake");
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");

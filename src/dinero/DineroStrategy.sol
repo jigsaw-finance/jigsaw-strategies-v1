@@ -3,23 +3,24 @@ pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
 
-import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {IHolding} from "@jigsaw/src/interfaces/core/IHolding.sol";
-import {IManagerContainer} from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
-import {IReceiptToken} from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
-import {IStrategy} from "@jigsaw/src/interfaces/core/IStrategy.sol";
+import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
+import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
+import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
+import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
-import {OperationsLib} from "../libraries/OperationsLib.sol";
-import {StrategyConfigLib} from "../libraries/StrategyConfigLib.sol";
+import { OperationsLib } from "../libraries/OperationsLib.sol";
+import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
-import {IStakerLight} from "../staker/interfaces/IStakerLight.sol";
-import {IStakerLightFactory} from "../staker/interfaces/IStakerLightFactory.sol";
+import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
+import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
 
-import {StrategyBaseUpgradeable} from "../StrategyBaseUpgradeable.sol";
-import {IPirexEth} from "./IPirexEth.sol";
-import {IAutoPxEth} from "./IAutoPxEth.sol";
+import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
+
+import { IAutoPxEth } from "./IAutoPxEth.sol";
+import { IPirexEth } from "./IPirexEth.sol";
 
 /**
  * @title DineroStrategy
@@ -148,15 +149,18 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Initializer for the Dinero Strategy.
      */
-    function initialize(InitializerParams memory _params) public initializer {
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
         require(_params.managerContainer != address(0), "3065");
         require(_params.pirexEth != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
-        if (_params.shouldStake == true && _params.autoPirexEth == address(0))
+        if (_params.shouldStake == true && _params.autoPirexEth == address(0)) {
             revert("3000");
+        }
 
-        __StrategyBase_init({_initialOwner: _params.owner});
+        __StrategyBase_init({ _initialOwner: _params.owner });
 
         managerContainer = IManagerContainer(_params.managerContainer);
         pirexEth = IPirexEth(_params.pirexEth);
@@ -170,6 +174,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
                 _receiptTokenName: "PirexEth Strategy Receipt Token",
                 _receiptTokenSymbol: "apxEth"
@@ -180,7 +185,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
                 _holdingManager: _getManager().holdingManager(),
-                _tokenIn: address(receiptToken),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration
@@ -211,13 +215,13 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        IHolding(_recipient).transfer({_token: _asset, _to: address(this), _amount: _amount});
+        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
 
         weth.withdraw(_amount);
 
-        pirexEth.deposit{value: _amount}({receiver: _recipient, shouldCompound: shouldStake});
+        pirexEth.deposit{ value: _amount }({ receiver: _recipient, shouldCompound: shouldStake });
 
         uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
 
@@ -232,7 +236,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.deposit({_user: _recipient, _amount: recipients[_recipient].investedAmount});
+        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
 
         emit Deposit({
             asset: _asset,
@@ -269,12 +273,13 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
         WithdrawParams memory params =
-                        WithdrawParams({shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0});
+            WithdrawParams({ shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0 });
 
         params.shareRatio = OperationsLib.getRatio({
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
-            precision: IERC20Metadata(tokenOut).decimals()
+            precision: IERC20Metadata(tokenOut).decimals(),
+            rounding: OperationsLib.Rounding.Floor
         });
 
         _burn({
@@ -290,14 +295,13 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
-        if (!shouldStake)
-        {
+        if (!shouldStake) {
             (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
                 _contract: address(pirexEth),
                 _call: abi.encodeWithSignature(
                     "instantRedeemWithPxEth(uint256,address)",
                     _shares, // amount of underlying to redeem
-                    address(this)  // receiverOfUnderlying
+                    address(this) // receiverOfUnderlying
                 )
             });
             // Assert the call succeeded.
@@ -306,7 +310,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             uint256 postFeeAmount = payable(address(this)).balance;
 
             // Swap ETH back to WETH
-            weth.deposit{value: postFeeAmount}();
+            weth.deposit{ value: postFeeAmount }();
 
             // Transfer WETH to _recipient
             IERC20(tokenIn).approve(_recipient, postFeeAmount);
@@ -317,16 +321,18 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         // there is no tokenIn rewards
-//        _extractTokenInRewards({
-//            _ratio: params.shareRatio,
-//            _result: params.balanceBefore > params.balanceAfter ? 0 : params.balanceAfter - params.balanceBefore,
-//            _recipient: _recipient,
-//            _decimals: IERC20Metadata(tokenOut).decimals()
-//        });
+        //        _extractTokenInRewards({
+        //            _ratio: params.shareRatio,
+        //            _result: params.balanceBefore > params.balanceAfter ? 0 : params.balanceAfter -
+        // params.balanceBefore,
+        //            _recipient: _recipient,
+        //            _decimals: IERC20Metadata(tokenOut).decimals()
+        //        });
 
-        jigsawStaker.withdraw({_user: _recipient, _amount: recipients[_recipient].investedAmount});
+        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
 
-        recipients[_recipient].totalShares = _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
+        recipients[_recipient].totalShares =
+            _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
@@ -392,13 +398,12 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Receives ETH.
      */
-    receive() external payable {}
+    receive() external payable { }
 
     /**
      * @notice Fallback ETH.
      */
-    fallback() external payable {}
-
+    fallback() external payable { }
 }
 
 /// @title Interface for WETH9
@@ -407,6 +412,7 @@ interface IWETH9 is IERC20 {
     function deposit() external payable;
 
     /// @notice Withdraw wrapped ether to get ether
-    function withdraw(uint) external;
+    function withdraw(
+        uint256
+    ) external;
 }
-
