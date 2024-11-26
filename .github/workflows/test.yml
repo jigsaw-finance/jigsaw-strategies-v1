@@ -1,6 +1,9 @@
-name: test
+name: CI
 
-on: workflow_dispatch
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 env:
   FOUNDRY_PROFILE: ci
@@ -22,9 +25,17 @@ jobs:
         with:
           version: nightly
 
-      - name: Run Forge build
+      - name: Show Forge version
         run: |
           forge --version
+
+      - name: create env file
+        run: |
+          touch .env
+          echo MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }} >> .env
+
+      - name: Run Forge build
+        run: |
           forge build --sizes
         id: build
 
