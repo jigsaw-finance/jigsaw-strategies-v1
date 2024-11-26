@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
+import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
@@ -37,26 +38,22 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        address jRewards = address(new ERC20Mock());
-        address stakerImplementation = address(new StakerLight());
-        address stakerFactory = address(new StakerLightFactory({ _initialOwner: OWNER }));
-
         address strategyImplementation = address(new AaveV3Strategy());
-
-        AaveV3Strategy.InitializerParams memory initParams = AaveV3Strategy.InitializerParams({
-            owner: OWNER,
-            managerContainer: address(managerContainer),
-            stakerFactory: address(stakerFactory),
-            lendingPool: lendingPool,
-            rewardsController: rewardsController,
-            rewardToken: address(0),
-            jigsawRewardToken: jRewards,
-            jigsawRewardDuration: 60 days,
-            tokenIn: tokenIn,
-            tokenOut: tokenOut
-        });
-
-        bytes memory data = abi.encodeCall(AaveV3Strategy.initialize, initParams);
+        bytes memory data = abi.encodeCall(
+            AaveV3Strategy.initialize,
+            AaveV3Strategy.InitializerParams({
+                owner: OWNER,
+                managerContainer: address(managerContainer),
+                stakerFactory: address(stakerFactory),
+                lendingPool: lendingPool,
+                rewardsController: rewardsController,
+                rewardToken: address(0),
+                jigsawRewardToken: jRewards,
+                jigsawRewardDuration: 60 days,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut
+            })
+        );
 
         address proxy = address(new ERC1967Proxy(strategyImplementation, data));
         strategy = AaveV3Strategy(proxy);
@@ -75,7 +72,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Test initialization
-    function test_initialization() public {
+    function test_initialization() public view {
         assertEq(strategy.owner(), OWNER, "Wrong owner");
         assertEq(address(strategy.managerContainer()), address(managerContainer), "Wrong managerContainer");
         assertEq(address(strategy.lendingPool()), lendingPool, "Wrong lendingPool");
@@ -86,7 +83,9 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit reverts correctly when wrong asset
-    function test_deposit_when_wrongAsset(address asset) public {
+    function test_deposit_when_wrongAsset(
+        address asset
+    ) public {
         vm.assume(asset != strategy.tokenIn());
         // Invest into the tested strategy vie strategyManager
         vm.prank(address(strategyManager), address(strategyManager));
@@ -95,57 +94,51 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit works correctly when authorized
-    function test_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+    function test_aave_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e6, 10e6);
-        // Mock values and setup necessary approvals and balances for the test
         address userHolding = initiateUser(user, tokenIn, amount);
-        // Mock expected behaviors and balances before deposit
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 tokenOutBalanceBefore = IAToken(tokenOut).scaledBalanceOf(userHolding);
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
         (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
 
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-        uint256 expectedShares = balanceAfter - balanceBefore;
+        uint256 expectedShares = IAToken(tokenOut).scaledBalanceOf(userHolding) - tokenOutBalanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
 
-        // Assert statements with reasons
+        /**
+         * Expected changes after deposit
+         * 1. Holding tokenIn balance =  balance - amount
+         * 2. Holding tokenOut balance += amount
+         * 3. Staker receiptTokens balance += shares
+         * 4. Strategy's invested amount  += amount
+         * 5. Strategy's total shares  += shares
+         */
+        // 1.
+        assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
+        // 2.
+        assertApproxEqAbs(IERC20(tokenOut).balanceOf(userHolding), amount, 1, "Holding token out balance wrong");
+        // 3.
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            expectedShares * 10 ** 12,
+            "Incorrect receipt tokens minted"
+        );
+        //4.
+        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
+        //5.
+        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
+
+        // Additional checks
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
-        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-        assertEq(strategy.totalInvestments(), amount, "Total investments mismatch");
-    }
-
-    // Tests if deposit works correctly when authorized
-    function test_deposit_when_referral() public {
-        address user = address(uint160(uint256(keccak256(bytes("ADMIN")))));
-        uint256 amount = 100e6;
-        // Mock values and setup necessary approvals and balances for the test
-        address userHolding = initiateUser(user, tokenIn, amount);
-        // Mock expected behaviors and balances before deposit
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(userHolding);
-
-        // Invest into the tested strategy vie strategyManager
-        vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) =
-            strategyManager.invest(tokenIn, address(strategy), amount, abi.encode("random ref"));
-
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-        uint256 expectedShares = balanceAfter - balanceBefore;
-        (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
-
-        // Assert statements with reasons
-        assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
-        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
-        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-        assertEq(strategy.totalInvestments(), amount, "Total investments mismatch");
     }
 
     // Tests if withdraw reverts correctly when wrong asset
-    function test_withdraw_when_wrongAsset(address asset) public {
+    function test_withdraw_when_wrongAsset(
+        address asset
+    ) public {
         vm.assume(asset != strategy.tokenIn());
         // Invest into the tested strategy vie strategyManager
         vm.prank(address(strategyManager), address(strategyManager));
@@ -162,22 +155,22 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if withdraw works correctly when authorized
-    // Is not fuzzy because Aave's withdraw randomly over/under flows due to undetermined reason
-    function test_withdraw_when_authorized() public {
-        address user = vm.addr(uint256(keccak256(bytes("Random user address"))));
-        uint256 amount = 9_000_624;
-
-        // Mock values and setup necessary approvals and balances for the test
+    function test_withdraw_aave_when_authorized(uint256 _amount, address user) public notOwnerNotZero(user) {
+        uint256 amount = bound(_amount, 1e6, 10e6);
         address userHolding = initiateUser(user, tokenIn, amount);
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        strategyManager.invest(tokenIn, address(strategy), amount, "");
+        strategyManager.invest(tokenIn, address(strategy), amount, abi.encode("random ref"));
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        (uint256 investedAmountBefore,) = strategy.recipients(userHolding);
 
-        // Mock the recipient’s shares balance
-        uint256 balanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        skip(100 days);
+
+        uint256 fee =
+            _getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
 
         vm.prank(user, user);
         (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
@@ -188,16 +181,39 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
             _data: ""
         });
 
-        uint256 balanceAfter = IERC20(tokenIn).balanceOf(userHolding);
-        uint256 expectedWithdrawal = balanceAfter - balanceBefore;
+        (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
+        uint256 tokenInBalanceAfter = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 expectedWithdrawal = tokenInBalanceAfter - tokenInBalanceBefore;
 
-        (, uint256 totalSharesAfter) = strategy.recipients(userHolding);
-
-        // Assert statements with reasons
-        assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
-        assertApproxEqAbs(tokenInAmount, expectedWithdrawal, 1, "Incorrect tokenInAmount returned");
+        /**
+         * Expected changes after withdrawal
+         * 1. Holding's tokenIn balance += (totalInvested + yield) * shareRatio
+         * 2. Holding's tokenOut balance -= shares
+         * 3. Staker receiptTokens balance -= shares
+         * 4. Strategy's invested amount  -= totalInvested * shareRatio
+         * 5. Strategy's total shares  -= shares
+         * 6. Fee address fee amount += yield * performanceFee
+         */
+        // 1.
+        assertEq(tokenInBalanceAfter, assetAmount - fee, "Holding balance after withdraw is wrong");
+        // 2.
+        assertEq(IAToken(tokenOut).scaledBalanceOf(userHolding), 0, "Holding ion balance wrong");
+        // 3.
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            0,
+            "Incorrect receipt tokens after withdraw"
+        );
+        // 4.
+        assertEq(investedAmount, 0, "Recipient invested amount mismatch");
+        // 5.
         assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
-        assertEq(strategy.totalInvestments(), 0, "Total investments mismatch after withdrawal");
+        // 6.
+        assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
+
+        // Additional checks
+        assertEq(assetAmount - fee, expectedWithdrawal, "Incorrect asset amount returned");
+        assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
     }
 
     // Tests if claimRewards works correctly when authorized

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 import { IReceiptTokenFactory } from "@jigsaw/src/interfaces/core/IReceiptTokenFactory.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
@@ -19,8 +19,9 @@ library StrategyConfigLib {
      * @notice Deploys the receipt token associated with this strategy.
      *
      * @dev This function uses the receipt token factory to create a new receipt token with the provided name and
-     * symbol. The newly created token will have the current contract as its minter and the caller as its owner.
+     * symbol. The newly created token will have the current contract as its minter and the _owner as its owner.
      *
+     * @param _initialOwner The address of the receipt token's owner.
      * @param _receiptTokenFactory The address of the receipt token factory contract.
      * @param _receiptTokenName The name of the receipt token to be created.
      * @param _receiptTokenSymbol The symbol of the receipt token to be created.
@@ -28,6 +29,7 @@ library StrategyConfigLib {
      * @return receiptToken The address of the newly created receipt token contract.
      */
     function configStrategy(
+        address _initialOwner,
         address _receiptTokenFactory,
         string memory _receiptTokenName,
         string memory _receiptTokenSymbol
@@ -36,7 +38,7 @@ library StrategyConfigLib {
             _name: _receiptTokenName,
             _symbol: _receiptTokenSymbol,
             _minter: address(this),
-            _owner: msg.sender
+            _owner: _initialOwner
         });
     }
 }

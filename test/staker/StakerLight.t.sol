@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.25;
+pragma solidity 0.8.22;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
@@ -21,18 +21,12 @@ contract StakerLightTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
         tokenIn = address(usdc);
-        address jRewards = address(new ERC20Mock());
 
-        address staker_impl = address(new StakerLight());
-        factory = new StakerLightFactory({ _initialOwner: OWNER });
-
-        vm.prank(OWNER, OWNER);
-        factory.setStakerLightReferenceImplementation(staker_impl);
+        factory = new StakerLightFactory({ _initialOwner: OWNER, _referenceImplementation: address(new StakerLight()) });
 
         address deployment = factory.createStakerLight({
             _initialOwner: OWNER,
             _holdingManager: address(holdingManager),
-            _tokenIn: tokenIn,
             _rewardToken: jRewards,
             _strategy: STRATEGY,
             _rewardsDuration: 10 days

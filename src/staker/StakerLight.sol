@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
@@ -20,22 +19,17 @@ import { IStakerLight } from "./interfaces/IStakerLight.sol";
  *
  * @dev This contract is called light due to the fact that it does not actually transfer the receipt tokens from the
  * user and is only used for accounting.
- * @dev This contract inherits functionalities from `Ownable2Step`, `Pausable`, and `ReentrancyGuard`.
+ * @dev This contract inherits functionalities from `Ownable2StepUpgradeable` and `ReentrancyGuardUpgradeable`.
  *
  * @author Hovooo (@hovooo)
  */
-contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable {
+contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     /**
      * @notice Address of the HoldingManager Contract.
      */
     IHoldingManager public holdingManager;
-
-    /**
-     * @notice Address of the staking token.
-     */
-    address public override tokenIn;
 
     /**
      * @notice Address of the reward token.
@@ -75,20 +69,20 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     /**
      * @notice Mapping of user addresses to the amount of rewards already paid to them.
      */
-    mapping(address => uint256) public override userRewardPerTokenPaid;
+    mapping(address user => uint256 amountPaid) public override userRewardPerTokenPaid;
 
     /**
      * @notice Mapping of user addresses to their accrued rewards.
      */
-    mapping(address => uint256) public override rewards;
+    mapping(address user => uint256 amountAccrued) public override rewards;
 
     /**
      * @notice Total supply limit of the staking token.
      */
-    uint256 public constant totalSupplyLimit = 1e34;
+    uint256 public constant TOTAL_SUPPLY_LIMIT = 1e34;
 
     uint256 private _totalSupply;
-    mapping(address => uint256) private _balances;
+    mapping(address user => uint256 amount) private _balances;
 
     // --- Modifiers ---
 
@@ -96,7 +90,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Modifier to update the reward for a specified account.
      * @param account The account for which the reward needs to be updated.
      */
-    modifier updateReward(address account) {
+    modifier updateReward(
+        address account
+    ) {
         rewardPerTokenStored = rewardPerToken();
         lastUpdateTime = lastTimeRewardApplicable();
         if (account != address(0)) {
@@ -110,7 +106,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Modifier to check if the provided address is valid.
      * @param _address to be checked for validity.
      */
-    modifier validAddress(address _address) {
+    modifier validAddress(
+        address _address
+    ) {
         if (_address == address(0)) revert InvalidAddress();
         _;
     }
@@ -119,14 +117,16 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Modifier to check if the provided amount is valid.
      * @param _amount to be checked for validity.
      */
-    modifier validAmount(uint256 _amount) {
+    modifier validAmount(
+        uint256 _amount
+    ) {
         if (_amount == 0) revert InvalidAmount();
         _;
     }
 
     /**
-     * @notice Modifier to restrict a function to be called only by the staking manager.
-     * @notice Reverts the transaction if the caller is not the staking manager.
+     * @notice Modifier to restrict a function to be called only by the `strategy` contract.
+     * @notice Reverts the transaction if the caller is not the `strategy`.
      */
     modifier onlyStrategy() {
         if (msg.sender != strategy) revert UnauthorizedCaller();
@@ -137,7 +137,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Modifier to restrict a function to be called only by the Holding's owner.
      * @notice Reverts the transaction if the msg.sender is not the owner of the Holding.
      */
-    modifier onlyInvestor(address _holding) {
+    modifier onlyInvestor(
+        address _holding
+    ) {
         if (holdingManager.userHolding(msg.sender) != _holding) revert UnauthorizedCaller();
         _;
     }
@@ -155,7 +157,6 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      *
      * @param _initialOwner The initial owner of the contract.
      * @param _holdingManager The address of the contract that contains the Holding manager contract.
-     * @param _tokenIn The address of the token to be staked.
      * @param _rewardToken The address of the reward token.
      * @param _strategy The address of the strategy contract.
      * @param _rewardsDuration The duration of the rewards period, in seconds.
@@ -163,16 +164,21 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     function initialize(
         address _initialOwner,
         address _holdingManager,
-        address _tokenIn,
         address _rewardToken,
         address _strategy,
         uint256 _rewardsDuration
-    ) public initializer validAddress(_tokenIn) validAddress(_rewardToken) validAddress(_strategy) {
+    )
+        public
+        initializer
+        validAddress(_holdingManager)
+        validAddress(_rewardToken)
+        validAddress(_strategy)
+        validAmount(_rewardsDuration)
+    {
         __Ownable_init(_initialOwner);
-        __Pausable_init();
+        __ReentrancyGuard_init();
 
         holdingManager = IHoldingManager(_holdingManager);
-        tokenIn = _tokenIn;
         rewardToken = _rewardToken;
         strategy = _strategy;
         rewardsDuration = _rewardsDuration;
@@ -191,9 +197,11 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     function deposit(
         address _user,
         uint256 _amount
-    ) external override onlyStrategy whenNotPaused nonReentrant updateReward(_user) validAmount(_amount) {
+    ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
         // Ensure that deposit operation will never surpass supply limit
-        if (_totalSupply + _amount > totalSupplyLimit) revert DepositSurpassesSupplyLimit(_amount, totalSupplyLimit);
+        if (_totalSupply + _amount > TOTAL_SUPPLY_LIMIT) {
+            revert DepositSurpassesSupplyLimit(_amount, TOTAL_SUPPLY_LIMIT);
+        }
         _totalSupply += _amount;
 
         _balances[_user] += _amount;
@@ -210,7 +218,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     function withdraw(
         address _user,
         uint256 _amount
-    ) external override onlyStrategy whenNotPaused nonReentrant updateReward(_user) validAmount(_amount) {
+    ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
         _totalSupply -= _amount;
         _balances[_user] = _balances[_user] - _amount;
         emit Withdrawn(_user, _amount);
@@ -226,7 +234,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     function claimRewards(
         address _holding,
         address _to
-    ) external override whenNotPaused nonReentrant onlyInvestor(_holding) updateReward(_holding) {
+    ) external override nonReentrant onlyInvestor(_holding) updateReward(_holding) {
         uint256 reward = rewards[_holding];
         if (reward == 0) revert NothingToClaim();
 
@@ -241,7 +249,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Sets the duration of each reward period.
      * @param _rewardsDuration The new rewards duration.
      */
-    function setRewardsDuration(uint256 _rewardsDuration) external override onlyOwner {
+    function setRewardsDuration(
+        uint256 _rewardsDuration
+    ) external override onlyOwner validAmount(_rewardsDuration) {
         if (block.timestamp <= periodFinish) revert PreviousPeriodNotFinished(block.timestamp, periodFinish);
         emit RewardsDurationUpdated(rewardsDuration, _rewardsDuration);
         rewardsDuration = _rewardsDuration;
@@ -250,22 +260,24 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
     /**
      * @notice Adds more rewards to the contract.
      *
-     * @dev Prior approval is required for this contract to transfer rewards from `_from` address.
+     * @dev Prior approval is required for this contract to transfer rewards from `owner`'s address.
      *
-     * @param _from address to transfer rewards from.
      * @param _amount The amount of new rewards.
      */
     function addRewards(
-        address _from,
         uint256 _amount
     ) external override onlyOwner validAmount(_amount) updateReward(address(0)) {
-        // Transfer assets from the user's wallet to this contract.
-        IERC20(rewardToken).safeTransferFrom({ from: _from, to: address(this), value: _amount });
+        // To mitigate any DOS issues, Admin must deposit 1 wei into the staker contract at the initialization
+        require(_totalSupply != 0, "Zero totalSupply");
+
+        // Transfer assets from the owner's wallet to this contract.
+        IERC20(rewardToken).safeTransferFrom({ from: msg.sender, to: address(this), value: _amount });
 
         uint256 duration = rewardsDuration;
         if (duration == 0) revert ZeroRewardsDuration();
         if (block.timestamp >= periodFinish) {
             rewardRate = _amount / duration;
+            periodFinish = block.timestamp + duration;
         } else {
             uint256 remaining = periodFinish - block.timestamp;
             uint256 leftover = remaining * rewardRate;
@@ -278,22 +290,20 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
         if (rewardRate > (balance / duration)) revert RewardRateTooBig();
 
         lastUpdateTime = block.timestamp;
-        periodFinish = block.timestamp + duration;
         emit RewardAdded(_amount);
     }
 
     /**
-     * @notice Triggers stopped state.
+     * This function allows the contract owner to recover ERC20 tokens that might have been
+     * accidentally or otherwise left within the contract. It requires the caller to have the
+     * `onlyOwner` modifier, ensuring that only the owner of the contract can invoke it.
+     *
+     * @param tokenAddress The contract address of the ERC20 token to be recovered.
+     * @param tokenAmount The amount of the specified ERC20 token to be transferred to the owner.
      */
-    function pause() external override onlyOwner whenNotPaused {
-        _pause();
-    }
-
-    /**
-     * @notice Returns to normal state.
-     */
-    function unpause() external override onlyOwner whenPaused {
-        _unpause();
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external override onlyOwner {
+        IERC20(tokenAddress).safeTransfer(owner(), tokenAmount);
+        emit Recovered(tokenAddress, tokenAmount);
     }
 
     /**
@@ -317,7 +327,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Returns the total invested amount for an account.
      * @param _account The participant's address.
      */
-    function balanceOf(address _account) external view override returns (uint256) {
+    function balanceOf(
+        address _account
+    ) external view override returns (uint256) {
         return _balances[_account];
     }
 
@@ -332,9 +344,7 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Returns rewards per token.
      */
     function rewardPerToken() public view override returns (uint256) {
-        if (_totalSupply == 0) {
-            return rewardPerTokenStored;
-        }
+        if (_totalSupply == 0) return rewardPerTokenStored;
 
         return
             rewardPerTokenStored + (((lastTimeRewardApplicable() - lastUpdateTime) * rewardRate * 1e18) / _totalSupply);
@@ -344,7 +354,9 @@ contract StakerLight is IStakerLight, OwnableUpgradeable, PausableUpgradeable, R
      * @notice Returns accrued rewards for an account.
      * @param _account The participant's address.
      */
-    function earned(address _account) public view override returns (uint256) {
+    function earned(
+        address _account
+    ) public view override returns (uint256) {
         return
             ((_balances[_account] * (rewardPerToken() - userRewardPerTokenPaid[_account])) / 1e18) + rewards[_account];
     }

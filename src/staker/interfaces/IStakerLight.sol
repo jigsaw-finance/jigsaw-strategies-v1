@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 /// @title Interface for Staker contract
 interface IStakerLight {
@@ -101,9 +101,11 @@ interface IStakerLight {
     event RewardPaid(address indexed user, uint256 indexed reward);
 
     /**
-     * @notice returns staking token address.
+     * @notice Event emitted when a ERC20 is recovered.
+     * @param token The address of the recovered token.
+     * @param amount The amount of the recovered token.
      */
-    function tokenIn() external view returns (address);
+    event Recovered(address token, uint256 amount);
 
     /**
      * @notice returns reward token address.
@@ -143,19 +145,22 @@ interface IStakerLight {
     /**
      * @notice rewards paid to participants so far.
      */
-    function userRewardPerTokenPaid(address participant) external view returns (uint256);
+    function userRewardPerTokenPaid(
+        address participant
+    ) external view returns (uint256);
 
     /**
      * @notice accrued rewards per participant.
      */
-    function rewards(address participant) external view returns (uint256);
+    function rewards(
+        address participant
+    ) external view returns (uint256);
 
     /**
      * @notice Initializer for the Staker Light contract.
      *
      * @param _initialOwner The initial owner of the contract.
      * @param _holdingManager The address of the contract that contains the Holding manager contract.
-     * @param _tokenIn The address of the token to be staked.
      * @param _rewardToken The address of the reward token.
      * @param _strategy The address of the strategy contract.
      * @param _rewardsDuration The duration of the rewards period, in seconds.
@@ -163,7 +168,6 @@ interface IStakerLight {
     function initialize(
         address _initialOwner,
         address _holdingManager,
-        address _tokenIn,
         address _rewardToken,
         address _strategy,
         uint256 _rewardsDuration
@@ -172,27 +176,30 @@ interface IStakerLight {
     /**
      * @notice sets the new rewards duration.
      */
-    function setRewardsDuration(uint256 _rewardsDuration) external;
+    function setRewardsDuration(
+        uint256 _rewardsDuration
+    ) external;
 
     /**
      * @notice Adds more rewards to the contract.
      *
-     * @dev Prior approval is required for this contract to transfer rewards from `_from` address.
+     * @dev Prior approval is required for this contract to transfer rewards from `owner`'s address.
      *
-     * @param _from address to transfer rewards from.
      * @param _amount The amount of new rewards.
      */
-    function addRewards(address _from, uint256 _amount) external;
+    function addRewards(
+        uint256 _amount
+    ) external;
 
     /**
-     * @notice Triggers stopped state.
+     * This function allows the contract owner to recover ERC20 tokens that might have been
+     * accidentally or otherwise left within the contract. It requires the caller to have the
+     * `onlyOwner` modifier, ensuring that only the owner of the contract can invoke it.
+     *
+     * @param tokenAddress The contract address of the ERC20 token to be recovered.
+     * @param tokenAmount The amount of the specified ERC20 token to be transferred to the owner.
      */
-    function pause() external;
-
-    /**
-     * @notice Returns to normal state.
-     */
-    function unpause() external;
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external;
 
     /**
      * @notice returns the total tokenIn supply.
@@ -203,7 +210,9 @@ interface IStakerLight {
      * @notice returns total invested amount for an account.
      * @param _account participant address
      */
-    function balanceOf(address _account) external view returns (uint256);
+    function balanceOf(
+        address _account
+    ) external view returns (uint256);
 
     /**
      * @notice returns the last time rewards were applicable.
@@ -219,7 +228,9 @@ interface IStakerLight {
      * @notice rewards accrued rewards for account.
      *  @param _account participant's address
      */
-    function earned(address _account) external view returns (uint256);
+    function earned(
+        address _account
+    ) external view returns (uint256);
 
     /**
      * @notice returns reward amount for a specific time range.

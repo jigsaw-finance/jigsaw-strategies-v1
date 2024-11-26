@@ -6,18 +6,21 @@ import "forge-std/console.sol";
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { DeployStaker } from "script/deployment/0_DeployStaker.s.sol";
+import { DeployIonImpl } from "script/deployment/ion/1_DeployIonImpl.s.sol";
+import { DeployIonProxy } from "script/deployment/ion/2_DeployIonProxy.s.sol";
 
 import { IonStrategy } from "../../src/ion/IonStrategy.sol";
+
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+import { IStakerLight } from "../../src/staker/interfaces/IStakerLight.sol";
 
 IIonPool constant ION_POOL = IIonPool(0x0000000000eaEbd95dAfcA37A39fd09745739b78);
 IWhitelist constant ION_WHITELIST = IWhitelist(0x7E317f99aA313669AaCDd8dB3927ff3aCB562dAD);
 
-contract IonStrategyForkTest is Test, BasicContractsFixture {
+contract DeployIonTest is Test, BasicContractsFixture {
+    DeployIonProxy internal ionDeployer;
     // Mainnet wstETH
     address internal tokenIn = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
     // Ion iweETH-wstETH token is the same as the pool due to Vault architecture
@@ -28,22 +31,20 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        address strategyImplementation = address(new IonStrategy());
-        bytes memory data = abi.encodeCall(
-            IonStrategy.initialize,
-            IonStrategy.InitializerParams({
-                owner: OWNER,
-                managerContainer: address(managerContainer),
-                stakerFactory: address(stakerFactory),
-                ionPool: address(ION_POOL),
-                jigsawRewardToken: jRewards,
-                jigsawRewardDuration: 60 days,
-                tokenIn: tokenIn,
-                tokenOut: tokenOut
+        DeployIonImpl implDeployer = new DeployIonImpl();
+        address implementation = implDeployer.run("my salt");
+
+        ionDeployer = new DeployIonProxy();
+        strategy = IonStrategy(
+            ionDeployer.run({
+                _implementation: implementation,
+                _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040,
+                _ionPool: address(ION_POOL),
+                _rewardDuration: 60 days,
+                _tokenIn: tokenIn,
+                _tokenOut: tokenOut
             })
         );
-        address proxy = address(new ERC1967Proxy(strategyImplementation, data));
-        strategy = IonStrategy(proxy);
 
         // Add tested strategy to the StrategyManager for integration testing purposes
         vm.startPrank((OWNER));
@@ -62,6 +63,22 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
         ION_POOL.updateSupplyCap(type(uint256).max);
         ION_WHITELIST.approveProtocolWhitelist(address(strategy));
         vm.stopPrank();
+    }
+
+    function test_ion_initialValues() public view {
+        assertEq(address(strategy.owner()), ionDeployer.OWNER(), "Owner initialized wrong");
+        assertEq(
+            address(strategy.managerContainer()), ionDeployer.MANAGER_CONTAINER(), "Manager Container initialized wrong"
+        );
+        assertEq(address(strategy.ionPool()), address(ION_POOL), "Ion Pool initialized wrong");
+        assertEq(strategy.tokenIn(), tokenIn, "tokenIn initialized wrong");
+        assertEq(strategy.tokenOut(), tokenOut, "tokenOut initialized wrong");
+
+        IStakerLight staker = strategy.jigsawStaker();
+
+        assertEq(staker.rewardToken(), ionDeployer.jREWARDS(), "rewardToken initialized wrong");
+        assertEq(staker.rewardsDuration(), 60 days, "rewardsDuration initialized wrong");
+        assertEq(staker.periodFinish(), block.timestamp + 60 days, "periodFinish initialized wrong");
     }
 
     // Tests if deposit works correctly when authorized
