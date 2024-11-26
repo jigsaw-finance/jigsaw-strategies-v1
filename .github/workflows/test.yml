@@ -16,9 +16,15 @@ jobs:
     name: Foundry project
     runs-on: ubuntu-latest
     steps:
+      - name: Set up SSH for private dependencies
+        run: |
+          eval `ssh-agent -s`
+          ssh-add - <<< '${{ secrets.PRIVATE_SSH_KEY }}'
+        env:
+          PRIVATE_SSH_KEY: ${{ secrets.PRIVATE_SSH_KEY }}
+
       - uses: actions/checkout@v4
         with:
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
           submodules: recursive
 
       - name: Install Foundry
@@ -30,7 +36,7 @@ jobs:
         run: |
           forge --version
 
-      - name: create env file
+      - name: Create .env file
         run: |
           touch .env
           echo MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }} >> .env
