@@ -158,7 +158,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.lendingPool != address(0), "3036");
         require(_params.rewardsController != address(0), "3039");
         require(_params.jigsawRewardToken != address(0), "3000");
-        require(_params.jigsawRewardDuration != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
 
