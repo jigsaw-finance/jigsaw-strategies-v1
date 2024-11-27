@@ -73,7 +73,7 @@ mp verbosity path: && _timer
 
 # Deploy StakerFactory
 # This script deploys the StakerFactory contract and handles logging.
-deploy-stakerFactory CHAIN_ID BROADCAST:
+deploy-stakerFactory CHAIN_ID BROADCAST: && _timer
 	#!/usr/bin/env bash
 	echo "Deploying Staker Factory on chain " {{CHAIN_ID}} "..."
 
@@ -91,7 +91,7 @@ deploy-stakerFactory CHAIN_ID BROADCAST:
 
 # Deploy implementation
 # This script deploys only the strategy implementation contract.
-deploy-impl STRATEGY CHAIN_ID BROADCAST:
+deploy-impl STRATEGY CHAIN_ID BROADCAST: && _timer
 	#!/usr/bin/env bash
 	echo "Deploying implementation for " {{STRATEGY}} " on chain " {{CHAIN_ID}} "..."
 
@@ -107,7 +107,7 @@ deploy-impl STRATEGY CHAIN_ID BROADCAST:
 
 # Deploy proxy
 # This script deploys the proxy and links it to the deployed implementation.
-deploy-proxy STRATEGY IMPL_ADDRESS SALT CHAIN_ID BROADCAST:
+deploy-proxy STRATEGY IMPL_ADDRESS SALT CHAIN_ID BROADCAST: && _timer
 	#!/usr/bin/env bash
 	echo "Deploying proxy for " {{STRATEGY}} " on chain " {{CHAIN_ID}} " with implementation at " {{IMPL_ADDRESS}} "..."
 
@@ -122,8 +122,7 @@ deploy-proxy STRATEGY IMPL_ADDRESS SALT CHAIN_ID BROADCAST:
 	echo "Proxy deployed at $PROXY_ADDRESS"
 
 # Deploy both implementation and proxy
-# This combines the above two steps for convenience.
-deploy-strategy STRATEGY SALT CHAIN_ID BROADCAST:
+deploy-strategy STRATEGY SALT CHAIN_ID BROADCAST: && _timer
 	#!/usr/bin/env bash
 	echo "Deploying full strategy " {{STRATEGY}} " on chain " {{CHAIN_ID}} "..."
 
@@ -135,3 +134,12 @@ deploy-strategy STRATEGY SALT CHAIN_ID BROADCAST:
 
 	# Step 2: Deploy proxy
 	just deploy-proxy {{STRATEGY}} $IMPL_ADDRESS {{SALT}} {{CHAIN_ID}} {{BROADCAST}}
+
+
+# Add strategy to the Strategy Manager
+# @dev MUST BE CALLED BY OWNER
+add-strategy STRATEGY_ADDR CHAIN_ID BROADCAST: && _timer
+	#!/usr/bin/env bash
+	"Adding" STRATEGY_ADDR "strategy to the Strategy Manager on "   CHAIN_ID "..."
+
+	forge script AddStrategy -s "run(address _strategy)" {{STRATEGY_ADDR}} --rpc-url {{CHAIN_ID}} --slow -vvvv {{BROADCAST}}
