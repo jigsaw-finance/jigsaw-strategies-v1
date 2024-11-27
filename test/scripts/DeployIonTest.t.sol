@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
+import { stdJson as StdJson } from "forge-std/StdJson.sol";
+
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
-import { DeployStaker } from "script/deployment/0_DeployStaker.s.sol";
-import { DeployIonImpl } from "script/deployment/ion/1_DeployIonImpl.s.sol";
-import { DeployIonProxy } from "script/deployment/ion/2_DeployIonProxy.s.sol";
+import { DeployStakerFactory } from "script/deployment/0_DeployStakerFactory.s.sol";
+import { DeployImpl } from "script/deployment/1_DeployImpl.s.sol";
+import { DeployProxy } from "script/deployment/2_DeployProxy.s.sol";
 
 import { IonStrategy } from "../../src/ion/IonStrategy.sol";
 
@@ -20,7 +22,9 @@ IIonPool constant ION_POOL = IIonPool(0x0000000000eaEbd95dAfcA37A39fd09745739b78
 IWhitelist constant ION_WHITELIST = IWhitelist(0x7E317f99aA313669AaCDd8dB3927ff3aCB562dAD);
 
 contract DeployIonTest is Test, BasicContractsFixture {
-    DeployIonProxy internal ionDeployer;
+    using StdJson for string;
+
+    DeployProxy internal proxyDeployer;
     // Mainnet wstETH
     address internal tokenIn = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
     // Ion iweETH-wstETH token is the same as the pool due to Vault architecture
@@ -31,18 +35,15 @@ contract DeployIonTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        DeployIonImpl implDeployer = new DeployIonImpl();
-        address implementation = implDeployer.run("my salt");
+        DeployImpl implDeployer = new DeployImpl();
+        address implementation = implDeployer.run("IonStrategy");
 
-        ionDeployer = new DeployIonProxy();
+        proxyDeployer = new DeployProxy();
         strategy = IonStrategy(
-            ionDeployer.run({
+            proxyDeployer.run({
+                _strategy: "IonStrategy",
                 _implementation: implementation,
-                _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040,
-                _ionPool: address(ION_POOL),
-                _rewardDuration: 60 days,
-                _tokenIn: tokenIn,
-                _tokenOut: tokenOut
+                _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040
             })
         );
 
@@ -66,19 +67,28 @@ contract DeployIonTest is Test, BasicContractsFixture {
     }
 
     function test_ion_initialValues() public view {
-        assertEq(address(strategy.owner()), ionDeployer.OWNER(), "Owner initialized wrong");
+        string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
+        string memory ionConfig = vm.readFile("./deployment-config/01_IonStrategyConfig.json");
+
+        assertEq(address(strategy.owner()), commonConfig.readAddress(".INITIAL_OWNER"), "Owner initialized wrong");
         assertEq(
-            address(strategy.managerContainer()), ionDeployer.MANAGER_CONTAINER(), "Manager Container initialized wrong"
+            address(strategy.managerContainer()),
+            commonConfig.readAddress(".MANAGER_CONTAINER"),
+            "Manager Container initialized wrong"
         );
-        assertEq(address(strategy.ionPool()), address(ION_POOL), "Ion Pool initialized wrong");
-        assertEq(strategy.tokenIn(), tokenIn, "tokenIn initialized wrong");
-        assertEq(strategy.tokenOut(), tokenOut, "tokenOut initialized wrong");
+        assertEq(address(strategy.ionPool()), ionConfig.readAddress(".ION_POOL"), "Ion Pool initialized wrong");
+        assertEq(strategy.tokenIn(), ionConfig.readAddress(".TOKEN_IN"), "tokenIn initialized wrong");
+        assertEq(strategy.tokenOut(), ionConfig.readAddress(".TOKEN_OUT"), "tokenOut initialized wrong");
 
         IStakerLight staker = strategy.jigsawStaker();
 
-        assertEq(staker.rewardToken(), ionDeployer.jREWARDS(), "rewardToken initialized wrong");
-        assertEq(staker.rewardsDuration(), 60 days, "rewardsDuration initialized wrong");
-        assertEq(staker.periodFinish(), block.timestamp + 60 days, "periodFinish initialized wrong");
+        assertEq(staker.rewardToken(), commonConfig.readAddress(".JIGSAW_REWARDS"), "rewardToken initialized wrong");
+        assertEq(staker.rewardsDuration(), ionConfig.readUint(".REWARD_DURATION"), "rewardsDuration initialized wrong");
+        assertEq(
+            staker.periodFinish(),
+            block.timestamp + ionConfig.readUint(".REWARD_DURATION"),
+            "periodFinish initialized wrong"
+        );
     }
 
     // Tests if deposit works correctly when authorized
