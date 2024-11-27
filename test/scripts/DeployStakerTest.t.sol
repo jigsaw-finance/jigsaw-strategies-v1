@@ -9,7 +9,7 @@ import "../fixtures/BasicContractsFixture.t.sol";
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
-import { DeployStakerFactory } from "script/deployment/0_DeployStakerFactory.s.sol";
+import { DeployStakerFactory } from "script/0_DeployStakerFactory.s.sol";
 
 contract DeployStakerFactoryTest is Test, BasicContractsFixture {
     DeployStakerFactory internal stakerDeployer;
