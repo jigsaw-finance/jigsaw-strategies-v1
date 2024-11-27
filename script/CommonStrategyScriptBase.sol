@@ -30,10 +30,27 @@ contract CommonStrategyScriptBase is Script {
 
     function _buildProxyData(
         string calldata _strategy
-    ) internal returns (bytes memory) {
+    ) internal view returns (bytes memory) {
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
 
-        if (keccak256(bytes(_strategy)) == keccak256(bytes("AaveV3Strategy"))) { }
+        if (keccak256(bytes(_strategy)) == keccak256(bytes("AaveV3Strategy"))) {
+            string memory aaveConfig = vm.readFile("./deployment-config/02_AaveV3StrategyConfig.json");
+            return abi.encodeCall(
+                AaveV3Strategy.initialize,
+                AaveV3Strategy.InitializerParams({
+                    owner: commonConfig.readAddress(".INITIAL_OWNER"),
+                    managerContainer: commonConfig.readAddress(".MANAGER_CONTAINER"),
+                    stakerFactory: commonConfig.readAddress(".STAKER_FACTORY"),
+                    lendingPool: aaveConfig.readAddress(".LENDING_POOL"),
+                    rewardsController: aaveConfig.readAddress(".REWARDS_CONTROLLER"),
+                    rewardToken: aaveConfig.readAddress(".REWARD_TOKEN"),
+                    jigsawRewardToken: commonConfig.readAddress(".JIGSAW_REWARDS"),
+                    jigsawRewardDuration: aaveConfig.readUint(".REWARD_DURATION"),
+                    tokenIn: aaveConfig.readAddress(".TOKEN_IN"),
+                    tokenOut: aaveConfig.readAddress(".TOKEN_OUT")
+                })
+            );
+        }
 
         if (keccak256(bytes(_strategy)) == keccak256(bytes("IonStrategy"))) {
             string memory ionConfig = vm.readFile("./deployment-config/01_IonStrategyConfig.json");
