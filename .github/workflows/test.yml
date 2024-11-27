@@ -16,10 +16,9 @@ jobs:
     name: Foundry project
     runs-on: ubuntu-latest
     steps:
-      - name: Set up SSH for private dependencies
-        run: |
-          eval `ssh-agent -s`
-          ssh-add - <<< '${{ secrets.PRIVATE_SSH_KEY }}'
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - uses: actions/checkout@v4
         with:
