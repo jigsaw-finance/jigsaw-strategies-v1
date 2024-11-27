@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.22;
 
-import "../CommonStrategyScriptBase.sol";
+import "./CommonStrategyScriptBase.sol";
 
-import { StakerLight } from "../../src/staker/StakerLight.sol";
-import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+import { StakerLight } from "../src/staker/StakerLight.sol";
+import { StakerLightFactory } from "../src/staker/StakerLightFactory.sol";
 
 contract DeployStakerFactory is CommonStrategyScriptBase {
     using StdJson for string;
