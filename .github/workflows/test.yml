@@ -19,9 +19,6 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Test SSH connection
-        run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 -T git@github.com
-
       - uses: actions/checkout@v4
         with:
           submodules: recursive
