@@ -72,3 +72,76 @@ mp verbosity path: && _timer
 
 mc contract: && _timer
 	forge test -vvvvvv --match-contract {{contract}}
+	
+# Deploy StakerFactory
+# This script deploys the StakerFactory contract and handles logging.
+deploy-stakerFactory CHAIN_ID BROADCAST: && _timer
+	#!/usr/bin/env bash
+	echo "Deploying Staker Factory on chain " {{CHAIN_ID}} "..."
+
+	# Run the Forge script to deploy the StakerFactory
+	forge script DeployStakerFactory --rpc-url {{CHAIN_ID}} --slow -vvvv {{BROADCAST}}
+
+	# Save the deployed address
+	FACTORY_ADDRESS=$(jq '.returns."1".value' "broadcast/DeployStakerFactory.s.sol/"{{CHAIN_ID}}"/run-latest.json" | xargs)
+
+	# Update deployments.json
+	jq --arg address "$FACTORY_ADDRESS" \
+		'. + {"StakerFactory": {"CHAIN_ID": {{CHAIN_ID}}, "ADDRESS": $address}}' ./deployments.json > temp.json && mv temp.json ./deployments.json
+
+	echo "Staker Factory deployed at $FACTORY_ADDRESS"
+
+# Deploy implementation
+# This script deploys only the strategy implementation contract.
+deploy-impl STRATEGY CHAIN_ID BROADCAST: && _timer
+	#!/usr/bin/env bash
+	echo "Deploying implementation for " {{STRATEGY}} " on chain " {{CHAIN_ID}} "..."
+
+	# Run the Forge script to deploy the implementation
+	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url {{CHAIN_ID}} --slow -vvvv {{BROADCAST}}
+
+	# Save implementation address
+	IMPL_ADDRESS=$(jq '.returns."0".value' "broadcast/1_DeployImpl.s.sol/"{{CHAIN_ID}}"/run-latest.json" | xargs)
+	jq --arg address "$IMPL_ADDRESS" --arg strategy "$STRATEGY" \
+		'. + {($strategy): {"IMPL": $address}}' ./deployments.json > temp.json && mv temp.json ./deployments.json
+
+	echo "Implementation deployed at $IMPL_ADDRESS"
+
+# Deploy proxy
+# This script deploys the proxy and links it to the deployed implementation.
+deploy-proxy STRATEGY IMPL_ADDRESS SALT CHAIN_ID BROADCAST: && _timer
+	#!/usr/bin/env bash
+	echo "Deploying proxy for " {{STRATEGY}} " on chain " {{CHAIN_ID}} " with implementation at " {{IMPL_ADDRESS}} "..."
+
+	# Run the Forge script to deploy the proxy
+	forge script DeployProxy -s "run(string calldata _strategy, address _implementation, bytes32 _salt)" {{STRATEGY}} {{IMPL_ADDRESS}} {{SALT}} --rpc-url {{CHAIN_ID}} --slow -vvvv {{BROADCAST}}
+
+	# Save proxy address
+	PROXY_ADDRESS=$(jq '.returns."0".value' "broadcast/2_DeployProxy.s.sol/"{{CHAIN_ID}}"/run-latest.json" | xargs)
+	jq --arg address "$PROXY_ADDRESS" --arg strategy "$STRATEGY" \
+		'. + {($strategy): (.[$strategy] // {} + {"PROXY": $address})}' ./deployments.json > temp.json && mv temp.json ./deployments.json
+
+	echo "Proxy deployed at $PROXY_ADDRESS"
+
+# Deploy both implementation and proxy
+deploy-strategy STRATEGY SALT CHAIN_ID BROADCAST: && _timer
+	#!/usr/bin/env bash
+	echo "Deploying full strategy " {{STRATEGY}} " on chain " {{CHAIN_ID}} "..."
+
+	# Step 1: Deploy implementation
+	just deploy-impl {{STRATEGY}} {{CHAIN_ID}} {{BROADCAST}}
+
+	# Fetch implementation address
+	IMPL_ADDRESS=$(jq -r --arg strategy "{{STRATEGY}}" '.[$strategy].IMPL' ./deployments.json)
+
+	# Step 2: Deploy proxy
+	just deploy-proxy {{STRATEGY}} $IMPL_ADDRESS {{SALT}} {{CHAIN_ID}} {{BROADCAST}}
+
+
+# Add strategy to the Strategy Manager
+# @dev MUST BE CALLED BY OWNER
+add-strategy STRATEGY_ADDR CHAIN_ID BROADCAST: && _timer
+	#!/usr/bin/env bash
+	"Adding" STRATEGY_ADDR "strategy to the Strategy Manager on "   CHAIN_ID "..."
+
+	forge script AddStrategy -s "run(address _strategy)" {{STRATEGY_ADDR}} --rpc-url {{CHAIN_ID}} --slow -vvvv {{BROADCAST}}
