@@ -33,7 +33,7 @@ import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
 abstract contract BasicContractsFixture is Test {
-    address internal constant OWNER = 0x3412d07beF5d0DcDb942aC1765D0b8f19D8CA2C4;
+    address internal constant OWNER = 0xf5a1Dc8f36ce7cf89a82BBd817F74EC56e7fDCd8;
 
     using Math for uint256;
 
@@ -60,9 +60,8 @@ abstract contract BasicContractsFixture is Test {
     mapping(address => address) internal registries;
 
     function init() public {
-        vm.startPrank(OWNER);
         vm.createSelectFork(vm.envString("MAINNET_RPC_URL"));
-
+        vm.startPrank(OWNER);
         deal(OWNER, 100_000e18);
 
         usdc = new SampleTokenERC20("USDC", "USDC", 0);

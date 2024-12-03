@@ -1,34 +1,45 @@
-name: test
+name: CI
 
-on: workflow_dispatch
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 env:
   FOUNDRY_PROFILE: ci
 
 jobs:
   check:
-    strategy:
-      fail-fast: true
-
-    name: Foundry project
     runs-on: ubuntu-latest
     steps:
+      - name: Add GitHub to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          repository: jigsaw-finance/jigsaw-protocol-v1
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
 
-      - name: Run Forge build
+      - name: Show Forge version
+        run: forge --version
+
+      - name: Create .env file
         run: |
-          forge --version
-          forge build --sizes
-        id: build
+          touch .env
+          echo MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }} >> .env
+
+      - name: Run Forge build
+        run: forge build --sizes
 
       - name: Run Forge tests
-        run: |
-          forge test -vvv
-        id: test
+        run: forge test -vvv
