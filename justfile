@@ -70,9 +70,7 @@ mt test: && _timer
 mp verbosity path: && _timer
 	forge test -{{verbosity}} --match-path test/{{path}}
 
-mc contract: && _timer
-	forge test -vvvvvv --match-contract {{contract}}
-	
+
 # Deploy StakerFactory
 # This script deploys the StakerFactory contract and handles logging.
 deploy-stakerFactory CHAIN_ID BROADCAST: && _timer
