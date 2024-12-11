@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
-import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /**
  * @title AutoPxEth
@@ -14,4 +14,6 @@ interface IAutoPxEth is IERC4626 {
      * @return uint256 Assets
      */
     function assetsPerShare() external view returns (uint256);
+
+    function redeem(uint256 shares, address receiver, address owner) external returns (uint256 assets);
 }
