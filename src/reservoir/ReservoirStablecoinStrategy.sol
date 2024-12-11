@@ -110,6 +110,11 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
+     * @notice The factor used to adjust values from 18 decimal precision (shares) to 6 decimal precision (USDC).
+     */
+    uint256 public constant DECIMAL_DIFF = 1e12;
+
+    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
@@ -165,6 +170,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        rewardToken = address(0);
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -288,13 +294,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: pegStabilityModule, _amount: _shares });
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pegStabilityModule,
-            _call: abi.encodeCall(
-                IPegStabilityModule.redeem,
-                (
-                    _recipient,
-                    _shares / 1e12 // converted to 6 decimals for USDC
-                )
-            )
+            _call: abi.encodeCall(IPegStabilityModule.redeem, (_recipient, _shares / DECIMAL_DIFF))
         });
         // Assert the call succeeded.
         require(success, OperationsLib.getRevertMsg(returnData));
