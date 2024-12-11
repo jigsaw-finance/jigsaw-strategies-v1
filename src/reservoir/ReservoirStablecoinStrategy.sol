@@ -165,6 +165,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        rewardToken = address(0);
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
