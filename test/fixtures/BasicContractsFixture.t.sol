@@ -27,10 +27,11 @@ import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.s
 import { SampleOracle } from "@jigsaw/test/utils/mocks/SampleOracle.sol";
 import { SampleTokenERC20 } from "@jigsaw/test/utils/mocks/SampleTokenERC20.sol";
 import { StrategyWithoutRewardsMock } from "@jigsaw/test/utils/mocks/StrategyWithoutRewardsMock.sol";
-import { wETHMock } from "@jigsaw/test/utils/mocks/wETHMock.sol";
 
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+
+import { IWETH9 as IWETH } from "../../src/dinero/interfaces/IWETH9.sol";
 
 abstract contract BasicContractsFixture is Test {
     address internal constant OWNER = 0xf5a1Dc8f36ce7cf89a82BBd817F74EC56e7fDCd8;
@@ -47,7 +48,7 @@ abstract contract BasicContractsFixture is Test {
     SampleOracle internal usdcOracle;
     SampleOracle internal jUsdOracle;
     SampleTokenERC20 internal usdc;
-    wETHMock internal weth;
+    IWETH internal weth;
     SharesRegistry internal sharesRegistry;
     SharesRegistry internal wethSharesRegistry;
     StablesManager internal stablesManager;
@@ -67,7 +68,7 @@ abstract contract BasicContractsFixture is Test {
         usdc = new SampleTokenERC20("USDC", "USDC", 0);
         usdcOracle = new SampleOracle();
 
-        weth = new wETHMock();
+        weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         SampleOracle wethOracle = new SampleOracle();
 
         jUsdOracle = new SampleOracle();
@@ -132,7 +133,12 @@ abstract contract BasicContractsFixture is Test {
         return initiateUser(_user, _token, _tokenAmount, true);
     }
 
-    function initiateUser(address _user, address _token, uint256 _tokenAmount, bool _adjust) public returns (address userHolding) {
+    function initiateUser(
+        address _user,
+        address _token,
+        uint256 _tokenAmount,
+        bool _adjust
+    ) public returns (address userHolding) {
         IERC20Metadata collateralContract = IERC20Metadata(_token);
         vm.startPrank(_user, _user);
 
