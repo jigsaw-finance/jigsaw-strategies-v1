@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
-
-import "forge-std/console.sol";
+pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+import { IAutoPxEth } from "./interfaces/IAutoPxEth.sol";
+import { IPirexEth } from "./interfaces/IPirexEth.sol";
+import { IWETH9 } from "./interfaces/IWETH9.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
@@ -19,19 +21,13 @@ import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.so
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
-import { IAutoPxEth } from "./IAutoPxEth.sol";
-import { IPirexEth } from "./IPirexEth.sol";
-
 /**
  * @title DineroStrategy
- * @dev Strategy used for PirexEth.
+ * @dev Strategy used for Dinero protocol's pxEth/autoPxEth.
  * @author Hovooo (@hovooo)
  */
 contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
-
-    // Mainnet wETH
-    IWETH9 public weth;
 
     // -- Custom types --
 
@@ -48,7 +44,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of the PirexEth receipt token (pxEth)
-        bool shouldStake; // pxETH/apxETH
+        bool shouldCompound; // Flag indicating whether pxETH should be staked into autocompounding Vault.
     }
 
     /**
@@ -59,7 +55,10 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 investment; // The amount of funds invested by the user.
         uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
         uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
+        uint256 balanceDiff; // The difference between balanceAfter and balanceBefore.
+        uint256 performanceFee; // Protocol's performanceFee applied to extra generated yield.
     }
+
     // -- Errors --
 
     error OperationNotSupported();
@@ -80,6 +79,14 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _new The new PirexEth address.
      */
     event pirexEthUpdated(address indexed _old, address indexed _new);
+
+    /**
+     * @notice Event indicating that the contract received Ether.
+     *
+     * @param from The address that sent the Ether.
+     * @param amount The amount of Ether received (in wei).
+     */
+    event Received(address indexed from, uint256 amount);
 
     // -- State variables --
 
@@ -104,9 +111,11 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     IReceiptToken public override receiptToken;
 
     /**
-     * @notice If true apxETH token staked, false means pxETH minted.
+     * @notice Determines the behavior for handling pxETH tokens.
+     * @dev If true, the pxETH tokens are staked into Dinero's autocompounding Vault.
+     * @dev If false, only pxETH tokens are minted without staking.
      */
-    bool public shouldStake;
+    bool public shouldCompound;
 
     /**
      * @notice The PirexEth contract.
@@ -129,14 +138,13 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
-     * @notice The total investments in the strategy.
+     * @notice wETH address used for strategy
      */
-    uint256 public totalInvestments;
-
+    IWETH9 public weth;
     /**
      * @notice A mapping that stores participant details by address.
      */
-    mapping(address => IStrategy.RecipientInfo) public override recipients;
+    mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
 
     // -- Constructor --
 
@@ -147,18 +155,39 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializer for the Dinero Strategy.
+     * @notice Initializes the Dinero Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.pirexEth` must be valid (`"3036"` error code if invalid).
+     * - `_params.autoPirexEth` must be valid (`"3036"` error code if invalid) if _params.shouldCompound is true.
+     * - `_params.rewardsController` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters:
+     * - owner: The address of the initial owner of the Strategy contract.
+     * - managerContainer: The address of the contract that contains the manager contract.
+     * - stakerFactory: The address of the StakerLightFactory contract.
+     * - pirexEth: The address of the PirexEth.
+     * - autoPirexEth: The address of the AutoPirexEth.
+     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
+     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
+     * - tokenIn: The address of the LP token used as input for the strategy.
+     * - tokenOut: The address of the Aave receipt token (aToken).
+     * - shouldCompound: Flag indicating whether pxETH should be staked into autocompounding Vault.
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
         require(_params.managerContainer != address(0), "3065");
         require(_params.pirexEth != address(0), "3036");
+        require(!_params.shouldCompound || _params.autoPirexEth != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
-        if (_params.shouldStake == true && _params.autoPirexEth == address(0)) {
-            revert("3000");
-        }
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
@@ -168,9 +197,9 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
-        shouldStake = _params.shouldStake;
+        shouldCompound = _params.shouldCompound;
 
-        weth = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        weth = IWETH9(_getManager().WETH());
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -197,9 +226,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Deposits funds into the strategy.
      *
-     * @dev Some strategies won't return any receipt tokens; in this case, 'tokenOutAmount' will be 0.
-     * @dev 'tokenInAmount' will be equal to '_amount' if '_asset' is the same as the strategy's 'tokenIn()'.
-     *
      * @param _asset The token to be invested.
      * @param _amount The amount of the token to be invested.
      * @param _recipient The address on behalf of which the funds are deposited.
@@ -212,49 +238,45 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount,
         address _recipient,
         bytes calldata
-    ) external override onlyValidAmount(_amount) onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
+        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
-
+        // Swap wETH to ETH.
         weth.withdraw(_amount);
+        // Deposit ETH to mint pxETH, stake pxETH if the strategy `shouldCompound`.
+        pirexEth.deposit{ value: _amount }({ receiver: _recipient, shouldCompound: shouldCompound });
 
-        pirexEth.deposit{ value: _amount }({ receiver: _recipient, shouldCompound: shouldStake });
+        uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
+        recipients[_recipient].investedAmount += _amount;
+        recipients[_recipient].totalShares += shares;
 
-        uint256 balanceAfter = IERC20(tokenOut).balanceOf(_recipient);
-
-        recipients[_recipient].investedAmount += balanceAfter - balanceBefore;
-        recipients[_recipient].totalShares += balanceAfter - balanceBefore;
-        totalInvestments += balanceAfter - balanceBefore;
-
+        // Mint Strategy's receipt tokens to allow later withdrawal.
         _mint({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _amount: balanceAfter - balanceBefore,
+            _amount: shares,
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        jigsawStaker.deposit({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        // Register `_recipient`'s deposit operation to generate jigsaw rewards.
+        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
         emit Deposit({
             asset: _asset,
             tokenIn: tokenIn,
             assetAmount: _amount,
             tokenInAmount: _amount,
-            shares: balanceAfter - balanceBefore,
+            shares: shares,
             recipient: _recipient
         });
-
-        return (balanceAfter - balanceBefore, _amount);
+        return (shares, _amount);
     }
 
     /**
      * @notice Withdraws deposited funds from the strategy.
-     *
-     * @dev Some strategies will only allow the tokenIn to be withdrawn.
-     * @dev 'assetAmount' will be equal to 'tokenInAmount' if '_asset' is the same as the strategy's 'tokenIn()'.
      *
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
@@ -268,13 +290,20 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override onlyStrategyManager nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
-        WithdrawParams memory params =
-            WithdrawParams({ shareRatio: 0, investment: 0, balanceBefore: 0, balanceAfter: 0 });
+        WithdrawParams memory params = WithdrawParams({
+            shareRatio: 0,
+            investment: 0,
+            balanceBefore: 0,
+            balanceAfter: 0,
+            balanceDiff: 0,
+            performanceFee: 0
+        });
 
+        // Calculate the ratio between all user's shares and the amount of shares used for withdrawal.
         params.shareRatio = OperationsLib.getRatio({
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
@@ -282,6 +311,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             rounding: OperationsLib.Rounding.Floor
         });
 
+        // Burn Strategy's receipt tokens used for withdrawal.
         _burn({
             _receiptToken: receiptToken,
             _recipient: _recipient,
@@ -290,62 +320,64 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
+        // To accurately compute the protocol's fees from the yield generated by the strategy, we first need to
+        // determine the percentage of the initial investment being withdrawn. This allows us to assess whether any
+        // yield has been generated beyond the initial investment.
         params.investment =
             (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
+        uint256 postFeeAmount = 0;
 
-        if (!shouldStake) {
+        if (!shouldCompound) {
             (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
                 _contract: address(pirexEth),
-                _call: abi.encodeWithSignature(
-                    "instantRedeemWithPxEth(uint256,address)",
-                    _shares, // amount of underlying to redeem
-                    address(this) // receiverOfUnderlying
-                )
+                _call: abi.encodeCall(IPirexEth.instantRedeemWithPxEth, (_shares, address(this)))
             });
+
             // Assert the call succeeded.
             require(success, OperationsLib.getRevertMsg(returnData));
+            (postFeeAmount,) = abi.decode(returnData, (uint256, uint256));
+        } else {
+            (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+                _contract: address(autoPirexEth),
+                _call: abi.encodeCall(IAutoPxEth.redeem, (_shares, address(this), _recipient))
+            });
 
-            uint256 postFeeAmount = payable(address(this)).balance;
-
-            // Swap ETH back to WETH
-            weth.deposit{ value: postFeeAmount }();
-
-            // Transfer WETH to _recipient
-            IERC20(tokenIn).approve(_recipient, postFeeAmount);
-            IERC20(tokenIn).transfer(_recipient, postFeeAmount);
+            // Assert the call succeeded.
+            require(success, OperationsLib.getRevertMsg(returnData));
+            (postFeeAmount,) = pirexEth.instantRedeemWithPxEth(_shares, address(this));
         }
 
-        // Assert the call succeeded.
-        params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
+        // Swap ETH back to WETH.
+        weth.deposit{ value: postFeeAmount }();
 
-        // there is no tokenIn rewards
-        //        _extractTokenInRewards({
-        //            _ratio: params.shareRatio,
-        //            _result: params.balanceBefore > params.balanceAfter ? 0 : params.balanceAfter -
-        // params.balanceBefore,
-        //            _recipient: _recipient,
-        //            _decimals: IERC20Metadata(tokenOut).decimals()
-        //        });
+        // Transfer WETH to the `_recipient`.
+        IERC20(tokenIn).transfer(_recipient, postFeeAmount);
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: recipients[_recipient].investedAmount });
+        // Take protocol's fee if any.
+        params.balanceDiff = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
+        (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        if (params.balanceDiff > params.investment && params.performanceFee != 0) {
+            uint256 rewardAmount = params.balanceDiff - params.investment;
+            uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
+            if (fee > 0) {
+                address feeAddr = _getManager().feeAddress();
+                emit FeeTaken(tokenIn, feeAddr, fee);
+                IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
+            }
+        }
 
-        recipients[_recipient].totalShares =
-            _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
+        recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
-        totalInvestments =
-            params.balanceAfter - params.balanceBefore > totalInvestments ? 0 : totalInvestments - params.investment;
 
-        emit Withdraw({
-            asset: _asset,
-            recipient: _recipient,
-            shares: _shares,
-            amount: params.balanceAfter - params.balanceBefore
-        });
-        return (params.balanceAfter - params.balanceBefore, params.investment);
+        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+
+        return (params.balanceDiff, params.investment);
     }
 
     /**
@@ -372,47 +404,13 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Utilities --
 
     /**
-     * @notice Sends tokenIn rewards to the fee address.
+     * @notice Allows the contract to accept incoming Ether transfers.
+     * @dev This function is executed when the contract receives Ether with no data in the transaction.
      *
-     * @param _ratio The ratio of the shares to total shares.
-     * @param _result The _result of the balance change.
-     * @param _recipient The address of the recipient.
-     * @param _decimals The number of decimals of the token.
+     * @notice Emits:
+     * - `Received` event to log the sender's address and the amount received.
      */
-    function _extractTokenInRewards(uint256 _ratio, uint256 _result, address _recipient, uint256 _decimals) internal {
-        if (_ratio > (10 ** _decimals) && _result < recipients[_recipient].investedAmount) return;
-        uint256 rewardAmount = 0;
-        if (_ratio >= (10 ** _decimals)) rewardAmount = _result - recipients[_recipient].investedAmount;
-        if (rewardAmount == 0) return;
-
-        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, performanceFee);
-
-        if (fee > 0) {
-            address feeAddr = _getManager().feeAddress();
-            emit FeeTaken(tokenIn, feeAddr, fee);
-            IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
-        }
+    receive() external payable {
+        emit Received({ from: msg.sender, amount: msg.value });
     }
-
-    /**
-     * @notice Receives ETH.
-     */
-    receive() external payable { }
-
-    /**
-     * @notice Fallback ETH.
-     */
-    fallback() external payable { }
-}
-
-/// @title Interface for WETH9
-interface IWETH9 is IERC20 {
-    /// @notice Deposit ether to get wrapped ether
-    function deposit() external payable;
-
-    /// @notice Withdraw wrapped ether to get ether
-    function withdraw(
-        uint256
-    ) external;
 }
