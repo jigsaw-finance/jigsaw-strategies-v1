@@ -10,10 +10,7 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
  */
 interface IAutoPxEth is IERC4626 {
     /**
-     * @notice Return the amount of assets per 1 (1e18) share
-     * @return uint256 Assets
+     * @dev Burns exactly shares from owner and sends assets of underlying tokens to receiver.
      */
-    function assetsPerShare() external view returns (uint256);
-
     function redeem(uint256 shares, address receiver, address owner) external returns (uint256 assets);
 }
