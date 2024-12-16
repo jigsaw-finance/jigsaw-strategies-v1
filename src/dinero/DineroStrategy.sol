@@ -91,7 +91,8 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- State variables --
 
     /**
-     * @notice The LP token address.
+     * @notice The wETH token is utilized as the input token, which is later unwrapped to ETH and re-wrapped to
+     * facilitate Dinero investments.
      */
     address public override tokenIn;
 
@@ -330,23 +331,32 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 postFeeAmount = 0;
 
         if (!shouldCompound) {
+            // Instantly redeem pxETH for ETH through the PirexEth contract.
             (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
                 _contract: address(pirexEth),
                 _call: abi.encodeCall(IPirexEth.instantRedeemWithPxEth, (_shares, address(this)))
             });
 
-            // Assert the call succeeded.
+            // Ensure the external call was successful and decode any potential revert reason.
             require(success, OperationsLib.getRevertMsg(returnData));
+
+            // Decode the returned data to retrieve the post-fee amount of ETH received.
             (postFeeAmount,) = abi.decode(returnData, (uint256, uint256));
         } else {
+            // Redeem pxETH via the AutoPirexEth contract using the recipient's `IHolding` contract.
             (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
                 _contract: address(autoPirexEth),
                 _call: abi.encodeCall(IAutoPxEth.redeem, (_shares, address(this), _recipient))
             });
 
-            // Assert the call succeeded.
+            // Ensure the external call was successful and decode any potential revert reason.
             require(success, OperationsLib.getRevertMsg(returnData));
-            (postFeeAmount,) = pirexEth.instantRedeemWithPxEth(_shares, address(this));
+
+            // Decode the returned data to get the amount of pxETH withdrawn from the AutoPirexEth contract.
+            uint256 pxEthWithdrawn = abi.decode(returnData, (uint256));
+
+            // Use the PirexEth contract to instantly redeem the withdrawn pxETH for ETH.
+            (postFeeAmount,) = pirexEth.instantRedeemWithPxEth(pxEthWithdrawn, address(this));
         }
 
         // Swap ETH back to WETH.
