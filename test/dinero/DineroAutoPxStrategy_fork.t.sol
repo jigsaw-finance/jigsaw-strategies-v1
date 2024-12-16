@@ -6,17 +6,18 @@ import "forge-std/console.sol";
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import { DineroStrategy } from "../../src/dinero/DineroStrategy.sol";
 import { IAutoPxEth } from "../../src/dinero/interfaces/IAutoPxEth.sol";
-import { IPirexEth } from "../../src/dinero/interfaces/IPirexEth.sol";
 
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
+address constant PX_ETH = 0x04C154b66CB340F3Ae24111CC767e0184Ed00Cc6;
 IPirexEth constant PIREX_ETH = IPirexEth(0xD664b74274DfEB538d9baC494F3a4760828B02b0);
 IAutoPxEth constant AUTO_PIREX_ETH = IAutoPxEth(0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6);
 
@@ -121,23 +122,29 @@ contract DineroAutoPxStrategyTest is Test, BasicContractsFixture {
         vm.prank(user, user);
         strategyManager.invest(tokenIn, address(strategy), amount, "");
 
-        console.log("INVESTED", amount);
-
         (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
 
         skip(100 days);
 
-        uint256 dineroFee = subtractPercent(totalShares, 5);
-        uint256 previewRedeem = AUTO_PIREX_ETH.previewRedeem(totalShares - dineroFee);
-        uint256 fee = investedAmountBefore > previewRedeem
-            ? 0
-            : _getFeeAbsolute(previewRedeem - investedAmountBefore, manager.performanceFee());
+        // Increase the balance of the autoPxEth with pxETH
+        uint256 addedRewards = 1e22;
+        deal(address(PX_ETH), address(AUTO_PIREX_ETH), addedRewards);
+        // Updated rewards state variable in autoPxEth contract
+        vm.store(address(AUTO_PIREX_ETH), bytes32(uint256(14)), bytes32(uint256(addedRewards)));
 
-        console.log("PREVIEW REDEEM", previewRedeem);
+        // Pirex ETH takes fee for instant redemption
+        uint256 postRedemptionFeeAssetAmt = subtractPercent(
+            AUTO_PIREX_ETH.previewRedeem(totalShares), PIREX_ETH.fees(IPirexEth.Fees.InstantRedemption) / 1000
+        );
+
+        // Compute Jigsaw's performance fee
+        uint256 fee = investedAmountBefore >= postRedemptionFeeAssetAmt
+            ? 0
+            : _getFeeAbsolute(postRedemptionFeeAssetAmt - investedAmountBefore, manager.performanceFee());
 
         vm.prank(user, user);
-        (uint256 assetAmount, uint256 withdrawnTokenInAmount) = strategyManager.claimInvestment({
+        (uint256 assetAmount,) = strategyManager.claimInvestment({
             _holding: userHolding,
             _strategy: address(strategy),
             _shares: totalShares,
@@ -148,9 +155,6 @@ contract DineroAutoPxStrategyTest is Test, BasicContractsFixture {
         (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
         uint256 tokenInBalanceAfter = IERC20(tokenIn).balanceOf(userHolding);
         uint256 expectedWithdrawal = tokenInBalanceAfter - tokenInBalanceBefore;
-
-        console.log("WITHDRAWN", assetAmount);
-        console.log("GAIN", withdrawnTokenInAmount - amount);
 
         /**
          * Expected changes after withdrawal
@@ -181,4 +185,26 @@ contract DineroAutoPxStrategyTest is Test, BasicContractsFixture {
         uint256 deduction = (value * percent) / 1000; // 0.5% is 5/1000
         return value - deduction;
     }
+}
+
+interface IPirexEth {
+    // Configurable fees
+    enum Fees {
+        // Fee type for deposit
+        Deposit,
+        // Fee type for redemption
+        Redemption,
+        // Fee type for instant redemption
+        InstantRedemption
+    }
+
+    /**
+     * @notice Retrieves the fee percentage for a specific operation type.
+     * @param feeType The type of fee (e.g., Deposit, Redemption, InstantRedemption).
+     * @return feePercentage The fee percentage corresponding to the provided fee type.
+     *         The value is scaled by 1,000,000 (e.g., 5000 represents 0.5%).
+     */
+    function fees(
+        Fees feeType
+    ) external view returns (uint32);
 }
