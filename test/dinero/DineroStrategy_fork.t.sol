@@ -6,24 +6,26 @@ import "forge-std/console.sol";
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import { DineroStrategy } from "../../src/dinero/DineroStrategy.sol";
 import { IAutoPxEth } from "../../src/dinero/interfaces/IAutoPxEth.sol";
-import { IPirexEth } from "../../src/dinero/interfaces/IPirexEth.sol";
 
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
+address constant PX_ETH = 0x04C154b66CB340F3Ae24111CC767e0184Ed00Cc6;
 IPirexEth constant PIREX_ETH = IPirexEth(0xD664b74274DfEB538d9baC494F3a4760828B02b0);
+IAutoPxEth constant AUTO_PIREX_ETH = IAutoPxEth(0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6);
 
-contract DineroPxStrategyTest is Test, BasicContractsFixture {
+contract DineroStrategyTest is Test, BasicContractsFixture {
     // Mainnet wETH
     address internal tokenIn = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    // pxETH token
-    address internal tokenOut = 0x04C154b66CB340F3Ae24111CC767e0184Ed00Cc6;
+    // apxETH token
+    address internal tokenOut = 0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6;
 
     DineroStrategy internal strategy;
 
@@ -36,12 +38,11 @@ contract DineroPxStrategyTest is Test, BasicContractsFixture {
             managerContainer: address(managerContainer),
             stakerFactory: address(stakerFactory),
             pirexEth: address(PIREX_ETH),
-            autoPirexEth: address(0),
+            autoPirexEth: address(AUTO_PIREX_ETH),
             jigsawRewardToken: jRewards,
             jigsawRewardDuration: 60 days,
             tokenIn: tokenIn,
-            tokenOut: tokenOut,
-            shouldCompound: false
+            tokenOut: tokenOut
         });
 
         bytes memory data = abi.encodeCall(DineroStrategy.initialize, initParams);
@@ -61,7 +62,7 @@ contract DineroPxStrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit works correctly when authorized
-    function test_dinero_px_eth_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+    function test_dinero_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e18, 10e18);
         address userHolding = initiateUser(user, tokenIn, amount, false);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
@@ -69,7 +70,7 @@ contract DineroPxStrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        (uint256 receiptTokens,) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
 
         uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
         uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
@@ -95,11 +96,18 @@ contract DineroPxStrategyTest is Test, BasicContractsFixture {
         assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
 
         // Additional checks
+        assertApproxEqRel(
+            tokenOutBalanceAfter,
+            strategy.autoPirexEth().convertToShares(amount),
+            0.01e18,
+            "Wrong balance in Dinero after stake"
+        );
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
+        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
     }
 
     // Tests if withdraw works correctly when authorized
-    function test_dinero_px_eth_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+    function test_dinero_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
         uint256 amount = bound(_amount, 1e18, 10e18);
         address userHolding = initiateUser(user, tokenIn, amount, false);
 
@@ -107,14 +115,26 @@ contract DineroPxStrategyTest is Test, BasicContractsFixture {
         vm.prank(user, user);
         strategyManager.invest(tokenIn, address(strategy), amount, "");
 
-        (, uint256 totalShares) = strategy.recipients(userHolding);
+        (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
-        (uint256 investedAmountBefore,) = strategy.recipients(userHolding);
 
         skip(100 days);
 
-        uint256 fee =
-            _getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
+        // Increase the balance of the autoPxEth with pxETH
+        uint256 addedRewards = 1e22;
+        deal(address(PX_ETH), address(AUTO_PIREX_ETH), addedRewards);
+        // Updated rewards state variable in autoPxEth contract
+        vm.store(address(AUTO_PIREX_ETH), bytes32(uint256(14)), bytes32(uint256(addedRewards)));
+
+        // Pirex ETH takes fee for instant redemption
+        uint256 postRedemptionFeeAssetAmt = subtractPercent(
+            AUTO_PIREX_ETH.previewRedeem(totalShares), PIREX_ETH.fees(IPirexEth.Fees.InstantRedemption) / 1000
+        );
+
+        // Compute Jigsaw's performance fee
+        uint256 fee = investedAmountBefore >= postRedemptionFeeAssetAmt
+            ? 0
+            : _getFeeAbsolute(postRedemptionFeeAssetAmt - investedAmountBefore, manager.performanceFee());
 
         vm.prank(user, user);
         (uint256 assetAmount,) = strategyManager.claimInvestment({
@@ -158,4 +178,26 @@ contract DineroPxStrategyTest is Test, BasicContractsFixture {
         uint256 deduction = (value * percent) / 1000; // 0.5% is 5/1000
         return value - deduction;
     }
+}
+
+interface IPirexEth {
+    // Configurable fees
+    enum Fees {
+        // Fee type for deposit
+        Deposit,
+        // Fee type for redemption
+        Redemption,
+        // Fee type for instant redemption
+        InstantRedemption
+    }
+
+    /**
+     * @notice Retrieves the fee percentage for a specific operation type.
+     * @param feeType The type of fee (e.g., Deposit, Redemption, InstantRedemption).
+     * @return feePercentage The fee percentage corresponding to the provided fee type.
+     *         The value is scaled by 1,000,000 (e.g., 5000 represents 0.5%).
+     */
+    function fees(
+        Fees feeType
+    ) external view returns (uint32);
 }
