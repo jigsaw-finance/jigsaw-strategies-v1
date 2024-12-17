@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -70,10 +70,6 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         LimitOrderData limit; // Pendle's limit param.
     }
 
-    // -- Errors --
-
-    error OperationNotSupported();
-
     // -- Events --
 
     /**
@@ -140,7 +136,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializes the Ion Strategy contract with necessary parameters.
+     * @notice Initializes the Pendle Strategy contract with necessary parameters.
      *
      * @dev Configures core components such as manager, tokens, pools, and reward systems
      * needed for the strategy to operate.
@@ -163,7 +159,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
      * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
      * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
+     * - tokenOut: The address of the Pendle receipt token received as output from the strategy.
      * - rewardToken: The address of the Pendle primary reward token.
      */
     function initialize(
@@ -172,6 +168,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.managerContainer != address(0), "3065");
         require(_params.pendleRouter != address(0), "3036");
         require(_params.pendleMarket != address(0), "3036");
+        require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
         require(_params.rewardToken != address(0), "3000");
@@ -302,7 +299,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
             precision: IERC20Metadata(tokenOut).decimals(),
-            rounding: OperationsLib.Rounding.Ceil
+            rounding: OperationsLib.Rounding.Floor
         });
 
         _burn({
@@ -353,14 +350,15 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
             }
         }
 
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
-
         recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
 
         emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+
         return (params.balanceDiff, params.investment);
     }
 
@@ -372,7 +370,13 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     function claimRewards(
         address _recipient,
         bytes calldata
-    ) external override returns (uint256[] memory claimedAmounts, address[] memory rewardsList) {
+    )
+        external
+        override
+        nonReentrant
+        onlyStrategyManager
+        returns (uint256[] memory claimedAmounts, address[] memory rewardsList)
+    {
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pendleMarket,
             _call: abi.encodeCall(IPMarket.redeemRewards, _recipient)

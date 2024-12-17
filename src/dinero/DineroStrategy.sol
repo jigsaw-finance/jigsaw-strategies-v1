@@ -4,6 +4,10 @@ pragma solidity 0.8.22;
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import { IAutoPxEth } from "./interfaces/IAutoPxEth.sol";
+import { IPirexEth } from "./interfaces/IPirexEth.sol";
+import { IWETH9 } from "./interfaces/IWETH9.sol";
+
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
@@ -14,16 +18,15 @@ import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
-import { IIonPool } from "./interfaces/IIonPool.sol";
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
 /**
- * @title IonStrategy
- * @dev Strategy used for Ion Pool.
+ * @title DineroStrategy
+ * @dev Strategy used for Dinero protocol's autoPxEth.
  * @author Hovooo (@hovooo)
  */
-contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
+contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
 
     // -- Custom types --
@@ -35,11 +38,12 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         address owner; // The address of the initial owner of the Strategy contract
         address managerContainer; // The address of the contract that contains the manager contract
         address stakerFactory; // The address of the StakerLightFactory contract
-        address ionPool; // The address of the Ion Pool
+        address pirexEth; // The address of the PirexEth
+        address autoPirexEth; // The address of the AutoPirexEth
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the Ion receipt token (iToken)
+        address tokenOut; // The address of the PirexEth receipt token (pxEth)
     }
 
     /**
@@ -47,16 +51,17 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     struct WithdrawParams {
         uint256 shareRatio; // The share ratio representing the proportion of the total investment owned by the user.
-        uint256 assetsToWithdraw; // The amount of tokeIn (initial deposit + yield) to be withdrawn.
-        uint256 investment; // The amount of funds invested by the user used to withdraw.
+        uint256 investment; // The amount of funds invested by the user.
         uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
         uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
-        uint256 balanceDiff; // The difference of the balance before and after
-        uint256 performanceFee; // Protocol's performance fee
+        uint256 balanceDiff; // The difference between balanceAfter and balanceBefore.
+        uint256 performanceFee; // Protocol's performanceFee applied to extra generated yield.
     }
+
     // -- Errors --
 
     error OperationNotSupported();
+    error InvalidEthSender(address sender);
 
     // -- Events --
 
@@ -68,15 +73,24 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
 
+    /**
+     * @notice Event indicating that the contract received Ether.
+     *
+     * @param from The address that sent the Ether.
+     * @param amount The amount of Ether received (in wei).
+     */
+    event Received(address indexed from, uint256 amount);
+
     // -- State variables --
 
     /**
-     * @notice The LP token address.
+     * @notice The wETH token is utilized as the input token, which is later unwrapped to ETH and re-wrapped to
+     * facilitate Dinero investments.
      */
     address public override tokenIn;
 
     /**
-     * @notice The Ion receipt token address.
+     * @notice The PirexEth receipt token address.
      */
     address public override tokenOut;
 
@@ -91,9 +105,14 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     IReceiptToken public override receiptToken;
 
     /**
-     * @notice The Ion Pool contract.
+     * @notice The PirexEth contract.
      */
-    IIonPool public ionPool;
+    IPirexEth public pirexEth;
+
+    /**
+     * @notice The PirexEth contract.
+     */
+    IAutoPxEth public autoPirexEth;
 
     /**
      * @notice The Jigsaw Rewards Controller contract.
@@ -104,6 +123,11 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice The number of decimals of the strategy's shares.
      */
     uint256 public override sharesDecimals;
+
+    /**
+     * @notice wETH address used for strategy
+     */
+    IWETH9 public weth;
 
     /**
      * @notice A mapping that stores participant details by address.
@@ -119,50 +143,56 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializes the Ion Strategy contract with necessary parameters.
+     * @notice Initializes the Dinero Strategy contract with necessary parameters.
      *
-     * @dev Configures core components such as manager, tokens, pools, and reward systems
-     * needed for the strategy to operate.
+     * @dev Configures core components such as manager, tokens, pools needed for the strategy to operate.
      *
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
      * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
-     * - `_params.ionPool` must be valid (`"3036"` error code if invalid).
+     * - `_params.pirexEth` must be valid (`"3036"` error code if invalid).
+     * - `_params.autoPirexEth` must be valid (`"3036"` error code if invalid).
+     * - `_params.rewardsController` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      *
      * @param _params Struct containing all initialization parameters:
      * - owner: The address of the initial owner of the Strategy contract.
      * - managerContainer: The address of the contract that contains the manager contract.
      * - stakerFactory: The address of the StakerLightFactory contract.
-     * - ionPool: The address of the Ion Pool where tokens will be pooled.
+     * - pirexEth: The address of the PirexEth.
+     * - autoPirexEth: The address of the AutoPirexEth.
      * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
      * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
      * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
+     * - tokenOut: The address of the Aave receipt token (aToken).
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
         require(_params.managerContainer != address(0), "3065");
-        require(_params.ionPool != address(0), "3036");
+        require(_params.pirexEth != address(0), "3036");
+        require(_params.autoPirexEth != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
         managerContainer = IManagerContainer(_params.managerContainer);
-        ionPool = IIonPool(_params.ionPool);
+        pirexEth = IPirexEth(_params.pirexEth);
+        autoPirexEth = IAutoPxEth(_params.autoPirexEth);
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+
+        weth = IWETH9(_getManager().WETH());
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
                 _receiptTokenFactory: _getManager().receiptTokenFactory(),
-                _receiptTokenName: "Ion Strategy Receipt Token",
-                _receiptTokenSymbol: "IoRT"
+                _receiptTokenName: "PirexEth Strategy Receipt Token",
+                _receiptTokenSymbol: "apxEth"
             })
         );
 
@@ -185,7 +215,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _asset The token to be invested.
      * @param _amount The amount of the token to be invested.
      * @param _recipient The address on behalf of which the funds are deposited.
-     * @param _data Extra data, e.g., a referral code.
      *
      * @return The amount of receipt tokens obtained.
      * @return The amount of the 'tokenIn()' token.
@@ -194,21 +223,19 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         address _asset,
         uint256 _amount,
         address _recipient,
-        bytes calldata _data
-    ) external override onlyValidAmount(_amount) nonReentrant onlyStrategyManager returns (uint256, uint256) {
+        bytes calldata
+    ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
+        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
+
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
-        uint256 balanceBefore = ionPool.normalizedBalanceOf(_recipient);
 
-        // Supply to the Ion Pool on behalf of the `_recipient`.
-        OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
-        ionPool.supply({
-            user: _recipient,
-            amount: _amount,
-            proof: _data.length > 0 ? abi.decode(_data, (bytes32[])) : new bytes32[](0)
-        });
+        // Swap wETH to ETH.
+        weth.withdraw(_amount);
+        // Deposit ETH to mint pxETH and stakes pxETH for autocompounding.
+        pirexEth.deposit{ value: _amount }({ receiver: _recipient, shouldCompound: true });
 
-        uint256 shares = ionPool.normalizedBalanceOf(_recipient) - balanceBefore;
+        uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += shares;
 
@@ -251,12 +278,10 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
-        uint256 totalSharesBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
-        require(_shares <= totalSharesBefore, "2002");
+        require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
         WithdrawParams memory params = WithdrawParams({
             shareRatio: 0,
-            assetsToWithdraw: 0,
             investment: 0,
             balanceBefore: 0,
             balanceAfter: 0,
@@ -281,13 +306,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             _tokenDecimals: IERC20Metadata(tokenOut).decimals()
         });
 
-        // Since Ion generates yield in the same token as the initial deposit (tokenIn), we must calculate the
-        // amount of tokenIn (including both the initial deposit and accrued yield) to be withdrawn. To achieve this,
-        // we apply the percentage of the user's total shares to be withdrawn relative to their entire shareholding to
-        // the available balance in Ion, ensuring the correct proportion of assets is withdrawn.
-        params.assetsToWithdraw =
-            IIonPool(tokenOut).balanceOf(_recipient) * params.shareRatio / (10 ** IERC20Metadata(tokenOut).decimals());
-
         // To accurately compute the protocol's fees from the yield generated by the strategy, we first need to
         // determine the percentage of the initial investment being withdrawn. This allows us to assess whether any
         // yield has been generated beyond the initial investment.
@@ -296,18 +314,29 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
-        // Perform the withdrawal operation from user's holding address.
+        // Redeem pxETH via the AutoPirexEth contract using the recipient's `IHolding` contract.
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-            _contract: address(ionPool),
-            _call: abi.encodeCall(IIonPool.withdraw, (_recipient, params.assetsToWithdraw))
+            _contract: address(autoPirexEth),
+            _call: abi.encodeCall(IAutoPxEth.redeem, (_shares, address(this), _recipient))
         });
 
-        // Assert the call succeeded.
+        // Ensure the external call was successful and decode any potential revert reason.
         require(success, OperationsLib.getRevertMsg(returnData));
-        params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
+
+        // Decode the returned data to get the amount of pxETH withdrawn from the AutoPirexEth contract.
+        uint256 pxEthWithdrawn = abi.decode(returnData, (uint256));
+
+        // Use the PirexEth contract to instantly redeem the withdrawn pxETH for ETH.
+        (uint256 postFeeAmount,) = pirexEth.instantRedeemWithPxEth(pxEthWithdrawn, address(this));
+
+        // Swap ETH back to WETH.
+        weth.deposit{ value: postFeeAmount }();
+
+        // Transfer WETH to the `_recipient`.
+        IERC20(tokenIn).safeTransfer(_recipient, postFeeAmount);
 
         // Take protocol's fee if any.
-        params.balanceDiff = params.balanceAfter - params.balanceBefore;
+        params.balanceDiff = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
         (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (params.balanceDiff > params.investment && params.performanceFee != 0) {
             uint256 rewardAmount = params.balanceDiff - params.investment;
@@ -319,26 +348,20 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             }
         }
 
-        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
-
-        recipients[_recipient].totalShares =
-            _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
+        recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
 
-        emit Withdraw({
-            asset: _asset,
-            recipient: _recipient,
-            shares: _shares,
-            amount: params.balanceAfter - params.balanceBefore
-        });
-        return (params.balanceAfter - params.balanceBefore, params.investment);
+        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+
+        return (params.balanceDiff, params.investment);
     }
 
     /**
-     * @notice Claims rewards from the Ion Pool.
+     * @notice Claims rewards from the PirexEth.
      * @return The amounts of rewards claimed.
      * @return The addresses of the reward tokens.
      */
@@ -356,5 +379,19 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
+    }
+
+    // -- Utilities --
+
+    /**
+     * @notice Allows the contract to accept incoming Ether transfers.
+     * @dev This function is executed when the contract receives Ether with no data in the transaction.
+     *
+     * @notice Emits:
+     * - `Received` event to log the sender's address and the amount received.
+     */
+    receive() external payable {
+        if (msg.sender != address(weth) && msg.sender != address(pirexEth)) revert InvalidEthSender(msg.sender);
+        emit Received({ from: msg.sender, amount: msg.value });
     }
 }

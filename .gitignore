@@ -19,6 +19,8 @@ docs/
 .VSCodeCounter/*
 .vscode/*
 
+.idea/*
+
 report
 lcov.info
 out

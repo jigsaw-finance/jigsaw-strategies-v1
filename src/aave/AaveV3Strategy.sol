@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -42,7 +42,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         address rewardsController; // The address of the Aave Rewards Controller
         address rewardToken; // The address of the Aave reward token associated with the strategy
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
+        uint256 jigsawRewardDuration; // Initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of the Aave receipt token (aToken)
     }
@@ -157,6 +157,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.managerContainer != address(0), "3065");
         require(_params.lendingPool != address(0), "3036");
         require(_params.rewardsController != address(0), "3039");
+        require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
 
@@ -279,7 +280,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
             precision: IERC20Metadata(tokenOut).decimals(),
-            rounding: OperationsLib.Rounding.Ceil
+            rounding: OperationsLib.Rounding.Floor
         });
 
         // Burn Strategy's receipt tokens used for withdrawal.
@@ -329,15 +330,15 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
             }
         }
 
-        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
-
         recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
 
         emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+
         return (params.balanceDiff, params.investment);
     }
 

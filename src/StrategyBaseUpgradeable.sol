@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -72,6 +72,7 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
         address _initialOwner
     ) internal onlyInitializing {
         __Ownable_init(_initialOwner);
+        __Ownable2Step_init();
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
     }

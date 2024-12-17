@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -110,6 +110,11 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
+     * @notice The factor used to adjust values from 18 decimal precision (shares) to 6 decimal precision (USDC).
+     */
+    uint256 public constant DECIMAL_DIFF = 1e12;
+
+    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
@@ -145,7 +150,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
      * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
      * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
      * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
+     * - tokenOut: The address of the receipt token received as output from the strategy.
      */
     function initialize(
         InitializerParams memory _params
@@ -153,6 +158,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.managerContainer != address(0), "3065");
         require(_params.creditEnforcer != address(0), "3036");
         require(_params.pegStabilityModule != address(0), "3036");
+        require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
 
@@ -164,6 +170,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        rewardToken = address(0);
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -268,7 +275,7 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
             numerator: _shares,
             denominator: recipients[_recipient].totalShares,
             precision: IERC20Metadata(tokenOut).decimals(),
-            rounding: OperationsLib.Rounding.Ceil
+            rounding: OperationsLib.Rounding.Floor
         });
 
         _burn({
@@ -287,19 +294,11 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
         IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: pegStabilityModule, _amount: _shares });
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pegStabilityModule,
-            _call: abi.encodeCall(
-                IPegStabilityModule.redeem,
-                (
-                    _recipient,
-                    _shares / 1e12 // converted to 6 decimals for USDC
-                )
-            )
+            _call: abi.encodeCall(IPegStabilityModule.redeem, (_recipient, _shares / DECIMAL_DIFF))
         });
         // Assert the call succeeded.
         require(success, OperationsLib.getRevertMsg(returnData));
         params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
-
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
 
         recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
@@ -312,6 +311,9 @@ contract ReservoirStablecoinStrategy is IStrategy, StrategyBaseUpgradeable {
             shares: _shares,
             amount: params.balanceAfter - params.balanceBefore
         });
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+
         return (params.balanceAfter - params.balanceBefore, params.investment);
     }
 
