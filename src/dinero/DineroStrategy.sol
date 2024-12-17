@@ -23,7 +23,7 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
 /**
  * @title DineroStrategy
- * @dev Strategy used for Dinero protocol's pxEth/autoPxEth.
+ * @dev Strategy used for Dinero protocol's autoPxEth.
  * @author Hovooo (@hovooo)
  */
 contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
@@ -61,6 +61,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Errors --
 
     error OperationNotSupported();
+    error InvalidEthSender(address sender);
 
     // -- Events --
 
@@ -390,6 +391,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * - `Received` event to log the sender's address and the amount received.
      */
     receive() external payable {
+        if (msg.sender != address(weth) && msg.sender != address(pirexEth)) revert InvalidEthSender(msg.sender);
         emit Received({ from: msg.sender, amount: msg.value });
     }
 }
