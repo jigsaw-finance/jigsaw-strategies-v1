@@ -44,7 +44,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of the PirexEth receipt token (pxEth)
-        bool shouldCompound; // Flag indicating whether pxETH should be staked into autocompounding Vault.
     }
 
     /**
@@ -72,13 +71,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param amount The amount of the fee.
      */
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
-
-    /**
-     * @notice Emitted when the PirexEth address is updated.
-     * @param _old The old PirexEth address.
-     * @param _new The new PirexEth address.
-     */
-    event pirexEthUpdated(address indexed _old, address indexed _new);
 
     /**
      * @notice Event indicating that the contract received Ether.
@@ -112,13 +104,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     IReceiptToken public override receiptToken;
 
     /**
-     * @notice Determines the behavior for handling pxETH tokens.
-     * @dev If true, the pxETH tokens are staked into Dinero's autocompounding Vault.
-     * @dev If false, only pxETH tokens are minted without staking.
-     */
-    bool public shouldCompound;
-
-    /**
      * @notice The PirexEth contract.
      */
     IPirexEth public pirexEth;
@@ -142,6 +127,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice wETH address used for strategy
      */
     IWETH9 public weth;
+
     /**
      * @notice A mapping that stores participant details by address.
      */
@@ -165,7 +151,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
      * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
      * - `_params.pirexEth` must be valid (`"3036"` error code if invalid).
-     * - `_params.autoPirexEth` must be valid (`"3036"` error code if invalid) if _params.shouldCompound is true.
+     * - `_params.autoPirexEth` must be valid (`"3036"` error code if invalid).
      * - `_params.rewardsController` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      *
@@ -179,14 +165,13 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
      * - tokenIn: The address of the LP token used as input for the strategy.
      * - tokenOut: The address of the Aave receipt token (aToken).
-     * - shouldCompound: Flag indicating whether pxETH should be staked into autocompounding Vault.
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
         require(_params.managerContainer != address(0), "3065");
         require(_params.pirexEth != address(0), "3036");
-        require(!_params.shouldCompound || _params.autoPirexEth != address(0), "3000");
+        require(_params.autoPirexEth != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
 
@@ -198,7 +183,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
-        shouldCompound = _params.shouldCompound;
 
         weth = IWETH9(_getManager().WETH());
 
@@ -247,8 +231,8 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
 
         // Swap wETH to ETH.
         weth.withdraw(_amount);
-        // Deposit ETH to mint pxETH, stake pxETH if the strategy `shouldCompound`.
-        pirexEth.deposit{ value: _amount }({ receiver: _recipient, shouldCompound: shouldCompound });
+        // Deposit ETH to mint pxETH and stakes pxETH for autocompounding.
+        pirexEth.deposit{ value: _amount }({ receiver: _recipient, shouldCompound: true });
 
         uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
         recipients[_recipient].investedAmount += _amount;
@@ -328,42 +312,27 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
-        uint256 postFeeAmount = 0;
 
-        if (!shouldCompound) {
-            // Instantly redeem pxETH for ETH through the PirexEth contract.
-            (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-                _contract: address(pirexEth),
-                _call: abi.encodeCall(IPirexEth.instantRedeemWithPxEth, (_shares, address(this)))
-            });
+        // Redeem pxETH via the AutoPirexEth contract using the recipient's `IHolding` contract.
+        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+            _contract: address(autoPirexEth),
+            _call: abi.encodeCall(IAutoPxEth.redeem, (_shares, address(this), _recipient))
+        });
 
-            // Ensure the external call was successful and decode any potential revert reason.
-            require(success, OperationsLib.getRevertMsg(returnData));
+        // Ensure the external call was successful and decode any potential revert reason.
+        require(success, OperationsLib.getRevertMsg(returnData));
 
-            // Decode the returned data to retrieve the post-fee amount of ETH received.
-            (postFeeAmount,) = abi.decode(returnData, (uint256, uint256));
-        } else {
-            // Redeem pxETH via the AutoPirexEth contract using the recipient's `IHolding` contract.
-            (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-                _contract: address(autoPirexEth),
-                _call: abi.encodeCall(IAutoPxEth.redeem, (_shares, address(this), _recipient))
-            });
+        // Decode the returned data to get the amount of pxETH withdrawn from the AutoPirexEth contract.
+        uint256 pxEthWithdrawn = abi.decode(returnData, (uint256));
 
-            // Ensure the external call was successful and decode any potential revert reason.
-            require(success, OperationsLib.getRevertMsg(returnData));
-
-            // Decode the returned data to get the amount of pxETH withdrawn from the AutoPirexEth contract.
-            uint256 pxEthWithdrawn = abi.decode(returnData, (uint256));
-
-            // Use the PirexEth contract to instantly redeem the withdrawn pxETH for ETH.
-            (postFeeAmount,) = pirexEth.instantRedeemWithPxEth(pxEthWithdrawn, address(this));
-        }
+        // Use the PirexEth contract to instantly redeem the withdrawn pxETH for ETH.
+        (uint256 postFeeAmount,) = pirexEth.instantRedeemWithPxEth(pxEthWithdrawn, address(this));
 
         // Swap ETH back to WETH.
         weth.deposit{ value: postFeeAmount }();
 
         // Transfer WETH to the `_recipient`.
-        IERC20(tokenIn).transfer(_recipient, postFeeAmount);
+        IERC20(tokenIn).safeTransfer(_recipient, postFeeAmount);
 
         // Take protocol's fee if any.
         params.balanceDiff = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
