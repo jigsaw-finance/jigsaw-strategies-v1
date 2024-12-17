@@ -197,7 +197,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         // 1.
         assertEq(tokenInBalanceAfter, assetAmount - fee, "Holding balance after withdraw is wrong");
         // 2.
-        assertEq(IAToken(tokenOut).scaledBalanceOf(userHolding), 0, "Holding ion balance wrong");
+        assertEq(IAToken(tokenOut).scaledBalanceOf(userHolding), 0, "Holding token out balance wrong");
         // 3.
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
