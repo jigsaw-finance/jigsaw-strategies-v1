@@ -45,7 +45,7 @@ contract AddStrategyTest is Test, BasicContractsFixture {
         );
 
         strategyAdder.run(strategy);
-        (uint256 performanceFee, bool active, bool whitelisted) = strategyManager.strategyInfo(strategy);
+        (, bool active,) = strategyManager.strategyInfo(strategy);
         assertEq(active, true);
     }
 }
