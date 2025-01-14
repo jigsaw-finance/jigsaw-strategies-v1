@@ -44,7 +44,7 @@ contract DeployAaveTest is Test, CommonStrategyScriptBase, BasicContractsFixture
     }
 
     // Test initialization
-    function test_initialization() public view {
+    function test_initialization() public {
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
         address ownerFromConfig = commonConfig.readAddress(".INITIAL_OWNER");
         address managerContainerFromConfig = commonConfig.readAddress(".MANAGER_CONTAINER");
@@ -56,6 +56,8 @@ contract DeployAaveTest is Test, CommonStrategyScriptBase, BasicContractsFixture
 
         for (uint256 i = 0; i < aaveStrategyParams.length; i++) {
             IStakerLight staker = strategy.jigsawStaker();
+
+            _populateAaveArray();
 
             assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
             assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer init wrong");

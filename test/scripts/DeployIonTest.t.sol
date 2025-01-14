@@ -42,7 +42,7 @@ contract DeployIonTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         strategy = IonStrategy(strategies[0]);
     }
 
-    function test_ion_initialValues() public view {
+    function test_ion_initialValues() public {
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
         address ownerFromConfig = commonConfig.readAddress(".INITIAL_OWNER");
         address managerContainerFromConfig = commonConfig.readAddress(".MANAGER_CONTAINER");
@@ -50,6 +50,8 @@ contract DeployIonTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
 
         for (uint256 i = 0; i < ionStrategyParams.length; i++) {
             IStakerLight staker = strategy.jigsawStaker();
+
+            _populateIonArray();
 
             assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
             assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer init wrong");
