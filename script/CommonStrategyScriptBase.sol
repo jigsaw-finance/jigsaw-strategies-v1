@@ -119,9 +119,9 @@ contract CommonStrategyScriptBase is Script {
         }
 
         if (keccak256(bytes(_strategy)) == ION_STRATEGY) {
-            data = new bytes[](ionStrategyParams.length);
-
             _populateIonArray();
+
+            data = new bytes[](ionStrategyParams.length);
 
             for (uint256 i = 0; i < ionStrategyParams.length; i++) {
                 data[i] = abi.encodeCall(
@@ -189,6 +189,8 @@ contract CommonStrategyScriptBase is Script {
                     tokenOut: reservoirStablecoinStrategyParams[0].tokenOut
                 })
             );
+
+            return data;
         }
 
         if (keccak256(bytes(_strategy)) == DINERO_STRATEGY) {
