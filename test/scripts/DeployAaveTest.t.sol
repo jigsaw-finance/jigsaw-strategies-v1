@@ -13,20 +13,16 @@ import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
-import { DeployStakerFactory } from "script/0_DeployStakerFactory.s.sol";
 import { DeployImpl } from "script/1_DeployImpl.s.sol";
 import { DeployProxy } from "script/2_DeployProxy.s.sol";
 
-import { AaveV3Strategy } from "../../src/aave/AaveV3Strategy.sol";
-import { StakerLight } from "../../src/staker/StakerLight.sol";
-import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 import { IStakerLight } from "../../src/staker/interfaces/IStakerLight.sol";
 
 contract DeployAaveTest is Test, CommonStrategyScriptBase, BasicContractsFixture {
     using StdJson for string;
 
     DeployProxy internal proxyDeployer;
-    AaveV3Strategy internal strategy;
+    address[] internal strategies;
 
     function setUp() public {
         init();
@@ -35,12 +31,11 @@ contract DeployAaveTest is Test, CommonStrategyScriptBase, BasicContractsFixture
         address implementation = implDeployer.run("AaveV3Strategy");
 
         proxyDeployer = new DeployProxy();
-        address[] memory strategies = proxyDeployer.run({
+        strategies = proxyDeployer.run({
             _strategy: "AaveV3Strategy",
             _implementation: implementation,
             _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040
         });
-        strategy = AaveV3Strategy(strategies[0]);
     }
 
     // Test initialization
@@ -54,18 +49,19 @@ contract DeployAaveTest is Test, CommonStrategyScriptBase, BasicContractsFixture
         address aaveLendingPoolFromConfig = aaveConfig.readAddress(".LENDING_POOL");
         address aaveRewardsControllerFromConfig = aaveConfig.readAddress(".REWARDS_CONTROLLER");
 
+        _populateAaveArray();
+
         for (uint256 i = 0; i < aaveStrategyParams.length; i++) {
+            AaveV3Strategy strategy = AaveV3Strategy(strategies[i]);
             IStakerLight staker = strategy.jigsawStaker();
 
-            _populateAaveArray();
-
             assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer init wrong");
+            assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer  wrong");
             assertEq(address(strategy.lendingPool()), aaveLendingPoolFromConfig, "Lending Pool initialized wrong");
-            assertEq(address(strategy.rewardsController()), aaveRewardsControllerFromConfig, "Wrong rewardsController");
+            assertEq(address(strategy.rewardsController()), aaveRewardsControllerFromConfig, "RewardsController wrong");
             assertEq(strategy.tokenIn(), aaveStrategyParams[i].tokenIn, "tokenIn initialized wrong");
             assertEq(strategy.tokenOut(), aaveStrategyParams[i].tokenOut, "tokenOut initialized wrong");
-            assertEq(strategy.rewardToken(), aaveStrategyParams[i].rewardToken, "AaveRewardToken initialized wrong");
+            assertEq(strategy.rewardToken(), aaveStrategyParams[i].rewardToken, "AaveRewardToken wrong");
             assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
             assertEq(staker.rewardsDuration(), aaveStrategyParams[i].jigsawRewardDuration, "RewardsDuration init wrong");
         }
