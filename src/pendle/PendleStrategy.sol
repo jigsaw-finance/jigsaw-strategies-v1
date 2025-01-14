@@ -88,7 +88,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     address public override tokenIn;
 
     /**
-     * @notice The tokenOut address (rUSD) for the strategy.
+     * @notice The tokenOut address for the strategy.
      */
     address public override tokenOut;
 
