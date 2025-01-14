@@ -12,13 +12,11 @@ contract DeployImpl is CommonStrategyScriptBase {
     function run(
         string memory _strategy
     ) external broadcast returns (address) {
-        if (keccak256(bytes(_strategy)) == keccak256(bytes("AaveV3Strategy"))) return address(new AaveV3Strategy());
-        if (keccak256(bytes(_strategy)) == keccak256(bytes("IonStrategy"))) return address(new IonStrategy());
-        if (keccak256(bytes(_strategy)) == keccak256(bytes("PendleStrategy"))) return address(new PendleStrategy());
-        if (keccak256(bytes(_strategy)) == keccak256(bytes("ReservoirStablecoinStrategy"))) {
-            return address(new ReservoirStablecoinStrategy());
-        }
-
+        if (keccak256(bytes(_strategy)) == AAVE_STRATEGY) return address(new AaveV3Strategy());
+        if (keccak256(bytes(_strategy)) == ION_STRATEGY) return address(new IonStrategy());
+        if (keccak256(bytes(_strategy)) == PENDLE_STRATEGY) return address(new PendleStrategy());
+        if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY) return address(new ReservoirStablecoinStrategy());
+        if (keccak256(bytes(_strategy)) == DINERO_STRATEGY) return address(new DineroStrategy());
         revert("Unknown strategy");
     }
 }
