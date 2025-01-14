@@ -6,6 +6,7 @@ import { stdJson as StdJson } from "forge-std/StdJson.sol";
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
+import "../../script/CommonStrategyScriptBase.sol";
 import "../fixtures/BasicContractsFixture.t.sol";
 
 import { DeployStakerFactory } from "script/0_DeployStakerFactory.s.sol";
@@ -20,14 +21,11 @@ import { IStakerLight } from "../../src/staker/interfaces/IStakerLight.sol";
 
 IIonPool constant ION_POOL = IIonPool(0x0000000000eaEbd95dAfcA37A39fd09745739b78);
 
-contract DeployIonTest is Test, BasicContractsFixture {
+contract DeployIonTest is Test, CommonStrategyScriptBase, BasicContractsFixture {
     using StdJson for string;
 
     DeployProxy internal proxyDeployer;
     IonStrategy internal strategy;
-
-    address internal tokenIn = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; // Mainnet wstETH
-    address internal tokenOut = address(ION_POOL); // Ion iweETH-wstETH token
 
     function setUp() public {
         init();
@@ -36,38 +34,31 @@ contract DeployIonTest is Test, BasicContractsFixture {
         address implementation = implDeployer.run("IonStrategy");
 
         proxyDeployer = new DeployProxy();
-        strategy = IonStrategy(
-            proxyDeployer.run({
-                _strategy: "IonStrategy",
-                _implementation: implementation,
-                _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040
-            })
-        );
+        address[] memory strategies = proxyDeployer.run({
+            _strategy: "IonStrategy",
+            _implementation: implementation,
+            _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040
+        });
+        strategy = IonStrategy(strategies[0]);
     }
 
     function test_ion_initialValues() public view {
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
-        string memory ionConfig = vm.readFile("./deployment-config/01_IonStrategyConfig.json");
+        address ownerFromConfig = commonConfig.readAddress(".INITIAL_OWNER");
+        address managerContainerFromConfig = commonConfig.readAddress(".MANAGER_CONTAINER");
+        address jigsawRewardTokenFromConfig = commonConfig.readAddress(".JIGSAW_REWARDS");
 
-        assertEq(address(strategy.owner()), commonConfig.readAddress(".INITIAL_OWNER"), "Owner initialized wrong");
-        assertEq(
-            address(strategy.managerContainer()),
-            commonConfig.readAddress(".MANAGER_CONTAINER"),
-            "Manager Container initialized wrong"
-        );
-        assertEq(address(strategy.ionPool()), ionConfig.readAddress(".ION_POOL"), "Ion Pool initialized wrong");
-        assertEq(strategy.tokenIn(), ionConfig.readAddress(".TOKEN_IN"), "tokenIn initialized wrong");
-        assertEq(strategy.tokenOut(), ionConfig.readAddress(".TOKEN_OUT"), "tokenOut initialized wrong");
+        for (uint256 i = 0; i < ionStrategyParams.length; i++) {
+            IStakerLight staker = strategy.jigsawStaker();
 
-        IStakerLight staker = strategy.jigsawStaker();
-
-        assertEq(staker.rewardToken(), commonConfig.readAddress(".JIGSAW_REWARDS"), "rewardToken initialized wrong");
-        assertEq(staker.rewardsDuration(), ionConfig.readUint(".REWARD_DURATION"), "rewardsDuration initialized wrong");
-        assertEq(
-            staker.periodFinish(),
-            block.timestamp + ionConfig.readUint(".REWARD_DURATION"),
-            "periodFinish initialized wrong"
-        );
+            assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
+            assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer init wrong");
+            assertEq(address(strategy.ionPool()), ionStrategyParams[i].ionPool, "Ion Pool initialized wrong");
+            assertEq(strategy.tokenIn(), ionStrategyParams[i].tokenIn, "tokenIn initialized wrong");
+            assertEq(strategy.tokenOut(), ionStrategyParams[i].tokenOut, "tokenOut initialized wrong");
+            assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
+            assertEq(staker.rewardsDuration(), ionStrategyParams[i].jigsawRewardDuration, "RewardsDuration init wrong");
+        }
     }
 }
 
