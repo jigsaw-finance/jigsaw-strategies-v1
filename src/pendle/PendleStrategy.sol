@@ -37,7 +37,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         address owner; // The address of the initial owner of the Strategy contract
         address managerContainer; // The address of the contract that contains the manager contract
         address pendleRouter; // The address of the Pendle's Router contract
-        address pendleMarket; // The Pendle's Router contract.
+        address pendleMarket; // The address of the Pendle's Market contract used for strategy.
         address stakerFactory; // The address of the StakerLightFactory contract
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
@@ -88,7 +88,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     address public override tokenIn;
 
     /**
-     * @notice The tokenOut address (rUSD) for the strategy.
+     * @notice The tokenOut address for the strategy.
      */
     address public override tokenOut;
 
