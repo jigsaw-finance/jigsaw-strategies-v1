@@ -81,14 +81,7 @@ deploy-stakerFactory: && _timer
 	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
 	
 	# Update deployments.json
-	FACTORY_ADDRESS=$(jq -r '.returns["1"].value' "broadcast/0_DeployStakerFactory.s.sol/$CHAIN_ID/run-latest.json")
-	jq --arg chainId "$CHAIN_ID" --arg address "$FACTORY_ADDRESS" \
-		'. + {STAKER_FACTORY: $address}' ./deployments.json > temp.json && mv temp.json ./deployments.json
-
-just-test: 
-	#!/usr/bin/env bash
-
-	FACTORY_ADDRESS=$(jq -r '.returns["1"].value' "broadcast/0_DeployStakerFactory.s.sol/$CHAIN_ID/run-latest.json")
+	FACTORY_ADDRESS=$(jq -r '.returns.stakerFactory.value' "broadcast/0_DeployStakerFactory.s.sol/$CHAIN_ID/run-latest.json")
 	jq --arg chainId "$CHAIN_ID" --arg address "$FACTORY_ADDRESS" \
 		'. + {STAKER_FACTORY: $address}' ./deployments.json > temp.json && mv temp.json ./deployments.json
 
@@ -102,7 +95,7 @@ deploy-impl STRATEGY: && _timer
 	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
 
 	# Update deployments.json
-	IMPL_ADDRESS=$(jq -r '.returns."0".value' "broadcast/1_DeployImpl.s.sol/"$CHAIN_ID"/run-latest.json")
+	IMPL_ADDRESS=$(jq -r '.returns.implementation.value' "broadcast/1_DeployImpl.s.sol/"$CHAIN_ID"/run-latest.json")
 	jq --arg address "$IMPL_ADDRESS" --arg strategy "$STRATEGY" \
 		'. + {($strategy + "_IMPL"):  $address}' ./deployments.json > temp.json && mv temp.json ./deployments.json
 
@@ -136,13 +129,3 @@ deploy-strategy STRATEGY SALT: && _timer
 
 	# Step 2: Deploy proxy
 	just deploy-proxy {{STRATEGY}} ${CHAIN}
-
-
-# Add strategy to the Strategy Manager
-# @dev MUST BE CALLED BY OWNER
-add-strategy STRATEGY_ADDR: && _timer
-	#!/usr/bin/env bash
-	echo "Adding" STRATEGY_ADDR "strategy to the Strategy Manager on "   CHAIN_ID "..."
-
-	forge script AddStrategy -s "run(address _strategy)" {{STRATEGY_ADDR}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
-	

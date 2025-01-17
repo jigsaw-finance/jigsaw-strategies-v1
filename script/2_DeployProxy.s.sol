@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.22;
 
-import "forge-std/console.sol";
-
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-import "./CommonStrategyScriptBase.sol";
+import "./CommonStrategyScriptBase.s.sol";
 
 contract DeployProxy is CommonStrategyScriptBase {
     using StdJson for string;

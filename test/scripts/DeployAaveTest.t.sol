@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.22;
 
-import "../../script/CommonStrategyScriptBase.sol";
+import "../../script/CommonStrategyScriptBase.s.sol";
 import "../fixtures/BasicContractsFixture.t.sol";
 
 import { stdJson as StdJson } from "forge-std/StdJson.sol";

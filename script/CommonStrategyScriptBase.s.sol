@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-
 import { Script, stdJson as StdJson } from "forge-std/Script.sol";
 
 import { AaveV3Strategy } from "../src/aave/AaveV3Strategy.sol";
