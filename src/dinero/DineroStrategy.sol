@@ -160,7 +160,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
      * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
      * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Aave receipt token (aToken).
+     * - tokenOut: The address of the PirexEth receipt token (pxEth).
      */
     function initialize(
         InitializerParams memory _params
