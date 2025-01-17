@@ -27,12 +27,11 @@ contract DeployPendleTest is Test, CommonStrategyScriptBase, BasicContractsFixtu
         DeployImpl implDeployer = new DeployImpl();
         address implementation = implDeployer.run("PendleStrategy");
 
+        // Save implementation address to deployments
+        Strings.toHexString(uint160(implementation), 20).write("./deployments.json", ".PendleStrategy_IMPL");
+
         proxyDeployer = new DeployProxy();
-        strategies = proxyDeployer.run({
-            _strategy: "PendleStrategy",
-            _implementation: implementation,
-            _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040
-        });
+        strategies = proxyDeployer.run({ _strategy: "PendleStrategy" });
     }
 
     function test_pendle_initialValues() public {

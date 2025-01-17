@@ -1,1 +1,13 @@
-{}
+{
+  "STAKER_FACTORY": "",
+  "AaveV3Strategy_IMPL": "",
+  "AaveV3Strategy_PROXIES": "",
+  "DineroStrategy_IMPL": "",
+  "DineroStrategy_PROXIES": "",
+  "IonStrategy_IMPL": "",
+  "IonStrategy_PROXIES": "",
+  "PendleStrategy_IMPL": "",
+  "PendleStrategy_PROXIES": "",
+  "ReservoirStablecoinStrategy_IMPL": "",
+  "ReservoirStablecoinStrategy_PROXIES": ""
+}

@@ -83,10 +83,12 @@ contract CommonStrategyScriptBase is Script {
         string calldata _strategy
     ) internal returns (bytes[] memory data) {
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
+        string memory deployments = vm.readFile("./deployments.json");
+
         address owner = commonConfig.readAddress(".INITIAL_OWNER");
         address managerContainer = commonConfig.readAddress(".MANAGER_CONTAINER");
-        address stakerFactory = commonConfig.readAddress(".STAKER_FACTORY");
         address jigsawRewardToken = commonConfig.readAddress(".JIGSAW_REWARDS");
+        address stakerFactory = deployments.readAddress(".STAKER_FACTORY");
 
         if (keccak256(bytes(_strategy)) == AAVE_STRATEGY) {
             string memory aaveConfig = vm.readFile("./deployment-config/01_AaveV3StrategyConfig.json");

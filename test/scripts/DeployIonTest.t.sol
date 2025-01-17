@@ -28,12 +28,11 @@ contract DeployIonTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         DeployImpl implDeployer = new DeployImpl();
         address implementation = implDeployer.run("IonStrategy");
 
+        // Save implementation address to deployments
+        Strings.toHexString(uint160(implementation), 20).write("./deployments.json", ".IonStrategy_IMPL");
+
         proxyDeployer = new DeployProxy();
-        strategies = proxyDeployer.run({
-            _strategy: "IonStrategy",
-            _implementation: implementation,
-            _salt: 0x3412d07bef5d0dcdb942ac1765d0b8f19d8ca2c4cc7a66b902ba9b1ebc080040
-        });
+        strategies = proxyDeployer.run({ _strategy: "IonStrategy" });
     }
 
     function test_ion_initialValues() public {
