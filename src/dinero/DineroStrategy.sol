@@ -84,7 +84,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- State variables --
 
     /**
-     * @notice The wETH token is utilized as the input token, which is later unwrapped to ETH and re-wrapped to
+     * @notice The WETH token is utilized as the input token, which is later unwrapped to ETH and re-wrapped to
      * facilitate Dinero investments.
      */
     address public override tokenIn;
@@ -125,11 +125,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
-     * @notice wETH address used for strategy
-     */
-    IWETH9 public weth;
-
-    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
@@ -165,7 +160,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
      * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
      * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Aave receipt token (aToken).
+     * - tokenOut: The address of the PirexEth receipt token (pxEth).
      */
     function initialize(
         InitializerParams memory _params
@@ -184,8 +179,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
-
-        weth = IWETH9(_getManager().WETH());
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -230,8 +223,8 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        // Swap wETH to ETH.
-        weth.withdraw(_amount);
+        // Swap WETH to ETH.
+        IWETH9(tokenIn).withdraw(_amount);
         // Deposit ETH to mint pxETH and stakes pxETH for autocompounding.
         pirexEth.deposit{ value: _amount }({ receiver: _recipient, shouldCompound: true });
 
@@ -330,7 +323,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         (uint256 postFeeAmount,) = pirexEth.instantRedeemWithPxEth(pxEthWithdrawn, address(this));
 
         // Swap ETH back to WETH.
-        weth.deposit{ value: postFeeAmount }();
+        IWETH9(tokenIn).deposit{ value: postFeeAmount }();
 
         // Transfer WETH to the `_recipient`.
         IERC20(tokenIn).safeTransfer(_recipient, postFeeAmount);
@@ -391,7 +384,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * - `Received` event to log the sender's address and the amount received.
      */
     receive() external payable {
-        if (msg.sender != address(weth) && msg.sender != address(pirexEth)) revert InvalidEthSender(msg.sender);
+        if (msg.sender != address(tokenIn) && msg.sender != address(pirexEth)) revert InvalidEthSender(msg.sender);
         emit Received({ from: msg.sender, amount: msg.value });
     }
 }
