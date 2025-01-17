@@ -83,10 +83,12 @@ contract CommonStrategyScriptBase is Script {
         string calldata _strategy
     ) internal returns (bytes[] memory data) {
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
+        string memory deployments = vm.readFile("./deployments.json");
+
         address owner = commonConfig.readAddress(".INITIAL_OWNER");
         address managerContainer = commonConfig.readAddress(".MANAGER_CONTAINER");
-        address stakerFactory = commonConfig.readAddress(".STAKER_FACTORY");
         address jigsawRewardToken = commonConfig.readAddress(".JIGSAW_REWARDS");
+        address stakerFactory = deployments.readAddress(".STAKER_FACTORY");
 
         if (keccak256(bytes(_strategy)) == AAVE_STRATEGY) {
             string memory aaveConfig = vm.readFile("./deployment-config/01_AaveV3StrategyConfig.json");
@@ -224,8 +226,18 @@ contract CommonStrategyScriptBase is Script {
             AaveStrategyParams({
                 rewardToken: address(0),
                 jigsawRewardDuration: 365 days,
-                tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,
-                tokenOut: 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
+                tokenIn: 0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8,
+                tokenOut: 0x16dA4541aD1807f4443d92D26044C1147406EB80
+            })
+        );
+
+        // Populate the individual initialization params per each Aave strategy, e.g.:
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8,
+                tokenOut: 0x16dA4541aD1807f4443d92D26044C1147406EB80
             })
         );
     }
