@@ -6,7 +6,7 @@ import { stdJson as StdJson } from "forge-std/StdJson.sol";
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
-import "../../script/CommonStrategyScriptBase.sol";
+import "../../script/CommonStrategyScriptBase.s.sol";
 import "../fixtures/BasicContractsFixture.t.sol";
 
 import { DeployStakerFactory } from "script/0_DeployStakerFactory.s.sol";
