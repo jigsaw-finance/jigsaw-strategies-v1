@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.22;
 
+import { stdJson as StdJson } from "forge-std/StdJson.sol";
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { HoldingManager } from "@jigsaw/src/HoldingManager.sol";
@@ -34,9 +36,10 @@ import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 import { IWETH9 as IWETH } from "../../src/dinero/interfaces/IWETH9.sol";
 
 abstract contract BasicContractsFixture is Test {
-    address internal constant OWNER = 0xf5a1Dc8f36ce7cf89a82BBd817F74EC56e7fDCd8;
-
+    using StdJson for string;
     using Math for uint256;
+
+    address internal constant OWNER = 0xf5a1Dc8f36ce7cf89a82BBd817F74EC56e7fDCd8;
 
     IReceiptToken public receiptTokenReference;
     HoldingManager internal holdingManager;
@@ -123,6 +126,17 @@ abstract contract BasicContractsFixture is Test {
         jRewards = address(new ERC20Mock());
         stakerFactory =
             new StakerLightFactory({ _initialOwner: OWNER, _referenceImplementation: address(new StakerLight()) });
+
+        // save deployed addresses to configs
+        Strings.toHexString(uint160(OWNER), 20).write("./deployment-config/00_CommonConfig.json", ".INITIAL_OWNER");
+        Strings.toHexString(uint160(address(managerContainer)), 20).write(
+            "./deployment-config/00_CommonConfig.json", ".MANAGER_CONTAINER"
+        );
+        Strings.toHexString(uint160(jRewards), 20).write("./deployment-config/00_CommonConfig.json", ".JIGSAW_REWARDS");
+        Strings.toHexString(uint160(address(strategyManager)), 20).write(
+            "./deployment-config/00_CommonConfig.json", ".STRATEGY_MANAGER"
+        );
+        Strings.toHexString(uint160(address(stakerFactory)), 20).write("./deployments.json", ".STAKER_FACTORY");
 
         vm.stopPrank();
     }
