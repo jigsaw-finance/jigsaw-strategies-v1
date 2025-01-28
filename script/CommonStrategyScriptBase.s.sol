@@ -300,6 +300,30 @@ contract CommonStrategyScriptBase is Script {
                 tokenOut: 0x0000000000eaEbd95dAfcA37A39fd09745739b78
             })
         );
+        ionStrategyParams.push(
+            IonStrategyParams({
+                ionPool: 0x00000000007C8105548f9d0eE081987378a6bE93,
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
+                tokenOut: 0x00000000007C8105548f9d0eE081987378a6bE93
+            })
+        );
+        ionStrategyParams.push(
+            IonStrategyParams({
+                ionPool: 0x0000000000eaEbd95dAfcA37A39fd09745739b78,
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
+                tokenOut: 0x0000000000E33e35EE6052fae87bfcFac61b1da9
+            })
+        );
+        ionStrategyParams.push(
+            IonStrategyParams({
+                ionPool: 0x0000000000eaEbd95dAfcA37A39fd09745739b78,
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,
+                tokenOut: 0x00000000008a3A77bd91bC738Ed2Efaa262c3763
+            })
+        );
     }
 
     function _populatePendleArray() internal {
