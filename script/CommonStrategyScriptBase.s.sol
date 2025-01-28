@@ -327,13 +327,57 @@ contract CommonStrategyScriptBase is Script {
     }
 
     function _populatePendleArray() internal {
-        // Populate the individual initialization params per each Pendle strategy, e.g.:
+        // LBTC
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0x676106576004EF54B4bD39Ce8d2B34069F86eb8f,
+                pendleMarket: 0x70b70ac0445c3ef04e314dfda6caafd825428221,
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x8236a87084f8b84306f72007f36f2618a5634494,
+                tokenOut: 0x70b70ac0445c3ef04e314dfda6caafd825428221,
+                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+            })
+        );
+
+        // USD0++
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0x048680f64d6dff1748ba6d9a01f578433787e24b,
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x35d8949372d46b7a3d5a56006ae77b215fc69bc0,
+                tokenOut: 0x048680f64d6dff1748ba6d9a01f578433787e24b,
+                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+            })
+        );
+
+        // eBTC
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0x523f9441853467477b4dde653c554942f8e17162,
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x657e8c867d8b37dcc18fa4caead9c45eb088c642,
+                tokenOut: 0x523f9441853467477b4dde653c554942f8e17162,
+                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+            })
+        );
+
+        // rswETH
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0xfd5cf95e8b886ace955057ca4dc69466e793fbbe,
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0xfae103dc9cf190ed75350761e95403b7b8afa6c0,
+                tokenOut: 0xfd5cf95e8b886ace955057ca4dc69466e793fbbe,
+                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+            })
+        );
+
+        // pufETH
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0x58612beb0e8a126735b19bb222cbc7fc2c162d2a,
                 jigsawRewardDuration: 365 days,
                 tokenIn: 0xD9A442856C234a39a81a089C06451EBAa4306a72,
-                tokenOut: 0x676106576004EF54B4bD39Ce8d2B34069F86eb8f,
+                tokenOut: 0x58612beb0e8a126735b19bb222cbc7fc2c162d2a,
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
