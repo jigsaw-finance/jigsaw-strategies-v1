@@ -78,8 +78,8 @@ deploy-stakerFactory: && _timer
 	echo "Deploying Staker Factory on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the StakerFactory
-	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
-	
+	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvv --etherscan-api-key ${TENDERLY_ETHERSCAN_API_KEY} --verify --verifier-url ${TENDERLY_VERIFIER_URL} --broadcast
+
 	# Update deployments.json
 	FACTORY_ADDRESS=$(jq -r '.returns.stakerFactory.value' "broadcast/0_DeployStakerFactory.s.sol/$CHAIN_ID/run-latest.json")
 	jq --arg chainId "$CHAIN_ID" --arg address "$FACTORY_ADDRESS" \
@@ -92,7 +92,7 @@ deploy-impl STRATEGY: && _timer
 	echo "Deploying implementation for " {{STRATEGY}} " on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the implementation
-	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url ${CHAIN}_RPC_URL --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
 
 	# Update deployments.json
 	IMPL_ADDRESS=$(jq -r '.returns.implementation.value' "broadcast/1_DeployImpl.s.sol/"$CHAIN_ID"/run-latest.json")
@@ -100,7 +100,7 @@ deploy-impl STRATEGY: && _timer
 		'. + {($strategy + "_IMPL"):  $address}' ./deployments.json > temp.json && mv temp.json ./deployments.json
 
 	echo "Implementation deployed at $IMPL_ADDRESS"
-	
+
 # Deploy proxy
 # This script deploys the proxy and links it to the deployed implementation.
 deploy-proxy STRATEGY: && _timer
@@ -109,7 +109,7 @@ deploy-proxy STRATEGY: && _timer
 
 	# Run the Forge script to deploy the proxy
 	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
-	
+
 	# Save proxy addresses
 	PROXIES=$(jq -c '.returns.proxies.value' "broadcast/2_DeployProxy.s.sol/${CHAIN_ID}/run-latest.json")
 
