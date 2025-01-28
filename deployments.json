@@ -1,10 +1,10 @@
 {
   "STAKER_FACTORY": "0x90A3B384F62f43Ba07938EA43aEEc35c2aBfeCa2",
-  "AaveV3Strategy_IMPL": "",
+  "AaveV3Strategy_IMPL": "0x2B07F89c9F574a890F5B8b7FddAfbBaE40f6Fde2",
   "AaveV3Strategy_PROXIES": "",
-  "DineroStrategy_IMPL": "",
+  "DineroStrategy_IMPL": "0xABc84968376556B5e5B3C3bda750D091a06De536",
   "DineroStrategy_PROXIES": "",
-  "IonStrategy_IMPL": "",
+  "IonStrategy_IMPL": "0xF01f4567586c3A707EBEC87651320b2dd9F4A287",
   "IonStrategy_PROXIES": "",
   "PendleStrategy_IMPL": "",
   "PendleStrategy_PROXIES": "",

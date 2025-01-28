@@ -330,10 +330,10 @@ contract CommonStrategyScriptBase is Script {
         // LBTC
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0x70b70ac0445c3ef04e314dfda6caafd825428221,
+                pendleMarket: 0x70B70Ac0445C3eF04E314DFdA6caafd825428221,
                 jigsawRewardDuration: 365 days,
-                tokenIn: 0x8236a87084f8b84306f72007f36f2618a5634494,
-                tokenOut: 0x70b70ac0445c3ef04e314dfda6caafd825428221,
+                tokenIn: 0x8236a87084f8B84306f72007F36F2618A5634494,
+                tokenOut: 0x70B70Ac0445C3eF04E314DFdA6caafd825428221,
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
@@ -341,10 +341,10 @@ contract CommonStrategyScriptBase is Script {
         // USD0++
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0x048680f64d6dff1748ba6d9a01f578433787e24b,
+                pendleMarket: 0x048680F64d6DFf1748ba6D9a01F578433787e24B,
                 jigsawRewardDuration: 365 days,
-                tokenIn: 0x35d8949372d46b7a3d5a56006ae77b215fc69bc0,
-                tokenOut: 0x048680f64d6dff1748ba6d9a01f578433787e24b,
+                tokenIn: 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0,
+                tokenOut: 0x048680F64d6DFf1748ba6D9a01F578433787e24B,
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
@@ -352,10 +352,10 @@ contract CommonStrategyScriptBase is Script {
         // eBTC
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0x523f9441853467477b4dde653c554942f8e17162,
+                pendleMarket: 0x523f9441853467477b4dDE653c554942f8E17162,
                 jigsawRewardDuration: 365 days,
-                tokenIn: 0x657e8c867d8b37dcc18fa4caead9c45eb088c642,
-                tokenOut: 0x523f9441853467477b4dde653c554942f8e17162,
+                tokenIn: 0x657e8C867D8B37dCC18fA4Caead9C45EB088C642,
+                tokenOut: 0x523f9441853467477b4dDE653c554942f8E17162,
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
@@ -363,10 +363,10 @@ contract CommonStrategyScriptBase is Script {
         // rswETH
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0xfd5cf95e8b886ace955057ca4dc69466e793fbbe,
+                pendleMarket: 0xfd5Cf95E8b886aCE955057cA4DC69466e793FBBE,
                 jigsawRewardDuration: 365 days,
-                tokenIn: 0xfae103dc9cf190ed75350761e95403b7b8afa6c0,
-                tokenOut: 0xfd5cf95e8b886ace955057ca4dc69466e793fbbe,
+                tokenIn: 0xFAe103DC9cf190eD75350761e95403b7b8aFa6c0,
+                tokenOut: 0xfd5Cf95E8b886aCE955057cA4DC69466e793FBBE,
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
@@ -374,10 +374,10 @@ contract CommonStrategyScriptBase is Script {
         // pufETH
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0x58612beb0e8a126735b19bb222cbc7fc2c162d2a,
+                pendleMarket: 0x58612beB0e8a126735b19BB222cbC7fC2C162D2a,
                 jigsawRewardDuration: 365 days,
                 tokenIn: 0xD9A442856C234a39a81a089C06451EBAa4306a72,
-                tokenOut: 0x58612beb0e8a126735b19bb222cbc7fc2c162d2a,
+                tokenOut: 0x58612beB0e8a126735b19BB222cbC7fC2C162D2a,
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
