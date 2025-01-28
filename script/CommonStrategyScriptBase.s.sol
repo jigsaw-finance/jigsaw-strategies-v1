@@ -8,6 +8,7 @@ import { DineroStrategy } from "../src/dinero/DineroStrategy.sol";
 import { IonStrategy } from "../src/ion/IonStrategy.sol";
 import { PendleStrategy } from "../src/pendle/PendleStrategy.sol";
 import { ReservoirStablecoinStrategy } from "../src/reservoir/ReservoirStablecoinStrategy.sol";
+import {USDCLike} from "../../jigsaw-protocol-v1/lib/forge-std/test/StdCheats.t.sol";
 
 contract CommonStrategyScriptBase is Script {
     using StdJson for string;
@@ -218,13 +219,73 @@ contract CommonStrategyScriptBase is Script {
     }
 
     function _populateAaveArray() internal {
-        // Populate the individual initialization params per each Aave strategy, e.g.:
+        // USDC
         aaveStrategyParams.push(
             AaveStrategyParams({
                 rewardToken: address(0),
                 jigsawRewardDuration: 365 days,
                 tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,
                 tokenOut: 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
+            })
+        );
+
+        // wstETH
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
+                tokenOut: 0x0B925eD163218f6662a35e0f0371Ac234f9E9371
+            })
+        );
+
+        // WETH
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,
+                tokenOut: 0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8
+            })
+        );
+
+        // USDT
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7,
+                tokenOut: 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a
+            })
+        );
+
+        // WBTC
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599,
+                tokenOut: 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8
+            })
+        );
+
+        // DAI
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0x6B175474E89094C44Da98b954EedeAC495271d0F,
+                tokenOut: 0x018008bfb33d285247A21d44E50697654f754e63
+            })
+        );
+
+        // weETH
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: 365 days,
+                tokenIn: 0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee,
+                tokenOut: 0xBdfa7b7893081B35Fb54027489e2Bc7A38275129
             })
         );
     }
