@@ -108,7 +108,7 @@ deploy-proxy STRATEGY: && _timer
 	echo "Deploying proxy for " {{STRATEGY}} " on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the proxy
-	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --etherscan-api-key ${TENDERLY_ETHERSCAN_API_KEY} --verify --verifier-url ${TENDERLY_VERIFIER_URL}
 
 	# Save proxy addresses
 	PROXIES=$(jq -c '.returns.proxies.value' "broadcast/2_DeployProxy.s.sol/${CHAIN_ID}/run-latest.json")
@@ -125,7 +125,7 @@ deploy-strategy STRATEGY SALT: && _timer
 	echo "Deploying full strategy " {{STRATEGY}} " on chain " ${CHAIN} "..."
 
 	# Step 1: Deploy implementation
-	just deploy-impl {{STRATEGY}} ${CHAIN}
+	just deploy-impl {{STRATEGY}}
 
 	# Step 2: Deploy proxy
-	just deploy-proxy {{STRATEGY}} ${CHAIN}
+	just deploy-proxy {{STRATEGY}}
