@@ -308,9 +308,11 @@ contract CommonStrategyScriptBase is Script {
                 tokenOut: 0x00000000007C8105548f9d0eE081987378a6bE93
             })
         );
+
+        // Check the correctness of the addresses and redeploy these Ion pools
         ionStrategyParams.push(
             IonStrategyParams({
-                ionPool: 0x0000000000eaEbd95dAfcA37A39fd09745739b78,
+                ionPool: 0x0000000000E33e35EE6052fae87bfcFac61b1da9,
                 jigsawRewardDuration: 365 days,
                 tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
                 tokenOut: 0x0000000000E33e35EE6052fae87bfcFac61b1da9
@@ -318,7 +320,7 @@ contract CommonStrategyScriptBase is Script {
         );
         ionStrategyParams.push(
             IonStrategyParams({
-                ionPool: 0x0000000000eaEbd95dAfcA37A39fd09745739b78,
+                ionPool: 0x00000000008a3A77bd91bC738Ed2Efaa262c3763,
                 jigsawRewardDuration: 365 days,
                 tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,
                 tokenOut: 0x00000000008a3A77bd91bC738Ed2Efaa262c3763
@@ -326,6 +328,7 @@ contract CommonStrategyScriptBase is Script {
         );
     }
 
+    // TODO: Fix Pendle deployment issue, ask for the correct addresses for Pendle markets
     function _populatePendleArray() internal {
         // LBTC
         pendleStrategyParams.push(
@@ -333,7 +336,7 @@ contract CommonStrategyScriptBase is Script {
                 pendleMarket: 0x70B70Ac0445C3eF04E314DFdA6caafd825428221,
                 jigsawRewardDuration: 365 days,
                 tokenIn: 0x8236a87084f8B84306f72007F36F2618A5634494,
-                tokenOut: 0x70B70Ac0445C3eF04E314DFdA6caafd825428221,
+                tokenOut: 0x8236a87084f8B84306f72007F36F2618A5634494,
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
@@ -397,7 +400,8 @@ contract CommonStrategyScriptBase is Script {
     }
 
     function _populateDineroArray() internal {
-        // Populate the initialization params for the DineroStrategy, e.g.:
+        // Dinero accepts only WETH,
+        // pxETH, stETH, pufETH is not accepted by any strategy
         dineroStrategyParams.push(
             DineroStrategyParams({
                 pirexEth: 0xD664b74274DfEB538d9baC494F3a4760828B02b0,
