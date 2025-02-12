@@ -336,6 +336,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
             uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
             if (fee > 0) {
                 address feeAddr = _getManager().feeAddress();
+                params.balanceDiff -= fee;
                 emit FeeTaken(tokenIn, feeAddr, fee);
                 IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
             }

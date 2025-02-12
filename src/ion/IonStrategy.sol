@@ -314,6 +314,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
             if (fee > 0) {
                 address feeAddr = _getManager().feeAddress();
+                params.balanceDiff -= fee;
                 emit FeeTaken(tokenIn, feeAddr, fee);
                 IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
             }
@@ -328,13 +329,8 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
 
-        emit Withdraw({
-            asset: _asset,
-            recipient: _recipient,
-            shares: _shares,
-            amount: params.balanceAfter - params.balanceBefore
-        });
-        return (params.balanceAfter - params.balanceBefore, params.investment);
+        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
+        return (params.balanceDiff, params.investment);
     }
 
     /**
