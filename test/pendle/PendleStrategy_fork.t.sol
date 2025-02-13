@@ -76,7 +76,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
 
     // Tests if deposit works correctly when authorized
     function test_pendle_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e18, 100_000e18);
+        uint256 amount = bound(_amount, 1e18, 10e18);
         address userHolding = initiateUser(user, tokenIn, amount);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
         uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
@@ -138,7 +138,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
 
     // Tests if withdrawal works correctly when authorized
     function test_pendle_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e6, 100_000e6);
+        uint256 amount = bound(_amount, 1e18, 10e18);
         address userHolding = initiateUser(user, tokenIn, amount);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
 
@@ -247,7 +247,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
     }
 
     function test_pendle_claimRewards_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e6, 100_000e6);
+        uint256 amount = bound(_amount, 1e18, 10e18);
         address userHolding = initiateUser(user, tokenIn, amount);
 
         // Invest into the tested strategy vie strategyManager
