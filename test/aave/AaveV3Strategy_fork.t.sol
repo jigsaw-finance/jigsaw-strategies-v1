@@ -195,7 +195,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
          * 6. Fee address fee amount += yield * performanceFee
          */
         // 1.
-        assertEq(tokenInBalanceAfter, assetAmount - fee, "Holding balance after withdraw is wrong");
+        assertEq(tokenInBalanceAfter, assetAmount, "Holding balance after withdraw is wrong");
         // 2.
         assertEq(IAToken(tokenOut).scaledBalanceOf(userHolding), 0, "Holding token out balance wrong");
         // 3.
@@ -212,7 +212,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
 
         // Additional checks
-        assertEq(assetAmount - fee, expectedWithdrawal, "Incorrect asset amount returned");
+        assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
         assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
     }
 

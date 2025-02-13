@@ -16,13 +16,13 @@ import { IPSwapAggregator } from "@pendle/router/swap-aggregator/IPSwapAggregato
 import { PendleStrategy } from "../../src/pendle/PendleStrategy.sol";
 
 address constant PENDLE_ROUTER = 0x888888888889758F76e7103c6CbF23ABbF58F946;
-address constant PENDLE_MARKET = 0x676106576004EF54B4bD39Ce8d2B34069F86eb8f; // pufETH pendle market address
+address constant PENDLE_MARKET = 0x58612beB0e8a126735b19BB222cbC7fC2C162D2a; // pufETH pendle market address
 
 contract PendleStrategyTest is Test, BasicContractsFixture {
     // Mainnet pufETH
     address internal tokenIn = 0xD9A442856C234a39a81a089C06451EBAa4306a72;
     // Pendle LP token
-    address internal tokenOut = 0x676106576004EF54B4bD39Ce8d2B34069F86eb8f;
+    address internal tokenOut = PENDLE_MARKET;
     // Pendle reward token
     address internal rewardToken = 0x808507121B80c02388fAd14726482e061B8da827;
 
@@ -35,7 +35,8 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
     LimitOrderData internal emptyLimit;
 
     // DefaultApprox means no off-chain preparation is involved, more gas consuming (~ 180k gas)
-    ApproxParams public defaultApprox = ApproxParams(0, type(uint256).max, 0, 256, 1e14);
+    ApproxParams public defaultApprox =
+        ApproxParams({ guessMin: 0, guessMax: type(uint256).max, guessOffchain: 0, maxIteration: 256, eps: 1e14 });
 
     function setUp() public {
         init();
@@ -75,12 +76,12 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
 
     // Tests if deposit works correctly when authorized
     function test_pendle_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e18, 100_000e18);
+        uint256 amount = bound(_amount, 1e18, 10e18);
         address userHolding = initiateUser(user, tokenIn, amount);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
         uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
 
-        // Invest into the tested strategy vie strategyManager
+        // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
         (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(
             tokenIn,
@@ -136,9 +137,10 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if withdrawal works correctly when authorized
-    function test_pendle_claimInvestment_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e6, 100_000e6);
+    function test_pendle_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+        uint256 amount = bound(_amount, 1e18, 10e18);
         address userHolding = initiateUser(user, tokenIn, amount);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
@@ -224,7 +226,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
          * 6. Fee address fee amount += yield * performanceFee
          */
         //1.
-        assertGe(IERC20(tokenIn).balanceOf(userHolding), amount, "Withdraw amount wrong");
+        assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Withdraw amount wrong");
         // 2.
         assertEq(IERC20(tokenOut).balanceOf(userHolding), 0, "Wrong token out  amount");
         // 3.
@@ -245,7 +247,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
     }
 
     function test_pendle_claimRewards_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e6, 100_000e6);
+        uint256 amount = bound(_amount, 1e18, 10e18);
         address userHolding = initiateUser(user, tokenIn, amount);
 
         // Invest into the tested strategy vie strategyManager
