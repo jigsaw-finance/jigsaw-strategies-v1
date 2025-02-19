@@ -120,7 +120,7 @@ deploy-proxy STRATEGY: && _timer
 	# echo "Proxies successfully deployed"
 
 # Deploy both implementation and proxy
-deploy-strategy STRATEGY SALT: && _timer
+deploy-strategy STRATEGY: && _timer
 	#!/usr/bin/env bash
 	echo "Deploying full strategy " {{STRATEGY}} " on chain " ${CHAIN} "..."
 
