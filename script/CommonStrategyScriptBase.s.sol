@@ -175,23 +175,26 @@ contract CommonStrategyScriptBase is Script {
         if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY) {
             _populateReservoirSavingStrategy();
 
-            data = new bytes[](1);
-            data[0] = abi.encodeCall(
-                ReservoirSavingStrategy.initialize,
-                ReservoirSavingStrategy.InitializerParams({
-                    owner: owner,
-                    managerContainer: managerContainer,
-                    stakerFactory: stakerFactory,
-                    jigsawRewardToken: jigsawRewardToken,
-                    creditEnforcer: reservoirSavingStrategyParams[0].creditEnforcer,
-                    pegStabilityModule: reservoirSavingStrategyParams[0].pegStabilityModule,
-                    savingModule: reservoirSavingStrategyParams[0].savingModule,
-                    rUSD: reservoirSavingStrategyParams[0].rUSD,
-                    jigsawRewardDuration: reservoirSavingStrategyParams[0].jigsawRewardDuration,
-                    tokenIn: reservoirSavingStrategyParams[0].tokenIn,
-                    tokenOut: reservoirSavingStrategyParams[0].tokenOut
-                })
-            );
+            data = new bytes[](reservoirSavingStrategyParams.length);
+
+            for (uint256 i = 0; i < reservoirSavingStrategyParams.length; i++) {
+                data[i] = abi.encodeCall(
+                    ReservoirSavingStrategy.initialize,
+                    ReservoirSavingStrategy.InitializerParams({
+                        owner: owner,
+                        managerContainer: managerContainer,
+                        stakerFactory: stakerFactory,
+                        jigsawRewardToken: jigsawRewardToken,
+                        creditEnforcer: reservoirSavingStrategyParams[i].creditEnforcer,
+                        pegStabilityModule: reservoirSavingStrategyParams[i].pegStabilityModule,
+                        savingModule: reservoirSavingStrategyParams[i].savingModule,
+                        rUSD: reservoirSavingStrategyParams[i].rUSD,
+                        jigsawRewardDuration: reservoirSavingStrategyParams[i].jigsawRewardDuration,
+                        tokenIn: reservoirSavingStrategyParams[i].tokenIn,
+                        tokenOut: reservoirSavingStrategyParams[i].tokenOut
+                    })
+                );
+            }
 
             return data;
         }
