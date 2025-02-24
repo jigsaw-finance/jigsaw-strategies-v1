@@ -3,6 +3,7 @@ pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
@@ -333,13 +334,9 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
         });
 
         params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** tokenOutDecimals;
-
-        // Since srUSD's price fluctuates relative to rUSD, we must calculate the current rUSD equivalent for the given
-        // srUSD amount. The Saving Module's `previewRedeem` function does not factor in the redeem fee applied during
-        // actual redemption. To get an accurate `assetsToWithdraw` value, we replicate the fee deduction logic here.
-        params.assetsToWithdraw = recipients[_recipient].totalShares * params.shareRatio
-            * ISavingModule(savingModule).currentPrice() / 1e8 * 1e6 / (1e6 + ISavingModule(savingModule).redeemFee())
-            / 10 ** tokenOutDecimals;
+        // Calculate rUSD to withdraw for shares, accounting for srUSD price fluctuation and redeem fee, and round up.
+        params.assetsToWithdraw = (_shares * ISavingModule(savingModule).currentPrice() * 1e6)
+            / (1e8 * (1e6 + ISavingModule(savingModule).redeemFee()));
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
         uint256 rUsdBalanceBefore = IERC20(rUSD).balanceOf(address(this));
