@@ -58,7 +58,7 @@ test-gas: && _timer
     forge test --gas-report
 
 coverage-all: && _timer
-	forge coverage --report lcov
+	forge coverage --report lcov --allow-failure
 	genhtml -o coverage --branch-coverage lcov.info --ignore-errors category
 
 docs: && _timer
@@ -69,7 +69,6 @@ mt test: && _timer
 
 mp verbosity path: && _timer
 	forge test -{{verbosity}} --match-path test/{{path}}
-
 
 # Deploy StakerFactory
 # This script deploys the StakerFactory contract and handles logging.
