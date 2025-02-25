@@ -67,9 +67,13 @@ Specific tests can be run using `forge test` conventions, specified in more deta
 
 ### Upcoming Release
 
-| Auditor  | Report Link |
-| -------- | ----------- |
-| Hallborn |             |
+| Auditor  | Strategy                | Report Link |
+| -------- | ----------------------- | ----------- |
+| Hallborn | AaveV3Strategy          |             |
+| Hallborn | DineroStrategy          |             |
+| Hallborn | IonStrategy             |             |
+| Hallborn | PendleStrategy          |             |
+| Hallborn | ReservoirSavingStrategy |             |
 
 ## About Jigsaw
 
