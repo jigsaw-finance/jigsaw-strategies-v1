@@ -231,7 +231,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
             data = new bytes[](dineroStrategyParams.length);
             for (uint256 i = 0; i < dineroStrategyParams.length; i++) {
                 _validateErc20(dineroStrategyParams[i].tokenIn);
-                _validateErc20(dineroStrategyParams[i].pirexEth);
+                _validatePirexEth(dineroStrategyParams[i].pirexEth);
                 _validateAutoPirexEth(dineroStrategyParams[i].autoPirexEth);
 
                 data[i] = abi.encodeCall(

@@ -26,6 +26,7 @@ import { ISavingModuleMin } from "./interfaces/reservoir/ISavingModuleMin.sol";
 
 // -- Dinero --
 import { IAutoPxEthMin } from "./interfaces/dinero/IAutoPxEthMin.sol";
+import { IPirexEthMin } from "./interfaces/dinero/IPirexEthMin.sol";
 
 /**
  * @notice Validates that an address implements the expected interface by checking there is code at the provided address
@@ -164,6 +165,15 @@ abstract contract ValidateInterface {
     }
 
     // -- Dinero validation --
+
+    function _validatePirexEth(
+        address pirexEth
+    ) internal view {
+        require(pirexEth.code.length > 0, "Pirex ETH address must have code");
+        IPirexEthMin(pirexEth).pxEth();
+        IPirexEthMin(pirexEth).pendingDeposit();
+        IPirexEthMin(pirexEth).outstandingRedemptions();
+    }
 
     function _validateAutoPirexEth(
         address autoPirexEth
