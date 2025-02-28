@@ -38,7 +38,15 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         jigsawRewardTokenFromConfig = commonConfig.readAddress(".JIGSAW_REWARDS");
     }
 
-    function test_aave_initialization() public {
+    function test_all_initializations() public {
+        aave_initialization();
+        dinero_initialization();
+        ion_initialization();
+        pendle_initialization();
+        reservoir_initialization();
+    }
+
+    function aave_initialization() public {
         DeployImpl implDeployer = new DeployImpl();
         address implementation = implDeployer.run("AaveV3Strategy");
 
@@ -70,7 +78,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         }
     }
 
-    function test_dinero_initialization() public {
+    function dinero_initialization() public {
         DeployImpl implDeployer = new DeployImpl();
         address implementation = implDeployer.run("DineroStrategy");
 
@@ -97,7 +105,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         }
     }
 
-    function test_ion_initialization() public {
+    function ion_initialization() public {
         DeployImpl implDeployer = new DeployImpl();
         address implementation = implDeployer.run("IonStrategy");
 
@@ -123,7 +131,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         }
     }
 
-    function test_pendle_initialization() public {
+    function pendle_initialization() public {
         DeployImpl implDeployer = new DeployImpl();
         address implementation = implDeployer.run("PendleStrategy");
 
@@ -154,7 +162,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         }
     }
 
-    function test_reservoir_initialization() public {
+    function reservoir_initialization() public {
         init();
 
         DeployImpl implDeployer = new DeployImpl();
