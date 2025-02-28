@@ -9,7 +9,9 @@ import { IonStrategy } from "../src/ion/IonStrategy.sol";
 import { PendleStrategy } from "../src/pendle/PendleStrategy.sol";
 import { ReservoirSavingStrategy } from "../src/reservoir/ReservoirSavingStrategy.sol";
 
-contract CommonStrategyScriptBase is Script {
+import { ValidateInterface } from "./validation/ValidateInterface.s.sol";
+
+contract CommonStrategyScriptBase is Script, ValidateInterface {
     using StdJson for string;
 
     struct AaveStrategyParams {
@@ -89,16 +91,26 @@ contract CommonStrategyScriptBase is Script {
         address jigsawRewardToken = commonConfig.readAddress(".JIGSAW_REWARDS");
         address stakerFactory = deployments.readAddress(".STAKER_FACTORY");
 
+        _validateManagerContainer(managerContainer);
+        _validateErc20(jigsawRewardToken);
+        _validateStakerFactory(stakerFactory);
+
         if (keccak256(bytes(_strategy)) == AAVE_STRATEGY) {
             string memory aaveConfig = vm.readFile("./deployment-config/01_AaveV3StrategyConfig.json");
             address aaveLendingPool = aaveConfig.readAddress(".LENDING_POOL");
             address aaveRewardsController = aaveConfig.readAddress(".REWARDS_CONTROLLER");
+
+            _validateAaveLendingPool(aaveLendingPool);
+            _validateAaveRewardsController(aaveRewardsController);
 
             _populateAaveArray();
 
             data = new bytes[](aaveStrategyParams.length);
 
             for (uint256 i = 0; i < aaveStrategyParams.length; i++) {
+                _validateErc20(aaveStrategyParams[i].tokenIn);
+                _validateAaveToken(aaveStrategyParams[i].tokenOut);
+
                 data[i] = abi.encodeCall(
                     AaveV3Strategy.initialize,
                     AaveV3Strategy.InitializerParams({
@@ -125,6 +137,9 @@ contract CommonStrategyScriptBase is Script {
             data = new bytes[](ionStrategyParams.length);
 
             for (uint256 i = 0; i < ionStrategyParams.length; i++) {
+                _validateIonPool(ionStrategyParams[i].ionPool);
+                _validateErc20(ionStrategyParams[i].tokenIn);
+
                 data[i] = abi.encodeCall(
                     IonStrategy.initialize,
                     IonStrategy.InitializerParams({
@@ -147,11 +162,16 @@ contract CommonStrategyScriptBase is Script {
             string memory pendleConfig = vm.readFile("./deployment-config/02_PendleStrategyConfig.json");
             address pendleRouter = pendleConfig.readAddress(".PENDLE_ROUTER");
 
+            _validatePendleRouter(pendleRouter);
+
             _populatePendleArray();
 
             data = new bytes[](pendleStrategyParams.length);
-
             for (uint256 i = 0; i < pendleStrategyParams.length; i++) {
+                _validatePendleMarket(pendleStrategyParams[i].pendleMarket);
+                _validateErc20(pendleStrategyParams[i].tokenIn);
+                _validateErc20(pendleStrategyParams[i].rewardToken);
+
                 data[i] = abi.encodeCall(
                     PendleStrategy.initialize,
                     PendleStrategy.InitializerParams({
@@ -176,8 +196,14 @@ contract CommonStrategyScriptBase is Script {
             _populateReservoirSavingStrategy();
 
             data = new bytes[](reservoirSavingStrategyParams.length);
-
             for (uint256 i = 0; i < reservoirSavingStrategyParams.length; i++) {
+                _validateCreditEnforcer(reservoirSavingStrategyParams[i].creditEnforcer);
+                _validatePegStabilityModule(reservoirSavingStrategyParams[i].pegStabilityModule);
+                _validateSavingModule(reservoirSavingStrategyParams[i].savingModule);
+                _validateErc20(reservoirSavingStrategyParams[i].tokenIn);
+                _validateRusd(reservoirSavingStrategyParams[i].rUSD, reservoirSavingStrategyParams[i].savingModule);
+                _validateSrUsd(reservoirSavingStrategyParams[i].tokenOut, reservoirSavingStrategyParams[i].savingModule);
+
                 data[i] = abi.encodeCall(
                     ReservoirSavingStrategy.initialize,
                     ReservoirSavingStrategy.InitializerParams({
