@@ -4,8 +4,8 @@ pragma solidity 0.8.22;
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { IPendleMarketMin } from "./interfaces/IPendleMarketMin.sol";
-import "./interfaces/IPendleRouterMin.sol";
+import "@pendle/interfaces/IPAllActionV3.sol";
+import { IPMarket, IPYieldToken, IStandardizedYield } from "@pendle/interfaces/IPMarket.sol";
 
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
@@ -105,7 +105,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice The Pendle's CreditEnforcer contract.
      */
-    IPendleRouterMin public pendleRouter;
+    IPAllActionV3 public pendleRouter;
 
     /**
      * @notice The Pendle's PegStabilityModule contract.
@@ -176,7 +176,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         __StrategyBase_init({ _initialOwner: _params.owner });
 
         managerContainer = IManagerContainer(_params.managerContainer);
-        pendleRouter = IPendleRouterMin(_params.pendleRouter);
+        pendleRouter = IPAllActionV3(_params.pendleRouter);
         pendleMarket = _params.pendleMarket;
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
@@ -322,7 +322,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(pendleRouter),
             _call: abi.encodeCall(
-                IPendleRouterMin.removeLiquiditySingleToken,
+                IPActionAddRemoveLiqV3.removeLiquiditySingleToken,
                 (
                     _recipient, // receiverOfUnderlying
                     pendleMarket,
@@ -380,13 +380,13 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     {
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: pendleMarket,
-            _call: abi.encodeCall(IPendleMarketMin.redeemRewards, _recipient)
+            _call: abi.encodeCall(IPMarket.redeemRewards, _recipient)
         });
 
         if (!success) revert(OperationsLib.getRevertMsg(returnData));
 
         // Get Pendle data.
-        rewardsList = IPendleMarketMin(pendleMarket).getRewardTokens();
+        rewardsList = IPMarket(pendleMarket).getRewardTokens();
         claimedAmounts = abi.decode(returnData, (uint256[]));
 
         // Get fee data.
