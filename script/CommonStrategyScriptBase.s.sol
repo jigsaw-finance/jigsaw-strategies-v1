@@ -362,15 +362,6 @@ contract CommonStrategyScriptBase is Script {
 
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0x08a152834de126d2ef83D612ff36e4523FD0017F,
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0, // wstETH
-                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
-            })
-        );
-
-        pendleStrategyParams.push(
-            PendleStrategyParams({
                 pendleMarket: 0xfd5Cf95E8b886aCE955057cA4DC69466e793FBBE,
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
                 tokenIn: 0xFAe103DC9cf190eD75350761e95403b7b8aFa6c0, // rswETH
