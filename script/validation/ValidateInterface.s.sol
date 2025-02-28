@@ -24,6 +24,9 @@ import { ICreditEnforcerMin } from "./interfaces/reservoir/ICreditEnforcerMin.so
 import { IPegStabilityModuleMin } from "./interfaces/reservoir/IPegStabilityModuleMin.sol";
 import { ISavingModuleMin } from "./interfaces/reservoir/ISavingModuleMin.sol";
 
+// -- Dinero --
+import { IAutoPxEthMin } from "./interfaces/dinero/IAutoPxEthMin.sol";
+
 /**
  * @notice Validates that an address implements the expected interface by checking there is code at the provided address
  * and calling a few functions.
@@ -158,5 +161,17 @@ abstract contract ValidateInterface {
             address(ISavingModuleMin(savingModule).srusd()) == srUSD,
             "srUSD address from savings module must match srUSD address"
         );
+    }
+
+    // -- Dinero validation --
+
+    function _validateAutoPirexEth(
+        address autoPirexEth
+    ) internal view {
+        require(autoPirexEth.code.length > 0, "Auto Pirex ETH address must have code");
+        IAutoPxEthMin(autoPirexEth).totalAssets();
+        IAutoPxEthMin(autoPirexEth).lastTimeRewardApplicable();
+        IAutoPxEthMin(autoPirexEth).rewardPerToken();
+        IAutoPxEthMin(autoPirexEth).withdrawalPenalty();
     }
 }

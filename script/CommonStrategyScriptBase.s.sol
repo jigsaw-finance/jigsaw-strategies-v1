@@ -228,21 +228,27 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         if (keccak256(bytes(_strategy)) == DINERO_STRATEGY) {
             _populateDineroArray();
 
-            data = new bytes[](1);
-            data[0] = abi.encodeCall(
-                DineroStrategy.initialize,
-                DineroStrategy.InitializerParams({
-                    owner: owner,
-                    managerContainer: managerContainer,
-                    stakerFactory: stakerFactory,
-                    jigsawRewardToken: jigsawRewardToken,
-                    pirexEth: dineroStrategyParams[0].pirexEth,
-                    autoPirexEth: dineroStrategyParams[0].autoPirexEth,
-                    jigsawRewardDuration: dineroStrategyParams[0].jigsawRewardDuration,
-                    tokenIn: dineroStrategyParams[0].tokenIn,
-                    tokenOut: dineroStrategyParams[0].tokenOut
-                })
-            );
+            data = new bytes[](dineroStrategyParams.length);
+            for (uint256 i = 0; i < dineroStrategyParams.length; i++) {
+                _validateErc20(dineroStrategyParams[i].tokenIn);
+                _validateErc20(dineroStrategyParams[i].pirexEth);
+                _validateAutoPirexEth(dineroStrategyParams[i].autoPirexEth);
+
+                data[i] = abi.encodeCall(
+                    DineroStrategy.initialize,
+                    DineroStrategy.InitializerParams({
+                        owner: owner,
+                        managerContainer: managerContainer,
+                        stakerFactory: stakerFactory,
+                        jigsawRewardToken: jigsawRewardToken,
+                        pirexEth: dineroStrategyParams[i].pirexEth,
+                        autoPirexEth: dineroStrategyParams[i].autoPirexEth,
+                        jigsawRewardDuration: dineroStrategyParams[i].jigsawRewardDuration,
+                        tokenIn: dineroStrategyParams[i].tokenIn,
+                        tokenOut: dineroStrategyParams[i].tokenOut
+                    })
+                );
+            }
 
             return data;
         }
