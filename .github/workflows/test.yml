@@ -27,8 +27,6 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
 
       - name: Show Forge version
         run: forge --version
@@ -46,7 +44,7 @@ jobs:
         run: forge test --match-path "test/scripts/*"
       - name: Run Forge Utils tests
         run: forge test --match-path "test/utils/*"
-      - name: Run Forge Ataker tests
+      - name: Run Forge Staker tests
         run: forge test --match-path "test/staker/*"
       - name: Run Forge Aave tests
         run: forge test --match-path "test/aave/*"
