@@ -37,9 +37,19 @@ jobs:
         run: |
           touch .env
           echo MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }} >> .env
+          echo DEPLOYER_PRIVATE_KEY=${{ secrets.DEPLOYER_PRIVATE_KEY }} >> .env
 
       - name: Run Forge build
         run: forge build --sizes
 
       - name: Run Forge tests
-        run: forge test -vvv
+        run: |
+          forge test --match-path "test/scripts/*"
+          forge test --match-path "test/aave/*"
+          forge test --match-path "test/dinero/*"
+          forge test --match-path "test/ion/*"
+          forge test --match-path "test/pendle/*"
+          forge test --match-path "test/reservoir/*"
+          forge test --match-path "test/staker/*"
+          forge test --match-path "test/utils/*"
+
