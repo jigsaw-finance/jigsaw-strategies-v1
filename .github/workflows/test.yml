@@ -41,18 +41,18 @@ jobs:
         run: forge build --sizes
 
       - name: Run Forge scripts
-        run: forge test --match-path "test/scripts/*"
+        run: forge test --match-path "test/scripts/*.*"
       - name: Run Forge Utils tests
-        run: forge test --match-path "test/utils/*"
+        run: forge test --match-path "test/utils/*.*"
       - name: Run Forge Staker tests
-        run: forge test --match-path "test/staker/*"
+        run: forge test --match-path "test/staker/*.*"
       - name: Run Forge Aave tests
-        run: forge test --match-path "test/aave/*"
+        run: forge test --match-path "test/aave/*.*"
       - name: Run Forge Dinero tests
-        run: forge test --match-path "test/dinero/*"
+        run: forge test --match-path "test/dinero/*.*"
       - name: Run Forge Ion tests
-        run: forge test --match-path "test/ion/*"
+        run: forge test --match-path "test/ion/*.*"
       - name: Run Forge Pendle tests
-        run: forge test --match-path "test/pendle/*"
+        run: forge test --match-path "test/pendle/*.*"
       - name: Run Forge Reservoir tests
-        run: forge test --match-path "test/reservoir/*"
+        run: forge test --match-path "test/reservoir/*.*"
