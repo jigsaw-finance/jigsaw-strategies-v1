@@ -131,6 +131,16 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public constant DECIMAL_DIFF = 1e12;
 
     /**
+     * @notice The precision used for the Reservoir's fee.
+     */
+    uint256 public constant RESERVOIR_FEE_PRECISION = 1e6;
+
+    /**
+     * @notice The precision used for the Reservoir's rUSD price.
+     */
+    uint256 public constant RESERVOIR_PRICE_PRECISION = 1e8;
+
+    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
@@ -334,8 +344,8 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
 
         params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** tokenOutDecimals;
         // Calculate rUSD to withdraw for shares, accounting for srUSD price fluctuation and redeem fee, and round up.
-        params.assetsToWithdraw = (_shares * ISavingModule(savingModule).currentPrice() * 1e6)
-            / (1e8 * (1e6 + ISavingModule(savingModule).redeemFee()));
+        params.assetsToWithdraw = (_shares * ISavingModule(savingModule).currentPrice() * RESERVOIR_FEE_PRECISION)
+            / (RESERVOIR_PRICE_PRECISION * (RESERVOIR_FEE_PRECISION + ISavingModule(savingModule).redeemFee()));
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
         uint256 rUsdBalanceBefore = IERC20(rUSD).balanceOf(address(this));
