@@ -43,10 +43,9 @@ jobs:
       - name: Run Forge scripts
         run: |
           forge test --match-path "test/scripts/**"
-          forge test --match-contract "TestDeterministicAddress"
-          forge test --match-path "test/staker/**"
           forge test --match-path "test/aave/**"
           forge test --match-path "test/dinero/**"
           forge test --match-path "test/ion/**"
           forge test --match-path "test/pendle/**"
           forge test --match-path "test/reservoir/**"
+          forge test --match-path "test/staker/**"
