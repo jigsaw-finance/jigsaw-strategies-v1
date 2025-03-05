@@ -3,7 +3,6 @@ pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
@@ -130,6 +129,16 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice The factor used to adjust values from 18 decimal precision (shares) to 6 decimal precision (USDC).
      */
     uint256 public constant DECIMAL_DIFF = 1e12;
+
+    /**
+     * @notice The precision used for the Reservoir's fee.
+     */
+    uint256 public constant RESERVOIR_FEE_PRECISION = 1e6;
+
+    /**
+     * @notice The precision used for the Reservoir's rUSD price.
+     */
+    uint256 public constant RESERVOIR_PRICE_PRECISION = 1e8;
 
     /**
      * @notice A mapping that stores participant details by address.
@@ -335,8 +344,8 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
 
         params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** tokenOutDecimals;
         // Calculate rUSD to withdraw for shares, accounting for srUSD price fluctuation and redeem fee, and round up.
-        params.assetsToWithdraw = (_shares * ISavingModule(savingModule).currentPrice() * 1e6)
-            / (1e8 * (1e6 + ISavingModule(savingModule).redeemFee()));
+        params.assetsToWithdraw = (_shares * ISavingModule(savingModule).currentPrice() * RESERVOIR_FEE_PRECISION)
+            / (RESERVOIR_PRICE_PRECISION * (RESERVOIR_FEE_PRECISION + ISavingModule(savingModule).redeemFee()));
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
         uint256 rUsdBalanceBefore = IERC20(rUSD).balanceOf(address(this));
