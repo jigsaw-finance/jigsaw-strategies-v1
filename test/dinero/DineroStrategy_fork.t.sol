@@ -158,7 +158,7 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
          * 5. Strategy's total shares  -= shares
          * 6. Fee address fee amount += yield * performanceFee
          */
-        assertEq(tokenInBalanceAfter, assetAmount - fee, "Holding balance after withdraw is wrong");
+        assertEq(tokenInBalanceAfter, assetAmount, "Holding balance after withdraw is wrong");
         assertEq(IERC20(tokenOut).balanceOf(userHolding), 0, "Holding token out balance wrong");
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),

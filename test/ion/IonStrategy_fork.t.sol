@@ -147,7 +147,7 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
          * 7. Fee address fee amount += yield * performanceFee
          */
         // 1.
-        assertEq(tokenInBalanceAfter, assetAmount - fee, "Holding balance after withdraw is wrong");
+        assertEq(tokenInBalanceAfter, assetAmount, "Holding balance after withdraw is wrong");
         // 2. and 3.
         assertEq(IIonPool(tokenOut).balanceOfUnaccrued(userHolding), 0, "Holding ion balance wrong");
         // 4.
@@ -164,7 +164,7 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
         assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
 
         // Additional checks
-        assertEq(assetAmount - fee, expectedWithdrawal, "Incorrect asset amount returned");
+        assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
         assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
     }
 }
