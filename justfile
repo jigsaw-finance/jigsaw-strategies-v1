@@ -51,8 +51,19 @@ build: && _timer
 format: && _timer
 	forge fmt
 
+test-current: && _timer
+    forge test -vvvvv --match-test "test_elixir_deposit_when_authorized"
+
 test-all: && _timer
-	forge test
+    forge test --match-path "test/scripts/**"
+    forge test --match-path "test/utils/**"
+    forge test --match-path "test/staker/**"
+    forge test --match-path "test/aave/**"
+    forge test --match-path "test/dinero/**"
+    forge test --match-path "test/ion/**"
+    forge test --match-path "test/pendle/**"
+    forge test --match-path "test/reservoir/**"
+
 
 test-gas: && _timer
     forge test --gas-report

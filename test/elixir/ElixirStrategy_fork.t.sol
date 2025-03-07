@@ -7,10 +7,9 @@ import "forge-std/Test.sol";
 
 import "forge-std/console.sol";
 import {ElixirStrategy} from "../../src/elixir/ElixirStrategy.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
-import {IAutoPxEth} from "../../src/dinero/interfaces/IAutoPxEth.sol";
 import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -18,10 +17,13 @@ import {StakerLight} from "../../src/staker/StakerLight.sol";
 import {StakerLightFactory} from "../../src/staker/StakerLightFactory.sol";
 
 contract ElixirStrategyTest is Test, BasicContractsFixture {
+    using SafeERC20 for IERC20;
     // Mainnet USDT
     address internal tokenIn = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    // sdeUSD token
+    address internal tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326;
     // deUSD token
-    address internal tokenOut = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
+    address internal deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
 
     ElixirStrategy internal strategy;
 
@@ -36,15 +38,17 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             jigsawRewardToken: jRewards,
             jigsawRewardDuration: 60 days,
             tokenIn: tokenIn,
-            tokenOut: tokenOut
+            tokenOut: tokenOut,
+            deUSD: deUSD
         });
 
         bytes memory data = abi.encodeCall(ElixirStrategy.initialize, initParams);
         address proxy = address(new ERC1967Proxy(strategyImplementation, data));
-        strategy = ElixirStrategy(payable(proxy));
+        strategy = ElixirStrategy(proxy);
 
         // Add tested strategy to the StrategyManager for integration testing purposes
         vm.startPrank((OWNER));
+        manager.whitelistToken(tokenIn);
         strategyManager.addStrategy(address(strategy));
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
@@ -55,13 +59,14 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         vm.stopPrank();
     }
 
-//    // Tests if deposit works correctly when authorized
-//    function test_elixir_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-//        uint256 amount = bound(_amount, 1e18, 10e18);
-//        address userHolding = initiateUser(user, tokenIn, amount, false);
+    // Tests if deposit works correctly when authorized
+    function test_elixir_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+        uint256 amount = bound(_amount, 1e6, 10e6);
+        address userHolding = initiateUser(user, tokenIn, amount);
+
 //        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
 //        uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
-//
+
 //        // Invest into the tested strategy vie strategyManager
 //        vm.prank(user, user);
 //        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
@@ -92,14 +97,14 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 //        // Additional checks
 //        assertApproxEqRel(
 //            tokenOutBalanceAfter,
-//            strategy.autoPirexEth().convertToShares(amount),
+//            amount,
 //            0.01e18,
 //            "Wrong balance in Elixir after stake"
 //        );
 //        assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
 //        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-//    }
-//
+    }
+
 //    // Tests if withdraw works correctly when authorized
 //    function test_elixir_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
 //        uint256 amount = bound(_amount, 1e18, 10e18);

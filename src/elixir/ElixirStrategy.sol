@@ -18,7 +18,7 @@ import {StrategyConfigLib} from "../libraries/StrategyConfigLib.sol";
 
 /**
  * @title ElixirStrategy
- * @dev Strategy used for srUSD minting.
+ * @dev Strategy used for deUSD minting.
  * @author Hovooo (@hovooo)
  */
 contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
@@ -37,6 +37,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of Elixir's receipt token
+        address deUSD; // The Elixir's deUSD stablecoin.
     }
 
     /**
@@ -73,7 +74,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     address public override tokenIn;
 
     /**
-     * @notice The tokenOut address (srUSD) for the strategy.
+     * @notice The tokenOut address (deUSD) for the strategy.
      */
     address public override tokenOut;
 
@@ -86,6 +87,11 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice The receipt token associated with this strategy.
      */
     IReceiptToken public override receiptToken;
+
+    /**
+     * @notice The Elixir's Stablecoin deUSD.
+     */
+    address public deUSD;
 
     /**
      * @notice The Jigsaw Rewards Controller contract.
@@ -143,6 +149,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
+        require(_params.deUSD != address(0), "3036");
 
         __StrategyBase_init({_initialOwner: _params.owner});
 
@@ -151,6 +158,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
         rewardToken = address(0);
+        deUSD = _params.deUSD;
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -191,26 +199,26 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         address _asset,
         uint256 _amount,
         address _recipient,
-        bytes calldata
+        bytes calldata // Maybe need custom typed data
     ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
-//        uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
-//
-//        // Transfer USDTs from recipient to this contract
+//        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
+//        uint256 deUsdBalanceBefore = IERC20(tokenIn).balanceOf(address(this));
+
+//        // Transfer USDTs from recipient to this contract twice ???
 //        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 //
 //        // Swap USDT to deUSD on Uniswap
-//        swapExactOutputMultihop();
+//        // swapExactInputMultihop();
 //
-//        uint256 deUSDAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
+//        uint256 deUSDAmount = IERC20(tokenOut).balanceOf(address(this)) - deUsdBalanceBefore;
 //
 //        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
 //
-//        // stake deUSD, get stdeUSD
+//        // stake deUSD, get sdeUSD
 //        // OperationsLib.safeApprove({ token: rUSD, to: address(savingModule), value: rUsdAmount });
-//        // creditEnforcer.mintSavingcoin({ to: _recipient, amount: rUsdAmount });
+//        // creditEnforcer.mintSavingcoin({ to: _recipient, amount: rUsdAmount }); // pseudo code
 //
 //        uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
 //
@@ -289,7 +297,13 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 //        });
 //
 //        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** tokenOutDecimals;
-//        // Calculate rUSD to withdraw for shares, accounting for srUSD price fluctuation and redeem fee, and round up.
+//        // Calculate rUSD to withdraw for shares, accounting for deUSD price fluctuation and redeem fee, and round up.
+//
+//        // USDT tokenIn
+//        // steUSD tokenOut - vary price related to deUSD
+//
+//
+//        // Important to double check
 //        params.assetsToWithdraw = (_shares * ISavingModule(savingModule).currentPrice() * 1e6)
 //            / (1e8 * (1e6 + ISavingModule(savingModule).redeemFee()));
 //
@@ -392,7 +406,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 //     *
 //     * @return amountIn The amount of `_tokenIn` spent to receive the desired `amountOut` of `tokenOut`.
 //     */
-//    function swapExactOutputMultihop(
+//    function swapExactInputMultihop(
 //        address _tokenIn,
 //        bytes calldata _swapPath,
 //        address _userHolding,
