@@ -61,8 +61,10 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
     // Tests if deposit works correctly when authorized
     function test_elixir_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+        // added to prevent USDT safeTransferFrom revert issue
+        assumeNotPrecompile(user);
         uint256 amount = bound(_amount, 1e6, 10e6);
-        address userHolding = initiateUser(user, tokenIn, amount); // <------ issues with transferFrom
+        address userHolding = initiateUser(user, tokenIn, amount);
 
 //        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
 //        uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
