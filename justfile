@@ -51,7 +51,7 @@ build: && _timer
 format: && _timer
 	forge fmt
 
-test-current: && _timer
+test-elixir: && _timer
     forge test -vvvvv --match-test "test_elixir_deposit_when_authorized"
 
 test-all: && _timer
