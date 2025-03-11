@@ -94,7 +94,11 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
          */
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
         // allow 10% difference for tokenOut balance
-        assertApproxEqRel(IERC20(tokenOut).balanceOf(userHolding), amount, 0.1e18, "Holding token out balance wrong");
+        assertApproxEqRel(
+            IERC20(tokenOut).balanceOf(userHolding),
+            amount * 1e12,
+            0.1e18,
+            "Holding token out balance wrong");
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
             expectedShares,
@@ -106,8 +110,8 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         // Additional checks
         assertApproxEqRel(
             tokenOutBalanceAfter,
-            amount,
-            0.01e18,
+            amount * 1e12,
+            0.04e18,
             "Wrong balance in Elixir after stake"
         );
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");

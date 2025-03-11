@@ -2,7 +2,10 @@
 pragma solidity 0.8.22;
 pragma abicoder v2;
 
-import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IHolding} from "@jigsaw/src/interfaces/core/IHolding.sol";
 import {IManagerContainer} from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
 
@@ -227,6 +230,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
             _tokenIn: _asset,
             _deadline: block.timestamp,
             _amountIn: _amount,
+            _recipient: address(this),
             _swapPath: _swapPath
         });
 
@@ -235,8 +239,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
 
         // stake deUSD, get sdeUSD
-        // OperationsLib.safeApprove({ token: rUSD, to: address(savingModule), value: rUsdAmount });
-        // creditEnforcer.mintSavingcoin({ to: _recipient, amount: rUsdAmount }); // pseudo code
+        OperationsLib.safeApprove({token: deUSD, to: address(tokenOut), value: deUSDAmount});
+        IERC4626(tokenOut).deposit({assets: deUSDAmount, receiver: _recipient}); // pseudo code
 
         uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
 
@@ -417,6 +421,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _tokenIn The address of the inbound asset.
      * @param _deadline The timestamp representing the latest time by which the swap operation must be completed.
      * @param _amountIn The desired amount of `tokenOut`.
+     * @param _recipient The address of recipient.
      * @param _swapPath The optimal path for the multi-hop swap.
      *
      * @return amountOut The amount of `_tokenIn` spent to receive the desired `amountOut` of `tokenOut`.
@@ -425,20 +430,21 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         address _tokenIn,
         uint256 _deadline,
         uint256 _amountIn,
+        address _recipient,
         bytes calldata _swapPath
     ) private returns (uint256 amountOut) {
         ISwapRouter swapRouter = ISwapRouter(UniswapSwapRouter);
 
         // Approve the router to spend USDT.
-        TransferHelper.safeApprove(_tokenIn, address(swapRouter), _amountIn);
+        OperationsLib.safeApprove(_tokenIn, address(swapRouter), _amountIn);
 
         // Multiple pool swaps are encoded through bytes called a `path`. A path is a sequence of token addresses and poolFees that define the pools used in the swaps.
         // The format for pool encoding is (tokenIn, fee, tokenOut/tokenIn, fee, tokenOut) where tokenIn/tokenOut parameter is the shared token across the pools.
         // Since we are swapping DAI to USDC and then USDC to WETH9 the path encoding is (DAI, 0.3%, USDC, 0.3%, WETH9).
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
             path: _swapPath,
-            recipient: address(this),
-            deadline: block.timestamp,
+            recipient: _recipient,
+            deadline: _deadline,
             amountIn: _amountIn,
             amountOutMinimum: 0
         });
