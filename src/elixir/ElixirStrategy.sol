@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
+pragma abicoder v2;
 
 import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IHolding} from "@jigsaw/src/interfaces/core/IHolding.sol";
 import {IManagerContainer} from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
-import {IReceiptToken} from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 
+import {IReceiptToken} from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import {IStakerLightFactory} from "../staker/interfaces/IStakerLightFactory.sol";
+
 import {IStakerLight} from "../staker/interfaces/IStakerLight.sol";
 import {IStrategy} from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
-import {OperationsLib} from "../libraries/OperationsLib.sol";
+import {ISwapManager} from "@jigsaw/src/interfaces/core/ISwapManager.sol";
+import {ISwapRouter} from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import {TransferHelper} from "@jigsaw/lib/v3-periphery/contracts/libraries/TransferHelper.sol";
 
+import {OperationsLib} from "../libraries/OperationsLib.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {StrategyBaseUpgradeable} from "../StrategyBaseUpgradeable.sol";
 import {StrategyConfigLib} from "../libraries/StrategyConfigLib.sol";
@@ -23,6 +28,7 @@ import {StrategyConfigLib} from "../libraries/StrategyConfigLib.sol";
  */
 contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
+    address internal constant UniswapSwapRouter = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 
     // -- Custom types --
 
@@ -65,6 +71,15 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param amount The amount of the fee.
      */
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
+
+    /**
+    * @notice Emitted when exact output swap is executed on UniswapV3 Pool.
+     * @param holding The holding address associated with the user.
+     * @param path The optimal path for the multi-hop swap.
+     * @param amountIn The amount of the input token used for the swap.
+     * @param amountOut The amount of the output token received after the swap.
+     */
+    event exactInputSwap(address indexed holding, bytes path, uint256 amountIn, uint256 amountOut);
 
     // -- State variables --
 
@@ -199,52 +214,54 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         address _asset,
         uint256 _amount,
         address _recipient,
-        bytes calldata // Maybe need custom typed data
+        bytes calldata _swapPath
     ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-//        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
-//        uint256 deUsdBalanceBefore = IERC20(tokenIn).balanceOf(address(this));
+        // Transfer USDTs from recipient to this contract
+        IHolding(_recipient).transfer({_token: _asset, _to: address(this), _amount: _amount});
+        uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
 
-//        // Transfer USDTs from recipient to this contract twice ???
-//        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
-//
-//        // Swap USDT to deUSD on Uniswap
-//        // swapExactInputMultihop();
-//
-//        uint256 deUSDAmount = IERC20(tokenOut).balanceOf(address(this)) - deUsdBalanceBefore;
-//
-//        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
-//
-//        // stake deUSD, get sdeUSD
-//        // OperationsLib.safeApprove({ token: rUSD, to: address(savingModule), value: rUsdAmount });
-//        // creditEnforcer.mintSavingcoin({ to: _recipient, amount: rUsdAmount }); // pseudo code
-//
-//        uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
-//
-//        recipients[_recipient].investedAmount += _amount;
-//        recipients[_recipient].totalShares += shares;
-//
-//        _mint({
-//            _receiptToken: receiptToken,
-//            _recipient: _recipient,
-//            _amount: shares,
-//            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
-//        });
-//
-//        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
-//
-//        emit Deposit({
-//            asset: _asset,
-//            tokenIn: tokenIn,
-//            assetAmount: _amount,
-//            tokenInAmount: _amount,
-//            shares: shares,
-//            recipient: _recipient
-//        });
-//
-//        return (shares, _amount);
-        return (0, _amount);
+        // Swap USDT to deUSD on Uniswap
+        swapExactInputMultihop({
+            _tokenIn: _asset,
+            _deadline: block.timestamp,
+            _amountIn: _amount,
+            _swapPath: _swapPath
+        });
+
+        uint256 deUSDAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
+
+        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
+
+        // stake deUSD, get sdeUSD
+        // OperationsLib.safeApprove({ token: rUSD, to: address(savingModule), value: rUsdAmount });
+        // creditEnforcer.mintSavingcoin({ to: _recipient, amount: rUsdAmount }); // pseudo code
+
+        uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
+
+        recipients[_recipient].investedAmount += _amount;
+        recipients[_recipient].totalShares += shares;
+
+        _mint({
+            _receiptToken: receiptToken,
+            _recipient: _recipient,
+            _amount: shares,
+            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
+        });
+
+        jigsawStaker.deposit({_user: _recipient, _amount: shares});
+
+        emit Deposit({
+            asset: _asset,
+            tokenIn: tokenIn,
+            assetAmount: _amount,
+            tokenInAmount: _amount,
+            shares: shares,
+            recipient: _recipient
+        });
+
+        return (shares, _amount);
     }
 
     /**
@@ -382,126 +399,55 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         return address(receiptToken);
     }
 
-//    // -- Utilities --
-//
-//    /**
-//     * @notice Swaps a minimum possible amount of `_tokenIn` for a fixed amount of `tokenOut` via `_swapPath`.
-//     *
-//     * @notice Requirements:
-//     * - The jUSD UniswapV3 Pool must be valid.
-//     * - The caller must be Liquidation Manager Contract.
-//     *
-//     * @notice Effects:
-//     * - Approves and transfers `tokenIn` from the `_userHolding`.
-//     * - Approves UniswapV3 Router to transfer `tokenIn` from address(this) to perform the `exactOutput` swap.
-//     * - Executes the `exactOutput` swap
-//     * - Handles any excess tokens.
-//     *
-//     * @param _tokenIn The address of the inbound asset.
-//     * @param _swapPath The optimal path for the multi-hop swap.
-//     * @param _userHolding The holding address associated with the user.
-//     * @param _deadline The timestamp representing the latest time by which the swap operation must be completed.
-//     * @param _amountOut The desired amount of `tokenOut`.
-//     * @param _amountInMaximum The maximum amount of `_tokenIn` to be swapped for the specified `_amountOut`.
-//     *
-//     * @return amountIn The amount of `_tokenIn` spent to receive the desired `amountOut` of `tokenOut`.
-//     */
-//    function swapExactInputMultihop(
-//        address _tokenIn,
-//        bytes calldata _swapPath,
-//        address _userHolding,
-//        uint256 _deadline,
-//        uint256 _amountOut,
-//        uint256 _amountInMaximum
-//    ) private validPool(_swapPath, _amountOut) returns (uint256 amountIn) {
-//        // Ensure the caller is Liquidation Manager Contract.
-//        require(msg.sender == IManager(managerContainer.manager()).liquidationManager(), "1000");
-//
-//        // Initialize tempData struct.
-//        SwapTempData memory tempData = SwapTempData({
-//            tokenIn: _tokenIn,
-//            swapPath: _swapPath,
-//            userHolding: _userHolding,
-//            deadline: _deadline,
-//            amountOut: _amountOut,
-//            amountInMaximum: _amountInMaximum,
-//            router: swapRouter
-//        });
-//
-//        // Holding must approve Swap Manager to transfer tokenIn from it.
-//        IHolding(tempData.userHolding).approve({
-//            _tokenAddress: tempData.tokenIn,
-//            _destination: address(this),
-//            _amount: tempData.amountInMaximum
-//        });
-//
-//        // Transfer the specified `amountInMaximum` to this contract.
-//        TransferHelper.safeTransferFrom({
-//            token: tempData.tokenIn,
-//            from: tempData.userHolding,
-//            to: address(this),
-//            value: tempData.amountInMaximum
-//        });
-//
-//        // Approve the Router to spend `amountInMaximum` from address(this).
-//        TransferHelper.safeApprove({ token: tempData.tokenIn, to: tempData.router, value: tempData.amountInMaximum });
-//
-//        // The parameter path is encoded as (tokenOut, fee, tokenIn/tokenOut, fee, tokenIn).
-//        ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
-//            path: tempData.swapPath,
-//            recipient: tempData.userHolding,
-//            deadline: tempData.deadline,
-//            amountOut: tempData.amountOut,
-//            amountInMaximum: tempData.amountInMaximum
-//        });
-//
-//        // Execute the swap, returning the amountIn actually spent.
-//        try ISwapRouter(tempData.router).exactOutput(params) returns (uint256 _amountIn) {
-//            amountIn = _amountIn;
-//        } catch {
-//            revert("3084");
-//        }
-//
-//        // Emit event indicating successful exact output swap.
-//        emit exactOutputSwap({
-//            holding: tempData.userHolding,
-//            path: tempData.swapPath,
-//            amountIn: amountIn,
-//            amountOut: tempData.amountOut
-//        });
-//
-//        // If the swap did not require the full amountInMaximum to achieve the exact amountOut make a refund.
-//        if (amountIn < tempData.amountInMaximum) {
-//            // Decrease allowance of the Swap Manager.
-//            IHolding(tempData.userHolding).approve(tempData.tokenIn, address(this), 0);
-//            // Decrease allowance of the router.
-//            TransferHelper.safeApprove(tempData.tokenIn, address(tempData.router), 0);
-//            // Make the refund.
-//            IERC20(tempData.tokenIn).safeTransfer(tempData.userHolding, tempData.amountInMaximum - amountIn);
-//        }
-//    }
-//
-//    /**
-//     * @notice Validates that jUSD UniswapV3 Pool is valid for the swap.
-//     *
-//     *   @notice Requirements:
-//     *  - `_path` must be of correct length.
-//     *  - jUSD UniswapV3 Pool specified in the `_path` has enough liquidity.
-//     */
-//    modifier validPool(bytes calldata _path, uint256 _amount) {
-//        // The shortest possible path is of 43 bytes, as an address takes 20 bytes and uint24 takes 3 bytes.
-//        require(_path.length >= 43, "3077");
-//        // Initialize tempData struct.
-//        ValidPoolTempData memory tempData = ValidPoolTempData({
-//            jUsd: _getStablesManager().jUSD(),
-//            tokenA: address(bytes20(_path[0 : 20])),
-//            fee: uint24(bytes3(_path[20 : 23])),
-//            tokenB: address(bytes20(_path[23 : 43]))
-//        });
-//        // The first address in the path must be jUsd
-//        require(tempData.tokenA == address(tempData.jUsd), "3077");
-//        // There should be enough jUsd in the pool to perform self-liquidation.
-//        require(tempData.jUsd.balanceOf(_getPool(tempData.tokenA, tempData.tokenB, tempData.fee)) >= _amount, "3083");
-//        _;
-//    }
+    // -- Utilities --
+
+    /**
+     * @notice Swaps a minimum possible amount of `_tokenIn` for a fixed amount of `tokenOut` via `_swapPath`.
+     *
+     * @notice Requirements:
+     * - The jUSD UniswapV3 Pool must be valid.
+     * - The caller must be Liquidation Manager Contract.
+     *
+     * @notice Effects:
+     * - Approves and transfers `tokenIn` from the `_userHolding`.
+     * - Approves UniswapV3 Router to transfer `tokenIn` from address(this) to perform the `exactOutput` swap.
+     * - Executes the `exactOutput` swap
+     * - Handles any excess tokens.
+     *
+     * @param _tokenIn The address of the inbound asset.
+     * @param _deadline The timestamp representing the latest time by which the swap operation must be completed.
+     * @param _amountIn The desired amount of `tokenOut`.
+     * @param _swapPath The optimal path for the multi-hop swap.
+     *
+     * @return amountOut The amount of `_tokenIn` spent to receive the desired `amountOut` of `tokenOut`.
+     */
+    function swapExactInputMultihop(
+        address _tokenIn,
+        uint256 _deadline,
+        uint256 _amountIn,
+        bytes calldata _swapPath
+    ) private returns (uint256 amountOut) {
+        ISwapRouter swapRouter = ISwapRouter(UniswapSwapRouter);
+
+        // Approve the router to spend USDT.
+        TransferHelper.safeApprove(_tokenIn, address(swapRouter), _amountIn);
+
+        // Multiple pool swaps are encoded through bytes called a `path`. A path is a sequence of token addresses and poolFees that define the pools used in the swaps.
+        // The format for pool encoding is (tokenIn, fee, tokenOut/tokenIn, fee, tokenOut) where tokenIn/tokenOut parameter is the shared token across the pools.
+        // Since we are swapping DAI to USDC and then USDC to WETH9 the path encoding is (DAI, 0.3%, USDC, 0.3%, WETH9).
+        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+            path: _swapPath,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: _amountIn,
+            amountOutMinimum: 0
+        });
+
+        // Execute the swap, returning the amountIn actually spent.
+        try swapRouter.exactInput(params) returns (uint256 _amountOut) {
+            amountOut = _amountOut;
+        } catch {
+            revert("3084");
+        }
+    }
 }

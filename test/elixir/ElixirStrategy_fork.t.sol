@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+pragma abicoder v2;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
@@ -24,6 +25,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     address internal tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326;
     // deUSD token
     address internal deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
+    uint24 public constant poolFee = 100;
 
     ElixirStrategy internal strategy;
 
@@ -66,45 +68,50 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         uint256 amount = bound(_amount, 1e6, 10e6);
         address userHolding = initiateUser(user, tokenIn, amount);
 
-//        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
-//        uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
 
-//        // Invest into the tested strategy vie strategyManager
-//        vm.prank(user, user);
-//        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
-//
-//        uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-//        uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
-//        (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
-//
-//        /**
-//         * Expected changes after deposit
-//         * 1. Holding tokenIn balance =  balance - amount
-//         * 2. Holding tokenOut balance += amount
-//         * 3. Staker receiptTokens balance += shares
-//         * 4. Strategy's invested amount  += amount
-//         * 5. Strategy's total shares  += shares
-//         */
-//        assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
-//        // allow 10% difference for tokenOut balance
-//        assertApproxEqRel(IERC20(tokenOut).balanceOf(userHolding), amount, 0.1e18, "Holding token out balance wrong");
-//        assertEq(
-//            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
-//            expectedShares,
-//            "Incorrect receipt tokens minted"
-//        );
-//        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
-//        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-//
-//        // Additional checks
-//        assertApproxEqRel(
-//            tokenOutBalanceAfter,
-//            amount,
-//            0.01e18,
-//            "Wrong balance in Elixir after stake"
-//        );
-//        assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
-//        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
+        // Invest into the tested strategy vie strategyManager
+        vm.prank(user, user);
+        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(
+            tokenIn,
+            address(strategy),
+            amount,
+            abi.encodePacked(tokenIn, poolFee, deUSD)
+        );
+
+        uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
+        uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
+        (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
+
+        /**
+         * Expected changes after deposit
+         * 1. Holding tokenIn balance =  balance - amount
+         * 2. Holding tokenOut balance += amount
+         * 3. Staker receiptTokens balance += shares
+         * 4. Strategy's invested amount  += amount
+         * 5. Strategy's total shares  += shares
+         */
+        assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
+        // allow 10% difference for tokenOut balance
+        assertApproxEqRel(IERC20(tokenOut).balanceOf(userHolding), amount, 0.1e18, "Holding token out balance wrong");
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            expectedShares,
+            "Incorrect receipt tokens minted"
+        );
+        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
+        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
+
+        // Additional checks
+        assertApproxEqRel(
+            tokenOutBalanceAfter,
+            amount,
+            0.01e18,
+            "Wrong balance in Elixir after stake"
+        );
+        assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
+        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
     }
 
 //    // Tests if withdraw works correctly when authorized
