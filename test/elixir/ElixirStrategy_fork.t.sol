@@ -5,15 +5,16 @@ pragma abicoder v2;
 import "../fixtures/BasicContractsFixture.t.sol";
 
 import "forge-std/Test.sol";
+import {stdStorage, StdStorage} from "forge-std/Test.sol";
 
 import "forge-std/console.sol";
 import {ElixirStrategy} from "../../src/elixir/ElixirStrategy.sol";
+import {IstdeUSD} from "../../src/elixir/interfaces/IstdeUSD.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {StakerLight} from "../../src/staker/StakerLight.sol";
 import {StakerLightFactory} from "../../src/staker/StakerLightFactory.sol";
 
@@ -25,6 +26,9 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     address internal tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326;
     // deUSD token
     address internal deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
+
+    address internal uniswapRouter = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+
     uint24 public constant poolFee = 100;
 
     ElixirStrategy internal strategy;
@@ -41,7 +45,8 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             jigsawRewardDuration: 60 days,
             tokenIn: tokenIn,
             tokenOut: tokenOut,
-            deUSD: deUSD
+            deUSD: deUSD,
+            uniswapRouter: uniswapRouter
         });
 
         bytes memory data = abi.encodeCall(ElixirStrategy.initialize, initParams);
@@ -110,84 +115,69 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         // Additional checks
         assertApproxEqRel(
             tokenOutBalanceAfter,
-            amount * 1e12,
-            0.04e18,
+            amount * 1e12, // TODO: decimals are different
+            0.04e18, // TODO: ensure delta is correct
             "Wrong balance in Elixir after stake"
         );
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
     }
 
-//    // Tests if withdraw works correctly when authorized
-//    function test_elixir_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-//        uint256 amount = bound(_amount, 1e18, 10e18);
-//        address userHolding = initiateUser(user, tokenIn, amount, false);
-//
-//        // Invest into the tested strategy vie strategyManager
-//        vm.prank(user, user);
-//        strategyManager.invest(tokenIn, address(strategy), amount, "");
-//
-//        (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
-//        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
-//
-//        skip(100 days);
-//
-//        // Increase the balance of the autoPxEth with pxETH
-//        uint256 addedRewards = 1e22;
-//        deal(address(PX_ETH), address(AUTO_PIREX_ETH), addedRewards);
-//        // Updated rewards state variable in autoPxEth contract
-//        vm.store(address(AUTO_PIREX_ETH), bytes32(uint256(14)), bytes32(uint256(addedRewards)));
-//
-//        // Pirex ETH takes fee for instant redemption
-//        uint256 postRedemptionFeeAssetAmt = subtractPercent(
-//            AUTO_PIREX_ETH.previewRedeem(totalShares), PIREX_ETH.fees(IPirexEth.Fees.InstantRedemption) / 1000
-//        );
-//
-//        // Compute Jigsaw's performance fee
-//        uint256 fee = investedAmountBefore >= postRedemptionFeeAssetAmt
-//            ? 0
-//            : _getFeeAbsolute(postRedemptionFeeAssetAmt - investedAmountBefore, manager.performanceFee());
-//
-//        vm.prank(user, user);
-//        (uint256 assetAmount,) = strategyManager.claimInvestment({
-//            _holding: userHolding,
-//            _strategy: address(strategy),
-//            _shares: totalShares,
-//            _asset: tokenIn,
-//            _data: ""
-//        });
-//
-//        (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
-//        uint256 tokenInBalanceAfter = IERC20(tokenIn).balanceOf(userHolding);
-//        uint256 expectedWithdrawal = tokenInBalanceAfter - tokenInBalanceBefore;
-//
-//        /**
-//         * Expected changes after withdrawal
-//         * 1. Holding's tokenIn balance += (totalInvested + yield) * shareRatio
-//         * 2. Holding's tokenOut balance -= shares
-//         * 3. Staker receiptTokens balance -= shares
-//         * 4. Strategy's invested amount  -= totalInvested * shareRatio
-//         * 5. Strategy's total shares  -= shares
-//         * 6. Fee address fee amount += yield * performanceFee
-//         */
-//        assertEq(tokenInBalanceAfter, assetAmount, "Holding balance after withdraw is wrong");
-//        assertEq(IERC20(tokenOut).balanceOf(userHolding), 0, "Holding token out balance wrong");
-//        assertEq(
-//            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
-//            0,
-//            "Incorrect receipt tokens after withdraw"
-//        );
-//        assertEq(investedAmount, 0, "Recipient invested amount mismatch");
-//        assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
-//        assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
-//
-//        // Additional checks
-//        assertEq(tokenInBalanceAfter, expectedWithdrawal, "Incorrect asset amount returned");
-//    }
-//
-//    // percent == 0.1%
-//    function subtractPercent(uint256 value, uint256 percent) public pure returns (uint256) {
-//        uint256 deduction = (value * percent) / 1000; // 0.5% is 5/1000
-//        return value - deduction;
-//    }
+    // Tests if withdraw works correctly when authorized
+    function test_elixir_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+        // added to prevent USDT safeTransferFrom revert issue
+        assumeNotPrecompile(user);
+        uint256 amount = bound(_amount, 1e6, 10e6);
+        address userHolding = initiateUser(user, tokenIn, amount);
+
+        // Invest into the tested strategy vie strategyManager
+        vm.prank(user, user);
+        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(
+            tokenIn,
+            address(strategy),
+            amount,
+            abi.encodePacked(tokenIn, poolFee, deUSD)
+        );
+
+        (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        skip(90 days);
+        strategy.cooldown(userHolding);
+        skip(7 days);
+
+        vm.prank(user, user);
+        (uint256 assetAmount,) = strategyManager.claimInvestment({
+            _holding: userHolding,
+            _strategy: address(strategy),
+            _shares: totalShares,
+            _asset: tokenIn,
+            _data: abi.encodePacked(deUSD, poolFee, tokenIn)
+        });
+
+        (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
+        uint256 tokenInBalanceAfter = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 expectedWithdrawal = tokenInBalanceAfter - tokenInBalanceBefore;
+
+        /**
+         * Expected changes after withdrawal
+         * 1. Holding's tokenIn balance += (totalInvested + yield) * shareRatio
+         * 2. Holding's tokenOut balance -= shares
+         * 3. Staker receiptTokens balance -= shares
+         * 4. Strategy's invested amount  -= totalInvested * shareRatio
+         * 5. Strategy's total shares  -= shares
+         * 6. Fee address fee amount += yield * performanceFee
+         */
+        assertEq(tokenInBalanceAfter, assetAmount, "Holding balance after withdraw is wrong");
+        assertEq(IERC20(tokenOut).balanceOf(userHolding), 0, "Holding token out balance wrong");
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            0,
+            "Incorrect receipt tokens after withdraw"
+        );
+        assertEq(investedAmount, 0, "Recipient invested amount mismatch");
+        assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
+
+        // Additional checks
+        assertEq(tokenInBalanceAfter, expectedWithdrawal, "Incorrect asset amount returned");
+    }
 }
