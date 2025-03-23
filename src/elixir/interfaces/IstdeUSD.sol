@@ -65,4 +65,6 @@ interface IstdeUSD is IERC4626 {
     function setCooldownDuration(uint24 duration) external;
 
     function withdraw(uint256 assets, address receiver, address _owner) external returns (uint256);
+
+    function grantRole(bytes32 role, address account) external;
 }

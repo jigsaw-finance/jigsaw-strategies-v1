@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.22;
-pragma abicoder v2;
+pragma solidity ^0.8.10;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import {IHolding} from "@jigsaw/src/interfaces/core/IHolding.sol";
 
 import {IManagerContainer} from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
@@ -77,12 +76,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
 
     /**
-    * @notice Emitted when exact output swap is executed on UniswapV3 Pool.
-     * @param holding The holding address associated with the user.
-     * @param path The optimal path for the multi-hop swap.
-     * @param amountIn The amount of the input token used for the swap.
-     * @param amountOut The amount of the output token received after the swap.
-     */
+    * @notice Emitted when exact input swap is executed on UniswapV3 Pool.
+    * @param holding The holding address associated with the user.
+    * @param path The optimal path for the multi-hop swap.
+    * @param amountIn The amount of the input token used for the swap.
+    * @param amountOut The amount of the output token received after the swap.
+    */
     event exactInputSwap(address indexed holding, bytes path, uint256 amountIn, uint256 amountOut);
 
     // -- State variables --
@@ -115,7 +114,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice The Uniswap Router.
      */
-
     address public uniswapRouter;
 
     /**
@@ -243,8 +241,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         // Swap USDT to deUSD on Uniswap
         swapExactInputMultihop({
             _tokenIn: _asset,
-            _deadline: block.timestamp,
             _amountIn: _amount,
+            _minAmountOut: 0,
             _recipient: address(this),
             _swapPath: _swapPath
         });
@@ -343,13 +341,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         // Ensure the external call was successful and decode any potential revert reason.
         require(success, OperationsLib.getRevertMsg(returnData));
 
-        uint256 deUsdBalanceAfter = IERC20(deUSD).balanceOf(address(this));
-
+        uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
         // Swap deUSD to USDT on Uniswap
         swapExactInputMultihop({
             _tokenIn: deUSD,
-            _deadline: block.timestamp,
-            _amountIn: deUsdBalanceAfter - deUsdBalanceBefore,
+            _amountIn: deUsdAmount,
+            _minAmountOut: (deUsdAmount * 90 / 100) / DECIMAL_DIFF, // set min amount to 90% of the amount
             _recipient: _recipient,
             _swapPath: _swapPath
         });
@@ -394,12 +391,10 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         revert OperationNotSupported();
     }
 
-    function cooldown(address _recipient) external {
-        uint256 assets = stdeUSD.maxWithdraw(_recipient);
-
+    function cooldown(address _recipient, uint256 _shares) external {
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(tokenOut),
-            _call: abi.encodeCall(IstdeUSD.cooldownAssets, (assets))
+            _call: abi.encodeCall(IstdeUSD.cooldownShares, _shares)
         });
 
         // Ensure the external call was successful and decode any potential revert reason.
@@ -431,8 +426,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      * - Handles any excess tokens.
      *
      * @param _tokenIn The address of the inbound asset.
-     * @param _deadline The timestamp representing the latest time by which the swap operation must be completed.
-     * @param _amountIn The desired amount of `tokenOut`.
+     * @param _amountIn The desired amount of `tokenIn`.
+     * @param _minAmountOut The desired min amount of `tokenOut`.
      * @param _recipient The address of recipient.
      * @param _swapPath The optimal path for the multi-hop swap.
      *
@@ -440,8 +435,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     function swapExactInputMultihop(
         address _tokenIn,
-        uint256 _deadline,
         uint256 _amountIn,
+        uint256 _minAmountOut,
         address _recipient,
         bytes calldata _swapPath
     ) private returns (uint256 amountOut) {
@@ -456,9 +451,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
             path: _swapPath,
             recipient: _recipient,
-            deadline: _deadline,
+            deadline: block.timestamp,
             amountIn: _amountIn,
-            amountOutMinimum: 0
+            amountOutMinimum: _minAmountOut
         });
 
         // Execute the swap, returning the amountIn actually spent.

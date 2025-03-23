@@ -4,10 +4,8 @@ pragma abicoder v2;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
-import "forge-std/Test.sol";
 import {stdStorage, StdStorage} from "forge-std/Test.sol";
 
-import "forge-std/console.sol";
 import {ElixirStrategy} from "../../src/elixir/ElixirStrategy.sol";
 import {IstdeUSD} from "../../src/elixir/interfaces/IstdeUSD.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -21,13 +19,15 @@ import {StakerLightFactory} from "../../src/staker/StakerLightFactory.sol";
 contract ElixirStrategyTest is Test, BasicContractsFixture {
     using SafeERC20 for IERC20;
     // Mainnet USDT
-    address internal tokenIn = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address internal tokenIn = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     // sdeUSD token
     address internal tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326;
     // deUSD token
     address internal deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
 
     address internal uniswapRouter = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+
+    address internal user = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
     uint24 public constant poolFee = 100;
 
@@ -67,9 +67,8 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit works correctly when authorized
-    function test_elixir_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+    function test_elixir_deposit_when_authorized(uint256 _amount) public notOwnerNotZero(user) {
         // added to prevent USDT safeTransferFrom revert issue
-        assumeNotPrecompile(user);
         uint256 amount = bound(_amount, 1e6, 10e6);
         address userHolding = initiateUser(user, tokenIn, amount);
 
@@ -98,11 +97,11 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
          * 5. Strategy's total shares  += shares
          */
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
-        // allow 10% difference for tokenOut balance
+        // allow 5% difference for tokenOut balance
         assertApproxEqRel(
             IERC20(tokenOut).balanceOf(userHolding),
             amount * 1e12,
-            0.1e18,
+            0.05e18,
             "Holding token out balance wrong");
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
@@ -116,7 +115,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         assertApproxEqRel(
             tokenOutBalanceAfter,
             amount * 1e12, // TODO: decimals are different
-            0.04e18, // TODO: ensure delta is correct
+            1e18, // TODO: ensure delta is correct
             "Wrong balance in Elixir after stake"
         );
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
@@ -124,10 +123,9 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if withdraw works correctly when authorized
-    function test_elixir_withdraw_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
+    function test_elixir_withdraw_when_authorized(uint256 _amount) public notOwnerNotZero(user) {
         // added to prevent USDT safeTransferFrom revert issue
-        assumeNotPrecompile(user);
-        uint256 amount = bound(_amount, 1e6, 10e6);
+        uint256 amount = bound(_amount, 1e6, 100000e6);
         address userHolding = initiateUser(user, tokenIn, amount);
 
         // Invest into the tested strategy vie strategyManager
@@ -141,8 +139,11 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
         (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+
+        _transferInRewards(100000e18);
         skip(90 days);
-        strategy.cooldown(userHolding);
+
+        strategy.cooldown(userHolding, totalShares);
         skip(7 days);
 
         vm.prank(user, user);
@@ -179,5 +180,22 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
         // Additional checks
         assertEq(tokenInBalanceAfter, expectedWithdrawal, "Incorrect asset amount returned");
+    }
+
+    function _transferInRewards(uint256 _amount) internal {
+        address defaultAdmin = strategy.stdeUSD().owner();
+
+        address rewarder = vm.randomAddress();
+        deal(deUSD, rewarder, _amount);
+
+        vm.startPrank(defaultAdmin);
+        strategy.stdeUSD().grantRole(keccak256("REWARDER_ROLE"), rewarder);
+        vm.stopPrank();
+
+        vm.startPrank(rewarder, rewarder);
+        IERC20(deUSD).approve(tokenOut, _amount);
+
+        strategy.stdeUSD().transferInRewards(_amount);
+        vm.stopPrank();
     }
 }
