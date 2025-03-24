@@ -19,21 +19,6 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
     using SafeERC20 for IERC20;
 
     /**
-     * @notice Emitted when a new underlying is added to the whitelist.
-     */
-    event UnderlyingAdded(address indexed newAddress);
-
-    /**
-     * @notice Emitted when a new underlying is removed from the whitelist.
-     */
-    event UnderlyingRemoved(address indexed old);
-
-    /**
-     * @notice Emitted when the address is updated.
-     */
-    event StrategyManagerUpdated(address indexed old, address indexed newAddress);
-
-    /**
      * @notice Emitted when funds are saved in case of an emergency.
      */
     event SavedFunds(address indexed token, uint256 amount);
