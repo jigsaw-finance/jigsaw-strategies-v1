@@ -28,12 +28,12 @@ library OperationsLib {
 
     /**
      * @notice Get the ratio of two numbers with a specified precision and rounding option.
-     * 
+     *
      * @param numerator The numerator in the ratio calculation.
      * @param denominator The denominator in the ratio calculation.
      * @param precision The number of decimals to include in the result.
      * @param rounding The rounding direction (Ceil or Floor).
-     * 
+     *
      * @return The calculated ratio.
      */
     function getRatio(
@@ -46,8 +46,8 @@ library OperationsLib {
             return 0;
         }
 
-+        uint256 _numerator = numerator * 10 ** precision;
-+        uint256 _quotient = _numerator / denominator;
+        uint256 _numerator = numerator * 10 ** precision;
+        uint256 _quotient = _numerator / denominator;
 
         // Round up if necessary
         if (rounding == Rounding.Ceil && _numerator % denominator > 0) {
@@ -59,7 +59,7 @@ library OperationsLib {
 
     /**
      * @notice Safely approve a token for spending by first setting approval to zero and then to the desired value.
-     * 
+     *
      * @param token The address of the token to approve.
      * @param to The address to grant approval for spending.
      * @param value The amount of tokens to approve.
