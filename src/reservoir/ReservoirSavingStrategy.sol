@@ -63,16 +63,6 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
 
     error OperationNotSupported();
 
-    // -- Events --
-
-    /**
-     * @notice Emitted when a performance fee is taken.
-     * @param token The token from which the fee is taken.
-     * @param feeAddress The address that receives the fee.
-     * @param amount The amount of the fee.
-     */
-    event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
-
     // -- State variables --
 
     /**

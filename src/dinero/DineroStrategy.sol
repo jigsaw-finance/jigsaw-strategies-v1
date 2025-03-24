@@ -66,14 +66,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Events --
 
     /**
-     * @notice Emitted when a performance fee is taken.
-     * @param token The token from which the fee is taken.
-     * @param feeAddress The address that receives the fee.
-     * @param amount The amount of the fee.
-     */
-    event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
-
-    /**
      * @notice Event indicating that the contract received Ether.
      *
      * @param from The address that sent the Ether.
