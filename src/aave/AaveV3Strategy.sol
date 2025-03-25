@@ -287,6 +287,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** params.shareDecimals);
 
         // Perform the withdrawal operation from user's holding address.
+        // Note: The `withdraw` function can be paused by Aave protocol, reverting the transaction.
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
         (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
             _contract: address(lendingPool),
