@@ -23,6 +23,7 @@ import { StrategyManager } from "@jigsaw/src/StrategyManager.sol";
 
 import { ILiquidationManager } from "@jigsaw/src/interfaces/core/ILiquidationManager.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
+import { ISharesRegistry } from "@jigsaw/src/interfaces/core/ISharesRegistry.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
@@ -76,7 +77,7 @@ abstract contract BasicContractsFixture is Test {
 
         jUsdOracle = new SampleOracle();
 
-        manager = new Manager(OWNER, address(usdc), address(weth), address(jUsdOracle), bytes(""));
+        manager = new Manager(OWNER, address(weth), address(jUsdOracle), bytes(""));
         managerContainer = new ManagerContainer(OWNER, address(manager));
 
         jUsd = new JigsawUSD(OWNER, address(managerContainer));
@@ -87,19 +88,34 @@ abstract contract BasicContractsFixture is Test {
         stablesManager = new StablesManager(OWNER, address(managerContainer), address(jUsd));
         strategyManager = new StrategyManager(OWNER, address(managerContainer));
 
-        sharesRegistry =
-            new SharesRegistry(OWNER, address(managerContainer), address(usdc), address(usdcOracle), bytes(""), 50_000);
-        stablesManager.registerOrUpdateShareRegistry(address(sharesRegistry), address(usdc), true);
-        registries[address(usdc)] = address(sharesRegistry);
+        sharesRegistry = new SharesRegistry(
+            OWNER,
+            address(managerContainer),
+            address(usdc),
+            address(usdcOracle),
+            bytes(""),
+            ISharesRegistry.RegistryConfig({
+                collateralizationRate: 50_000,
+                liquidationBuffer: 5e3,
+                liquidatorBonus: 8e3
+            })
+        );
 
-        wethSharesRegistry =
-            new SharesRegistry(OWNER, address(managerContainer), address(weth), address(wethOracle), bytes(""), 50_000);
-        stablesManager.registerOrUpdateShareRegistry(address(wethSharesRegistry), address(weth), true);
-        registries[address(weth)] = address(wethSharesRegistry);
+        wethSharesRegistry = new SharesRegistry(
+            OWNER,
+            address(managerContainer),
+            address(weth),
+            address(wethOracle),
+            bytes(""),
+            ISharesRegistry.RegistryConfig({
+                collateralizationRate: 50_000,
+                liquidationBuffer: 5e3,
+                liquidatorBonus: 8e3
+            })
+        );
 
-        receiptTokenFactory = new ReceiptTokenFactory(OWNER);
         receiptTokenReference = IReceiptToken(new ReceiptToken());
-        receiptTokenFactory.setReceiptTokenReferenceImplementation(address(receiptTokenReference));
+        receiptTokenFactory = new ReceiptTokenFactory(OWNER, address(receiptTokenReference));
 
         manager.setReceiptTokenFactory(address(receiptTokenFactory));
 
@@ -122,6 +138,12 @@ abstract contract BasicContractsFixture is Test {
             _receiptTokenSymbol: "RUSDCM"
         });
         strategyManager.addStrategy(address(strategyWithoutRewardsMock));
+
+        stablesManager.registerOrUpdateShareRegistry(address(sharesRegistry), address(usdc), true);
+        registries[address(usdc)] = address(sharesRegistry);
+
+        stablesManager.registerOrUpdateShareRegistry(address(wethSharesRegistry), address(weth), true);
+        registries[address(weth)] = address(wethSharesRegistry);
 
         jRewards = address(new ERC20Mock());
         stakerFactory =
