@@ -197,6 +197,15 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
         }
     }
 
+    function _genericCall(
+        address _holding,
+        address _contract,
+        bytes memory _call
+    ) internal returns (bool success, bytes memory returnData) {
+        (success, returnData) = IHolding(_holding).genericCall({ _contract: _contract, _call: _call });
+        if (!success) revert(OperationsLib.getRevertMsg(returnData));
+    }
+
     // -- Modifiers --
 
     /**
