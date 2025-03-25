@@ -3,6 +3,8 @@ pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
@@ -27,38 +29,38 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
  */
 contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     // -- Custom types --
 
     /**
      * @notice Struct for the initializer params.
+     * @param owner The address of the initial owner of the Strategy contract
+     * @param managerContainer The address of the contract that contains the manager contract
+     * @param creditEnforcer The address of the Reservoir's CreditEnforcer contract
+     * @param pegStabilityModule The Reservoir's PegStabilityModule contract.
+     * @param savingModule The Reservoir's SavingModule contract.
+     * @param rUSD The Reservoir's rUSD stablecoin.
+     * @param stakerFactory The address of the StakerLightFactory contract
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
+     * @param jigsawRewardDuration The initial Jigsaw reward distribution duration for the strategy
+     * @param tokenIn The address of the LP token
+     * @param tokenOut The address of Reservoir's receipt token
      */
     struct InitializerParams {
-        address owner; // The address of the initial owner of the Strategy contract
-        address managerContainer; // The address of the contract that contains the manager contract
-        address creditEnforcer; // The address of the Reservoir's CreditEnforcer contract
-        address pegStabilityModule; // The Reservoir's PegStabilityModule contract.
-        address savingModule; // The Reservoir's SavingModule contract.
-        address rUSD; // The Reservoir's rUSD stablecoin.
-        address stakerFactory; // The address of the StakerLightFactory contract
-        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of Reservoir's receipt token
+        address owner;
+        address managerContainer;
+        address creditEnforcer;
+        address pegStabilityModule;
+        address savingModule;
+        address rUSD;
+        address stakerFactory;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
     }
 
-    /**
-     * @notice Struct containing parameters for a withdrawal operation.
-     */
-    struct WithdrawParams {
-        uint256 shareRatio; // The share ratio representing the proportion of the total investment owned by the user.
-        uint256 assetsToWithdraw; // The amount of assets to withdraw based on the share ratio.
-        uint256 investment; // The amount of funds invested by the user.
-        uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
-        uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
-        uint256 balanceDiff; // The difference between balanceAfter and balanceBefore.
-        uint256 performanceFee; // Protocol's performanceFee applied to extra generated yield.
-    }
     // -- Errors --
 
     error OperationNotSupported();
@@ -157,18 +159,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
      * - `_params.pegStabilityModule` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      *
-     * @param _params Struct containing all initialization parameters:
-     * - owner: The address of the initial owner of the Strategy contract.
-     * - managerContainer: The address of the contract that contains the manager contract.
-     * - creditEnforcer: The address of the Reservoir's CreditEnforcer contract.
-     * - pegStabilityModule:  The Reservoir's PegStabilityModule contract.
-     * - savingModule:  The Reservoir's SavingModule contract.
-     * - rUSD:  The Reservoir's rUSD stablecoin.
-     * - stakerFactory: The address of the StakerLightFactory contract.
-     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
-     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
-     * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the receipt token received as output from the strategy.
+     * @param _params Struct containing all initialization parameters.
      */
     function initialize(
         InitializerParams memory _params
@@ -192,7 +183,6 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
-        rewardToken = address(0);
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -286,78 +276,80 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Withdraws deposited funds from the strategy.
      *
-     * @dev Some strategies will only allow the tokenIn to be withdrawn.
-     * @dev 'assetAmount' will be equal to 'tokenInAmount' if '_asset' is the same as the strategy's 'tokenIn()'.
-     *
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
      * @param _asset The token to be withdrawn.
      *
-     * @return The amount of the asset obtained from the operation.
-     * @return The amount of the 'tokenIn()' token.
+     * @return withdrawnAmount The actual amount of asset withdrawn from the strategy.
+     * @return initialInvestment The amount of initial investment.
+     * @return yield The amount of yield generated by the user beyond their initial investment.
+     * @return fee The amount of fee charged by the strategy.
      */
     function withdraw(
         uint256 _shares,
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
         WithdrawParams memory params = WithdrawParams({
+            shares: _shares,
+            totalShares: recipients[_recipient].totalShares,
             shareRatio: 0,
-            assetsToWithdraw: 0,
+            shareDecimals: sharesDecimals,
             investment: 0,
+            assetsToWithdraw: 0, // not used in Reservoir strategy
             balanceBefore: 0,
-            balanceAfter: 0,
-            balanceDiff: 0,
-            performanceFee: 0
+            withdrawnAmount: 0,
+            yield: 0,
+            fee: 0
         });
 
-        uint256 tokenOutDecimals = IERC20Metadata(tokenOut).decimals();
-
         params.shareRatio = OperationsLib.getRatio({
-            numerator: _shares,
-            denominator: recipients[_recipient].totalShares,
-            precision: tokenOutDecimals,
+            numerator: params.shares,
+            denominator: params.totalShares,
+            precision: params.shareDecimals,
             rounding: OperationsLib.Rounding.Floor
         });
 
         _burn({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _shares: _shares,
-            _totalShares: recipients[_recipient].totalShares,
-            _tokenDecimals: tokenOutDecimals
+            _shares: params.shares,
+            _totalShares: params.totalShares,
+            _tokenDecimals: params.shareDecimals
         });
 
-        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** tokenOutDecimals;
-        // Calculate rUSD to withdraw for shares, accounting for srUSD price fluctuation and redeem fee, and round up.
-        params.assetsToWithdraw = (_shares * ISavingModule(savingModule).currentPrice() * RESERVOIR_FEE_PRECISION)
-            / (RESERVOIR_PRICE_PRECISION * (RESERVOIR_FEE_PRECISION + ISavingModule(savingModule).redeemFee()));
+        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** params.shareDecimals;
+        // Calculate rUSD to withdraw for specified shares, accounting for srUSD price fluctuation and redeem fee.
+        params.assetsToWithdraw = _getAssetsToWithdraw({
+            _shares: params.shares,
+            _currentPrice: ISavingModule(savingModule).currentPrice(),
+            _redeemFee: ISavingModule(savingModule).redeemFee()
+        });
 
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
         uint256 rUsdBalanceBefore = IERC20(rUSD).balanceOf(address(this));
 
-        IHolding(_recipient).approve({
-            _tokenAddress: tokenOut,
-            _destination: savingModule,
-            _amount: params.assetsToWithdraw
-        });
-
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+        // Approve the amount of shares to be redeemed and call redeem on the SavingModule contract.
+        IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: savingModule, _amount: _shares });
+        _genericCall({
+            _holding: _recipient,
             _contract: savingModule,
             _call: abi.encodeCall(
                 ISavingModule.redeem, (_asset == rUSD ? _recipient : address(this), params.assetsToWithdraw)
             )
         });
-        require(success, OperationsLib.getRevertMsg(returnData));
 
         // Get USDC back if it was used as tokenIn
         if (_asset != rUSD) {
             uint256 rUsdRedemptionAmount = IERC20(rUSD).balanceOf(address(this)) - rUsdBalanceBefore;
             OperationsLib.safeApprove({ token: rUSD, to: address(pegStabilityModule), value: rUsdRedemptionAmount });
+
+            // Note: The `redeem` function can be paused by Reservoir protocol, making USDC unclaimable.
+            // Note: This redemption process may leave a small dust amount of rUSD in the contract
             IPegStabilityModule(pegStabilityModule).redeem({
                 to: _recipient,
                 amount: rUsdRedemptionAmount / DECIMAL_DIFF
@@ -365,29 +357,81 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
         }
 
         // Take protocol's fee if any.
-        params.balanceDiff = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
-        (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        if (params.balanceDiff > params.investment && params.performanceFee != 0) {
-            uint256 rewardAmount = params.balanceDiff - params.investment;
-            uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
-            if (fee > 0) {
-                address feeAddr = _getManager().feeAddress();
-                params.balanceDiff -= fee;
-                emit FeeTaken(tokenIn, feeAddr, fee);
-                IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
+        params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
+        params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
+
+        // Take protocol's fee from generated yield if any.
+        if (params.yield > 0) {
+            params.fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(params.yield) });
+            if (params.fee > 0) {
+                params.withdrawnAmount -= params.fee;
+                params.yield -= params.fee.toInt256();
             }
         }
 
-        recipients[_recipient].totalShares -= _shares;
+        recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
 
-        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
-        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+        emit Withdraw({
+            asset: _asset,
+            recipient: _recipient,
+            shares: params.shares,
+            withdrawnAmount: params.withdrawnAmount,
+            initialInvestment: params.investment,
+            yield: params.yield
+        });
 
-        return (params.balanceDiff, params.investment);
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: params.shares });
+
+        return (params.withdrawnAmount, params.investment, params.yield, params.fee);
+    }
+
+    /**
+     * @notice Calculates the amount of assets to withdraw based exactly on specified shares amount
+     * @param _shares The amount of shares to convert to assets
+     * @param _currentPrice The current price of srUSD
+     * @param _redeemFee The current redemption fee
+     * @return assetsToWithdraw The amount of assets that can be withdrawn
+     */
+    function _getAssetsToWithdraw(
+        uint256 _shares,
+        uint256 _currentPrice,
+        uint256 _redeemFee
+    ) internal pure returns (uint256 assetsToWithdraw) {
+        // Initial estimate: Convert shares to assets considering the current price and redemption fee
+        // This formula gives us a starting point that's likely close to the correct value
+        assetsToWithdraw = (_shares * _currentPrice * RESERVOIR_FEE_PRECISION)
+            / (RESERVOIR_PRICE_PRECISION * (RESERVOIR_FEE_PRECISION + _redeemFee));
+
+        // Decrement the assets amount until we find the maximum valid withdrawal
+        // This ensures we don't try to withdraw more than specified shares
+        while (_previewRedeem(assetsToWithdraw, _currentPrice, _redeemFee) > _shares) {
+            assetsToWithdraw--;
+        }
+    }
+
+    /**
+     * @notice Previews the amount of srUSD that would be burned for a given redemption
+     * @param _amount The amount of assets to redeem
+     * @param _currentPrice The current price of srUSD
+     * @param _redeemFee The current redemption fee
+     * @return srUSDToBurn The amount of srUSD that would be burned
+     */
+    function _previewRedeem(
+        uint256 _amount,
+        uint256 _currentPrice,
+        uint256 _redeemFee
+    ) internal pure returns (uint256 srUSDToBurn) {
+        // Step 1: Calculate the base amount of srUSD needed for the redemption
+        // We use Math.ceilDiv to round up, ensuring we don't underestimate the shares needed
+        srUSDToBurn = Math.ceilDiv(_amount * RESERVOIR_PRICE_PRECISION, _currentPrice);
+
+        // Step 2: Apply the redemption fee to get the total srUSD that will be burned
+        // This accounts for the fee taken by the Reservoir protocol during redemption
+        srUSDToBurn = srUSDToBurn * (1e6 + _redeemFee) / 1e6;
     }
 
     /**
