@@ -64,7 +64,16 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         strategyManager.addStrategy(address(strategy));
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
-            OWNER, address(managerContainer), address(tokenIn), address(usdcOracle), bytes(""), 50_000
+            OWNER,
+            address(managerContainer),
+            address(tokenIn),
+            address(usdcOracle),
+            bytes(""),
+            ISharesRegistry.RegistryConfig({
+                collateralizationRate: 50_000,
+                liquidationBuffer: 5e3,
+                liquidatorBonus: 8e3
+            })
         );
         stablesManager.registerOrUpdateShareRegistry(address(tokenInSharesRegistry), address(tokenIn), true);
         registries[address(tokenIn)] = address(tokenInSharesRegistry);
@@ -173,11 +182,11 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
             _getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
 
         vm.prank(user, user);
-        (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
+        (uint256 assetAmount, uint256 tokenInAmount,,) = strategyManager.claimInvestment({
             _holding: userHolding,
+            _token: tokenIn,
             _strategy: address(strategy),
             _shares: totalShares,
-            _asset: tokenIn,
             _data: ""
         });
 
