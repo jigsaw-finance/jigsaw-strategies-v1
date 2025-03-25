@@ -34,9 +34,21 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
     // EmptyLimit means no limit order is involved
     LimitOrderData internal emptyLimit;
 
+    TokenOutput internal emptyTokenOutput;
+
     // DefaultApprox means no off-chain preparation is involved, more gas consuming (~ 180k gas)
     ApproxParams public defaultApprox =
         ApproxParams({ guessMin: 0, guessMax: type(uint256).max, guessOffchain: 0, maxIteration: 256, eps: 1e14 });
+
+    function test_emptyLimit() public {
+        vm.assertEq(keccak256(abi.encode(emptyLimit)), keccak256(abi.encode(emptyLimit)), "Empty limit is not empty");
+        vm.assertEq(
+            keccak256(abi.encode(emptyTokenOutput)),
+            keccak256(abi.encode(emptyTokenOutput)),
+            "emptyTokenOutput is not empty"
+        );
+        vm.assertEq(keccak256(abi.encode(emptySwap)), keccak256(abi.encode(emptySwap)), "emptySwap is not empty");
+    }
 
     function setUp() public {
         init();
@@ -67,7 +79,16 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
         strategyManager.addStrategy(address(strategy));
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
-            OWNER, address(managerContainer), address(tokenIn), address(usdcOracle), bytes(""), 50_000
+            OWNER,
+            address(managerContainer),
+            address(tokenIn),
+            address(usdcOracle),
+            bytes(""),
+            ISharesRegistry.RegistryConfig({
+                collateralizationRate: 50_000,
+                liquidationBuffer: 5e3,
+                liquidatorBonus: 8e3
+            })
         );
         stablesManager.registerOrUpdateShareRegistry(address(tokenInSharesRegistry), address(tokenIn), true);
         registries[address(tokenIn)] = address(tokenInSharesRegistry);
@@ -169,12 +190,12 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
         skip(100 days);
 
         vm.prank(user, user);
-        strategyManager.claimInvestment(
-            userHolding,
-            address(strategy),
-            withdrawalShares,
-            tokenIn,
-            abi.encode(
+        strategyManager.claimInvestment({
+            _holding: userHolding,
+            _token: tokenIn,
+            _strategy: address(strategy),
+            _shares: withdrawalShares,
+            _data: abi.encode(
                 TokenOutput({
                     tokenOut: tokenIn,
                     minTokenOut: 0,
@@ -184,7 +205,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
                 }),
                 emptyLimit
             )
-        );
+        });
 
         (, uint256 updatedShares) = strategy.recipients(userHolding);
 
@@ -210,7 +231,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
 
         // withdraw the rest
         vm.prank(user, user);
-        strategyManager.claimInvestment(userHolding, address(strategy), totalShares - withdrawalShares, tokenIn, "");
+        strategyManager.claimInvestment(userHolding, tokenIn, address(strategy), totalShares - withdrawalShares, "");
         (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
 
         uint256 fee =
