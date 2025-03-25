@@ -35,32 +35,28 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
     /**
      * @notice Struct for the initializer params.
+     * @param owner The address of the initial owner of the Strategy contract
+     * @param managerContainer The address of the contract that contains the manager contract
+     * @param stakerFactory The address of the StakerLightFactory contract
+     * @param rewardToken The address of the Aave reward token associated with the strategy
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
+     * @param jigsawRewardDuration Initial Jigsaw reward distribution duration for the strategy
+     * @param tokenIn The address of the LP token
+     * @param tokenOut The address of the Aave receipt token (aToken)
+     * @param lendingPool The address of the Aave Lending Pool
+     * @param rewardsController The address of the Aave Rewards Controller
      */
     struct InitializerParams {
-        address owner; // The address of the initial owner of the Strategy contract
-        address managerContainer; // The address of the contract that contains the manager contract
-        address stakerFactory; // The address of the StakerLightFactory contract
-        address lendingPool; // The address of the Aave Lending Pool
-        address rewardsController; // The address of the Aave Rewards Controller
-        address rewardToken; // The address of the Aave reward token associated with the strategy
-        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // Initial Jigsaw reward distribution duration for the strategy
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the Aave receipt token (aToken)
-    }
-
-    /**
-     * @notice Struct containing parameters for a withdrawal operation.
-     */
-    struct WithdrawParams {
-        uint256 shareRatio;
-        uint256 assetsToWithdraw;
-        uint256 investment;
-        uint256 balanceBefore;
-        uint256 balanceAfter;
-        uint256 withdrawnAmount;
-        int256 yield;
-        uint256 fee;
+        address owner;
+        address managerContainer;
+        address stakerFactory;
+        address rewardToken;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
+        address lendingPool;
+        address rewardsController;
     }
 
     // -- State variables --
@@ -132,36 +128,26 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      * - `_params.rewardsController` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      *
-     * @param _params Struct containing all initialization parameters:
-     * - owner: The address of the initial owner of the Strategy contract.
-     * - managerContainer: The address of the contract that contains the manager contract.
-     * - stakerFactory: The address of the StakerLightFactory contract.
-     * - lendingPool: The address of the Aave Lending Pool.
-     * - rewardsController: The address of the Aave Rewards Controller
-     * - rewardToken: The address of the Aave reward token associated with the strategy
-     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
-     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
-     * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Aave receipt token (aToken).
+     * @param _params Struct containing all initialization parameters.
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
         require(_params.managerContainer != address(0), "3065");
-        require(_params.lendingPool != address(0), "3036");
-        require(_params.rewardsController != address(0), "3039");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
+        require(_params.lendingPool != address(0), "3036");
+        require(_params.rewardsController != address(0), "3039");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
         managerContainer = IManagerContainer(_params.managerContainer);
-        rewardsController = IRewardsController(_params.rewardsController);
         rewardToken = _params.rewardToken;
-        lendingPool = IPool(_params.lendingPool);
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        lendingPool = IPool(_params.lendingPool);
+        rewardsController = IRewardsController(_params.rewardsController);
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -236,9 +222,6 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Withdraws deposited funds.
      *
-     * @dev Some strategies will allow only the tokenIn to be withdrawn. 'assetAmount' will be equal to 'tokenInAmount'
-     * in case the '_asset' is the same as strategy 'tokenIn()'.
-     *
      * @param _shares The amount to withdraw.
      * @param _recipient The address of the recipient.
      * @param _asset The token to be withdrawn.
@@ -258,11 +241,13 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         require(_shares <= IAToken(tokenOut).scaledBalanceOf(_recipient), "2002");
 
         WithdrawParams memory params = WithdrawParams({
+            shares: _shares,
+            totalShares: recipients[_recipient].totalShares,
             shareRatio: 0,
-            assetsToWithdraw: 0,
+            shareDecimals: sharesDecimals,
             investment: 0,
+            assetsToWithdraw: 0,
             balanceBefore: 0,
-            balanceAfter: 0,
             withdrawnAmount: 0,
             yield: 0,
             fee: 0
@@ -270,9 +255,9 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
         // Calculate the ratio between all user's shares and the amount of shares used for withdrawal.
         params.shareRatio = OperationsLib.getRatio({
-            numerator: _shares,
-            denominator: recipients[_recipient].totalShares,
-            precision: sharesDecimals,
+            numerator: params.shares,
+            denominator: params.totalShares,
+            precision: params.shareDecimals,
             rounding: OperationsLib.Rounding.Floor
         });
 
@@ -280,21 +265,26 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         _burn({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _shares: _shares,
-            _totalShares: recipients[_recipient].totalShares,
-            _tokenDecimals: sharesDecimals
+            _shares: params.shares,
+            _totalShares: params.totalShares,
+            _tokenDecimals: params.shareDecimals
         });
 
         // Since Aave generates yield in the same token as the tokenOut, we must calculate the amount of tokenOut
         // (including both the initial deposit and accrued yield) to be withdrawn. To achieve this, we apply the
         // percentage of the user's total shares to be withdrawn relative to their entire shareholding to the available
         // balance of aTokens in the Aave pool, ensuring the correct proportion of assets is withdrawn.
-        params.assetsToWithdraw = IAToken(tokenOut).balanceOf(_recipient) * params.shareRatio / (10 ** sharesDecimals);
+        // Note: In case that params.shareRatio is equal to 1 (100% of shares are being withdrawn),
+        // params.assetsToWithdraw should be set to type(uint256).max as then we are sure that we will withdraw all
+        // remaining balance from given aToken, and totalShares will be zeroed.
+        params.assetsToWithdraw = params.shareRatio == 10 ** params.shareDecimals
+            ? type(uint256).max
+            : IAToken(tokenOut).balanceOf(_recipient) * params.shareRatio / 10 ** params.shareDecimals;
 
         // To accurately compute the protocol's fees from the yield generated by the strategy, we first need to
         // determine the percentage of the initial investment being withdrawn. This allows us to assess whether any
         // yield has been generated beyond the initial investment.
-        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** sharesDecimals);
+        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** params.shareDecimals);
 
         // Perform the withdrawal operation from user's holding address.
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
@@ -303,23 +293,21 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
             _call: abi.encodeCall(IPool.withdraw, (_asset, params.assetsToWithdraw, _recipient))
         });
         require(success, OperationsLib.getRevertMsg(returnData));
-        params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
 
         // Get the actually withdrawn amount and calculate the generated yield
-        params.withdrawnAmount = params.balanceAfter - params.balanceBefore;
+        params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
         params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
 
         // Take protocol's fee from generated yield if any.
         if (params.yield > 0) {
             params.fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(params.yield) });
-
             if (params.fee > 0) {
                 params.withdrawnAmount -= params.fee;
                 params.yield -= params.fee.toInt256();
             }
         }
 
-        recipients[_recipient].totalShares -= _shares;
+        recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
@@ -327,14 +315,14 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         emit Withdraw({
             asset: _asset,
             recipient: _recipient,
-            shares: _shares,
+            shares: params.shares,
             withdrawnAmount: params.withdrawnAmount,
             initialInvestment: params.investment,
             yield: params.yield
         });
 
         // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+        jigsawStaker.withdraw({ _user: _recipient, _amount: params.shares });
 
         return (params.withdrawnAmount, params.investment, params.yield, params.fee);
     }
