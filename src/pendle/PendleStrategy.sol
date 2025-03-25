@@ -3,6 +3,7 @@ pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import "@pendle/interfaces/IPAllActionV3.sol";
 import { IPMarket, IPYieldToken, IStandardizedYield } from "@pendle/interfaces/IPMarket.sol";
@@ -27,27 +28,42 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
  */
 contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     // -- Custom types --
 
     /**
      * @notice Struct for the initializer params.
+     * @param owner The address of the initial owner of the Strategy contract
+     * @param managerContainer The address of the contract that contains the manager contract
+     * @param pendleRouter The address of the Pendle's Router contract
+     * @param pendleMarket The address of the Pendle's Market contract used for strategy
+     * @param stakerFactory The address of the StakerLightFactory contract
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
+     * @param jigsawRewardDuration The address of the initial Jigsaw reward distribution duration for the strategy
+     * @param tokenIn The address of the LP token
+     * @param tokenOut The address of the Pendle receipt token
+     * @param rewardToken The address of the Pendle primary reward token
      */
     struct InitializerParams {
-        address owner; // The address of the initial owner of the Strategy contract
-        address managerContainer; // The address of the contract that contains the manager contract
-        address pendleRouter; // The address of the Pendle's Router contract
-        address pendleMarket; // The address of the Pendle's Market contract used for strategy.
-        address stakerFactory; // The address of the StakerLightFactory contract
-        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the Pendle receipt token
-        address rewardToken; // The address of the Pendle primary reward token
+        address owner;
+        address managerContainer;
+        address pendleRouter;
+        address pendleMarket;
+        address stakerFactory;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
+        address rewardToken;
     }
 
     /**
      * @notice Struct containing parameters for a deposit operation.
+     * @param minLpOut The minimum amount of LP tokens to receive
+     * @param guessPtReceivedFromSy The estimated amount of PT received from the strategy
+     * @param input The input parameters for the pendleRouter addLiquiditySingleToken function
+     * @param limit The limit parameters for the pendleRouter addLiquiditySingleToken function
      */
     struct DepositParams {
         uint256 minLpOut;
@@ -56,19 +72,12 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         LimitOrderData limit;
     }
 
-    /**
-     * @notice Struct containing parameters for a withdrawal operation.
-     */
-    struct WithdrawParams {
-        uint256 shareRatio; // The share ratio representing the proportion of the total investment owned by the user.
-        uint256 investment; // The amount of funds invested by the user.
-        uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
-        uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
-        uint256 balanceDiff; // The difference between balanceAfter and balanceBefore.
-        uint256 performanceFee; // Protocol's performanceFee applied to extra generated yield.
-        TokenOutput output; // Pendle's output param.
-        LimitOrderData limit; // Pendle's limit param.
-    }
+    // -- Errors --
+
+    error InvalidTokenIn();
+    error InvalidTokenOut();
+    error PendleSwapNotEmpty();
+    error SwapDataNotEmpty();
 
     // -- State variables --
 
@@ -113,6 +122,16 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
+     * @notice The empty limit order data.
+     */
+    LimitOrderData public EMPTY_LIMIT_ORDER_DATA;
+
+    /**
+     * @notice The keccak256 hash of the empty limit order data.
+     */
+    bytes32 public EMPTY_SWAP_DATA_HASH;
+
+    /**
      * @notice A mapping that stores participant details by address.
      */
     mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
@@ -138,19 +157,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      * - `_params.pendleRouter` must be valid (`"3036"` error code if invalid).
      * - `_params.pendleMarket` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
-     * - `_params.rewardToken` must be valid (`"3036"` error code if invalid).
-     *
-     * @param _params Struct containing all initialization parameters:
-     * - owner: The address of the initial owner of the Strategy contract.
-     * - managerContainer: The address of the contract that contains the manager contract.
-     * - pendleRouter:  The address of the Pendle's Router contract.
-     * - pendleMarket:  The Pendle's Router contract.
-     * - stakerFactory: The address of the StakerLightFactory contract.
-     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
-     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
-     * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Pendle receipt token received as output from the strategy.
-     * - rewardToken: The address of the Pendle primary reward token.
+     * - `_params.rewardToken` must be valid (`"3000"` error code if invalid).
      */
     function initialize(
         InitializerParams memory _params
@@ -158,7 +165,6 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.managerContainer != address(0), "3065");
         require(_params.pendleRouter != address(0), "3036");
         require(_params.pendleMarket != address(0), "3036");
-        require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
         require(_params.rewardToken != address(0), "3000");
@@ -172,6 +178,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         tokenOut = _params.tokenOut;
         rewardToken = _params.rewardToken;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        EMPTY_SWAP_DATA_HASH = 0x95e00231cb51f973e9db40dd7466e602a0dcf1466ba8363089a90b5cb5416a27;
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -201,6 +208,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _asset The token to be invested.
      * @param _amount The amount of the token to be invested.
      * @param _recipient The address on behalf of which the funds are deposited.
+     * @param _data The data containing the deposit parameters.
      *
      * @return The amount of receipt tokens obtained.
      * @return The amount of the 'tokenIn()' token.
@@ -214,11 +222,15 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_asset == tokenIn, "3001");
 
         DepositParams memory params;
-        (params.minLpOut, params.guessPtReceivedFromSy, params.input, params.limit) =
-            abi.decode(_data, (uint256, ApproxParams, TokenInput, LimitOrderData));
+        (params.minLpOut, params.guessPtReceivedFromSy, params.input) =
+            abi.decode(_data, (uint256, ApproxParams, TokenInput));
 
         require(params.input.tokenIn == tokenIn, "3001");
         require(params.input.netTokenIn == _amount, "2001");
+
+        if (params.input.pendleSwap != address(0)) revert PendleSwapNotEmpty();
+        if (params.input.tokenMintSy != tokenIn) revert InvalidTokenIn();
+        if (keccak256(abi.encode(params.input.swapData)) != EMPTY_SWAP_DATA_HASH) revert SwapDataNotEmpty();
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
@@ -231,7 +243,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
             minLpOut: params.minLpOut,
             guessPtReceivedFromSy: params.guessPtReceivedFromSy,
             input: params.input,
-            limit: params.limit
+            limit: EMPTY_LIMIT_ORDER_DATA
         });
 
         uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
@@ -239,12 +251,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += shares;
 
-        _mint({
-            _receiptToken: receiptToken,
-            _recipient: _recipient,
-            _amount: shares,
-            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
-        });
+        _mint({ _receiptToken: receiptToken, _recipient: _recipient, _amount: shares, _tokenDecimals: sharesDecimals });
 
         jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
@@ -263,94 +270,111 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Withdraws deposited funds from the strategy.
      *
-     * @dev Some strategies will only allow the tokenIn to be withdrawn.
-     * @dev 'assetAmount' will be equal to 'tokenInAmount' if '_asset' is the same as the strategy's 'tokenIn()'.
-     *
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
      * @param _asset The token to be withdrawn.
+     * @param _data The data containing the token output .
      *
-     * @return The amount of the asset obtained from the operation.
-     * @return The amount of the 'tokenIn()' token.
+     * @return withdrawnAmount The actual amount of asset withdrawn from the strategy.
+     * @return initialInvestment The amount of initial investment.
+     * @return yield The amount of yield generated by the user beyond their initial investment.
+     * @return fee The amount of fee charged by the strategy.
      */
     function withdraw(
         uint256 _shares,
         address _recipient,
         address _asset,
         bytes calldata _data
-    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
-        WithdrawParams memory params;
-        (params.output, params.limit) = abi.decode(_data, (TokenOutput, LimitOrderData));
+        WithdrawParams memory params = WithdrawParams({
+            shares: _shares,
+            totalShares: recipients[_recipient].totalShares,
+            shareRatio: 0,
+            shareDecimals: sharesDecimals,
+            investment: 0,
+            assetsToWithdraw: 0, // not used in Pendle strategy
+            balanceBefore: 0,
+            withdrawnAmount: 0,
+            yield: 0,
+            fee: 0
+        });
+
+        // Decode pendle's output params used for removeLiquiditySingleToken.
+        TokenOutput memory output = abi.decode(_data, (TokenOutput));
+
+        if (output.pendleSwap != address(0)) revert PendleSwapNotEmpty();
+        if (output.tokenOut != tokenIn || output.tokenRedeemSy != tokenIn) revert InvalidTokenOut();
+        if (keccak256(abi.encode(output.swapData)) != EMPTY_SWAP_DATA_HASH) revert SwapDataNotEmpty();
 
         params.shareRatio = OperationsLib.getRatio({
-            numerator: _shares,
-            denominator: recipients[_recipient].totalShares,
-            precision: IERC20Metadata(tokenOut).decimals(),
+            numerator: params.shares,
+            denominator: params.totalShares,
+            precision: params.shareDecimals,
             rounding: OperationsLib.Rounding.Floor
         });
 
         _burn({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _shares: _shares,
-            _totalShares: recipients[_recipient].totalShares,
-            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
+            _shares: params.shares,
+            _totalShares: params.totalShares,
+            _tokenDecimals: params.shareDecimals
         });
 
         // To accurately compute the protocol's fees from the yield generated by the strategy, we first need to
         // determine the percentage of the initial investment being withdrawn. This allows us to assess whether any
         // yield has been generated beyond the initial investment.
-        params.investment =
-            (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
-
+        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** params.shareDecimals);
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
-        IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: address(pendleRouter), _amount: _shares });
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+        IHolding(_recipient).approve({
+            _tokenAddress: tokenOut,
+            _destination: address(pendleRouter),
+            _amount: params.shares
+        });
+        _genericCall({
+            _holding: _recipient,
             _contract: address(pendleRouter),
             _call: abi.encodeCall(
                 IPActionAddRemoveLiqV3.removeLiquiditySingleToken,
-                (
-                    _recipient, // receiverOfUnderlying
-                    pendleMarket,
-                    _shares,
-                    params.output,
-                    params.limit
-                )
+                (_recipient, pendleMarket, params.shares, output, EMPTY_LIMIT_ORDER_DATA)
             )
         });
 
-        // Assert the call succeeded.
-        if (!success) revert(OperationsLib.getRevertMsg(returnData));
-        params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
+        // Take protocol's fee from generated yield if any.
+        params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
+        params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
 
-        // Take protocol's fee if any.
-        params.balanceDiff = params.balanceAfter - params.balanceBefore;
-        (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        if (params.balanceDiff > params.investment && params.performanceFee != 0) {
-            uint256 rewardAmount = params.balanceDiff - params.investment;
-            uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
-            if (fee > 0) {
-                address feeAddr = _getManager().feeAddress();
-                params.balanceDiff -= fee;
-                emit FeeTaken(tokenIn, feeAddr, fee);
-                IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
+        // Take protocol's fee from generated yield if any.
+        if (params.yield > 0) {
+            params.fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(params.yield) });
+            if (params.fee > 0) {
+                params.withdrawnAmount -= params.fee;
+                params.yield -= params.fee.toInt256();
             }
         }
 
-        recipients[_recipient].totalShares -= _shares;
+        recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
 
-        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
-        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+        emit Withdraw({
+            asset: _asset,
+            recipient: _recipient,
+            shares: params.shares,
+            withdrawnAmount: params.withdrawnAmount,
+            initialInvestment: params.investment,
+            yield: params.yield
+        });
 
-        return (params.balanceDiff, params.investment);
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: params.shares });
+
+        return (params.withdrawnAmount, params.investment, params.yield, params.fee);
     }
 
     /**
@@ -368,12 +392,11 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         onlyStrategyManager
         returns (uint256[] memory claimedAmounts, address[] memory rewardsList)
     {
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+        (, bytes memory returnData) = _genericCall({
+            _holding: _recipient,
             _contract: pendleMarket,
             _call: abi.encodeCall(IPMarket.redeemRewards, _recipient)
         });
-
-        if (!success) revert(OperationsLib.getRevertMsg(returnData));
 
         // Get Pendle data.
         rewardsList = IPMarket(pendleMarket).getRewardTokens();
