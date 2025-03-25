@@ -289,11 +289,11 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         // Perform the withdrawal operation from user's holding address.
         // Note: The `withdraw` function can be paused by Aave protocol, reverting the transaction.
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+        _genericCall({
+            _holding: _recipient,
             _contract: address(lendingPool),
             _call: abi.encodeCall(IPool.withdraw, (_asset, params.assetsToWithdraw, _recipient))
         });
-        require(success, OperationsLib.getRevertMsg(returnData));
 
         // Get the actually withdrawn amount and calculate the generated yield
         params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
@@ -345,13 +345,13 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         eligibleTokens[0] = tokenOut;
 
         // Make the claimAllRewards through the user's Holding.
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+        (, bytes memory returnData) = _genericCall({
+            _holding: _recipient,
             _contract: address(rewardsController),
             _call: abi.encodeCall(IRewardsController.claimAllRewards, (eligibleTokens, _recipient))
         });
 
         // Assert the call succeeded.
-        require(success, OperationsLib.getRevertMsg(returnData));
         (address[] memory rewardsList, uint256[] memory claimedAmounts) = abi.decode(returnData, (address[], uint256[]));
 
         // Return if no rewards were claimed.
