@@ -257,9 +257,6 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
     function addRewards(
         uint256 _amount
     ) external override onlyOwner validAmount(_amount) updateReward(address(0)) {
-        // To mitigate any DOS issues, Admin must deposit 1 wei into the staker contract at the initialization
-        require(_totalSupply != 0, "Zero totalSupply");
-
         // Transfer assets from the owner's wallet to this contract.
         IERC20(rewardToken).safeTransferFrom({ from: msg.sender, to: address(this), value: _amount });
 
