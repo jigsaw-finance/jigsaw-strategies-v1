@@ -63,8 +63,7 @@ contract TestDeterministicAddress is StdInvariant, Test {
                             ionPool: 0x0000000000eaEbd95dAfcA37A39fd09745739b78,
                             jigsawRewardToken: 0x371BC93e9661d445fC046918231483faDF1Dbd96,
                             jigsawRewardDuration: 5_184_000,
-                            tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
-                            tokenOut: 0x0000000000eaEbd95dAfcA37A39fd09745739b78
+                            tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0
                         })
                     )
                 )

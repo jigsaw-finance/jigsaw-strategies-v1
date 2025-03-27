@@ -38,8 +38,7 @@ contract IonStrategyForkTest is Test, BasicContractsFixture {
                 ionPool: address(ION_POOL),
                 jigsawRewardToken: jRewards,
                 jigsawRewardDuration: 60 days,
-                tokenIn: tokenIn,
-                tokenOut: tokenOut
+                tokenIn: tokenIn
             })
         );
         address proxy = address(new ERC1967Proxy(strategyImplementation, data));

@@ -149,8 +149,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                         jigsawRewardToken: jigsawRewardToken,
                         ionPool: ionStrategyParams[i].ionPool,
                         jigsawRewardDuration: ionStrategyParams[i].jigsawRewardDuration,
-                        tokenIn: ionStrategyParams[i].tokenIn,
-                        tokenOut: ionStrategyParams[i].tokenOut
+                        tokenIn: ionStrategyParams[i].tokenIn
                     })
                 );
             }
