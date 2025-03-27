@@ -76,11 +76,6 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
      */
     mapping(address user => uint256 amountAccrued) public override rewards;
 
-    /**
-     * @notice Total supply limit of the staking token.
-     */
-    uint256 public constant TOTAL_SUPPLY_LIMIT = 1e34;
-
     uint256 private _totalSupply;
     mapping(address user => uint256 amount) private _balances;
 
@@ -182,7 +177,6 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
         rewardToken = _rewardToken;
         strategy = _strategy;
         rewardsDuration = _rewardsDuration;
-        periodFinish = block.timestamp + rewardsDuration;
     }
 
     // -- Staker's operations  --
@@ -198,10 +192,6 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
         address _user,
         uint256 _amount
     ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
-        // Ensure that deposit operation will never surpass supply limit
-        if (_totalSupply + _amount > TOTAL_SUPPLY_LIMIT) {
-            revert DepositSurpassesSupplyLimit(_amount, TOTAL_SUPPLY_LIMIT);
-        }
         _totalSupply += _amount;
 
         _balances[_user] += _amount;
@@ -281,13 +271,10 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
         } else {
             uint256 remaining = periodFinish - block.timestamp;
             uint256 leftover = remaining * rewardRate;
-            rewardRate = (_amount + leftover) / duration;
+            rewardRate = (_amount + leftover) / remaining;
         }
 
         if (rewardRate == 0) revert RewardAmountTooSmall();
-
-        uint256 balance = IERC20(rewardToken).balanceOf(address(this));
-        if (rewardRate > (balance / duration)) revert RewardRateTooBig();
 
         lastUpdateTime = block.timestamp;
         emit RewardAdded(_amount);
