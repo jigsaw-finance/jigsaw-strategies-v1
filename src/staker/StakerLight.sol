@@ -13,12 +13,14 @@ import { IStakerLight } from "./interfaces/IStakerLight.sol";
 
 /**
  * @title StakerLight
+ *
  * @notice StakerLight is a contract responsible for distributing Jigsaw rewards to Jigsaw strategy investors.
  * @notice This contract accepts Jigsaw Strategy's receipt tokens as `tokenIn` and distributes rewards accordingly.
  * @notice It is not intended for direct use; interaction should be done through the corresponding `Staker` contract.
  *
  * @dev This contract is called light due to the fact that it does not actually transfer the receipt tokens from the
  * user and is only used for accounting.
+ * @dev It is expected that rewards will not be distributed for periods when there are no stakers in the contract.
  * @dev This contract inherits functionalities from `Ownable2StepUpgradeable` and `ReentrancyGuardUpgradeable`.
  *
  * @author Hovooo (@hovooo)
