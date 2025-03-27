@@ -238,7 +238,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
-        require(_shares <= IAToken(tokenOut).scaledBalanceOf(_recipient), "2002");
+        require(_shares <= recipients[_recipient].totalShares, "2002");
 
         WithdrawParams memory params = WithdrawParams({
             shares: _shares,
