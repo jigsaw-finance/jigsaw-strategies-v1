@@ -32,16 +32,23 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
 
     /**
      * @notice Struct for the initializer params.
+     * @param owner The address of the initial owner of the Strategy contract
+     * @param manager The address of the Manager contract
+     * @param stakerFactory The address of the StakerLightFactory contract
+     * @param ionPool The address of the Ion Pool
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
+     * @param jigsawRewardDuration The address of the initial Jigsaw reward distribution duration for the strategy
+     * @param tokenIn The address of the LP token
+     * @dev The `tokenOut` field is not used in the Ion strategy as it is the same as `ionPool`.
      */
     struct InitializerParams {
-        address owner; // The address of the initial owner of the Strategy contract
-        address manager; // The address of the Manager contract
-        address stakerFactory; // The address of the StakerLightFactory contract
-        address ionPool; // The address of the Ion Pool
-        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the Ion receipt token (iToken)
+        address owner;
+        address manager;
+        address stakerFactory;
+        address ionPool;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
     }
 
     // -- Errors --
@@ -101,9 +108,11 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Initializes the Ion Strategy contract with necessary parameters.
      *
+     * @notice IonPool is an upgradeable contract for each of its markets. This introduces upgrade risk
+     * that users should be aware of, as changes to the implementation could affect deposited funds.
+     *
      * @dev Configures core components such as manager, tokens, pools, and reward systems
      * needed for the strategy to operate.
-     *
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
@@ -119,16 +128,14 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.manager != address(0), "3065");
         require(_params.ionPool != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
-        require(_params.tokenOut != address(0), "3000");
-        require(_params.tokenOut == _params.ionPool, "3104");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
         manager = IManager(_params.manager);
         ionPool = IIonPool(_params.ionPool);
         tokenIn = _params.tokenIn;
-        tokenOut = _params.tokenOut;
-        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        tokenOut = _params.ionPool;
+        sharesDecimals = IERC20Metadata(_params.ionPool).decimals();
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -268,6 +275,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
         // Perform the withdrawal operation from user's holding address.
+        // Note: The `withdraw` function can be paused by Ion protocol, reverting the transaction.
         _genericCall({
             _holding: _recipient,
             _contract: address(ionPool),
