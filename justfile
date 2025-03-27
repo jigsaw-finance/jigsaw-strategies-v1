@@ -52,7 +52,14 @@ format: && _timer
 	forge fmt
 
 test-all: && _timer
-	forge test
+	forge test -vvvv --match-contract AaveV3StrategyTest
+	forge test -vvvv --match-contract DineroStrategyTest
+	forge test -vvvv --match-contract IonStrategyTest
+	forge test -vvvv --match-contract PendleStrategyTest
+	forge test -vvvv --match-contract ReservoirSavingStrategyTest
+	forge test -vvvv --match-contract ReservoirMath
+	forge test -vvvv --match-contract DeployAllTest
+
 
 test-gas: && _timer
     forge test --gas-report
