@@ -17,7 +17,7 @@ import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 IIonPool constant ION_POOL = IIonPool(0x0000000000eaEbd95dAfcA37A39fd09745739b78);
 IWhitelist constant ION_WHITELIST = IWhitelist(0x7E317f99aA313669AaCDd8dB3927ff3aCB562dAD);
 
-contract IonStrategyForkTest is Test, BasicContractsFixture {
+contract IonStrategyTest is Test, BasicContractsFixture {
     // Mainnet wstETH
     address internal tokenIn = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
     // Ion iweETH-wstETH token is the same as the pool due to Vault architecture
