@@ -284,6 +284,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         });
 
         // Use the PirexEth contract to instantly redeem the withdrawn pxETH for ETH.
+        // Note: The `instantRedeemWithPxEth` function can be paused by PirexEth protocol, reverting the transaction.
         (uint256 postFeeAmount,) = pirexEth.instantRedeemWithPxEth(abi.decode(returnData, (uint256)), address(this));
 
         // Transfer WETH to the `_recipient`.
