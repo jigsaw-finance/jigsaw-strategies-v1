@@ -43,7 +43,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
             AaveV3Strategy.initialize,
             AaveV3Strategy.InitializerParams({
                 owner: OWNER,
-                managerContainer: address(managerContainer),
+                manager: address(manager),
                 stakerFactory: address(stakerFactory),
                 lendingPool: lendingPool,
                 rewardsController: rewardsController,
@@ -65,7 +65,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
             OWNER,
-            address(managerContainer),
+            address(manager),
             address(tokenIn),
             address(usdcOracle),
             bytes(""),
@@ -83,7 +83,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     // Test initialization
     function test_initialization() public view {
         assertEq(strategy.owner(), OWNER, "Wrong owner");
-        assertEq(address(strategy.managerContainer()), address(managerContainer), "Wrong managerContainer");
+        assertEq(address(strategy.manager()), address(manager), "Wrong manager");
         assertEq(address(strategy.lendingPool()), lendingPool, "Wrong lendingPool");
         assertEq(address(strategy.rewardsController()), rewardsController, "Wrong rewardsController");
         assertEq(strategy.rewardToken(), address(0), "Wrong rewardToken");
@@ -111,7 +111,8 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+        (uint256 receiptTokens, uint256 tokenInAmount) =
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         uint256 expectedShares = IAToken(tokenOut).scaledBalanceOf(userHolding) - tokenOutBalanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
@@ -170,7 +171,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        strategyManager.invest(tokenIn, address(strategy), amount, abi.encode("random ref"));
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, abi.encode("random ref"));
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);

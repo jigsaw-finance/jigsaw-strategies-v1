@@ -8,7 +8,6 @@ import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/Saf
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
-import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
@@ -47,7 +46,7 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
     /**
      * @notice Contract that contains the address of the manager contract.
      */
-    IManagerContainer public managerContainer;
+    IManager public manager;
 
     /**
      * @notice Default decimals used for computations.
@@ -113,19 +112,11 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
     // -- Getters --
 
     /**
-     * @notice Retrieves the Manager Contract instance from the Manager Container.
-     * @return IManager The Manager Contract instance.
-     */
-    function _getManager() internal view returns (IManager) {
-        return IManager(managerContainer.manager());
-    }
-
-    /**
      * @notice Retrieves the Strategy Manager Contract instance from the Manager Contract.
      * @return IStrategyManager The Strategy Manager contract instance.
      */
     function _getStrategyManager() internal view returns (IStrategyManager) {
-        return IStrategyManager(_getManager().strategyManager());
+        return IStrategyManager(manager.strategyManager());
     }
 
     // -- Utility functions --
@@ -190,7 +181,7 @@ abstract contract StrategyBaseUpgradeable is Ownable2StepUpgradeable, Reentrancy
         if (performanceFee != 0) {
             fee = OperationsLib.getFeeAbsolute(_yield, performanceFee);
             if (fee > 0) {
-                address feeAddr = _getManager().feeAddress();
+                address feeAddr = manager.feeAddress();
                 emit FeeTaken(_token, feeAddr, fee);
                 IHolding(_recipient).transfer(_token, feeAddr, fee);
             }

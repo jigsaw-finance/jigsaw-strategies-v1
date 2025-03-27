@@ -38,7 +38,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
             ReservoirSavingStrategy.initialize,
             ReservoirSavingStrategy.InitializerParams({
                 owner: OWNER,
-                managerContainer: address(managerContainer),
+                manager: address(manager),
                 creditEnforcer: RESERVOIR_CI,
                 pegStabilityModule: RESERVOIR_PSM,
                 savingModule: RESERVOIR_SM,
@@ -61,7 +61,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
             OWNER,
-            address(managerContainer),
+            address(manager),
             address(tokenIn),
             address(usdcOracle),
             bytes(""),
@@ -89,7 +89,8 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+        (uint256 receiptTokens, uint256 tokenInAmount) =
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
         uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
@@ -139,7 +140,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
         // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
 
-        strategyManager.invest(tokenIn, address(strategy), amount, "");
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
@@ -214,7 +215,8 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+        (uint256 receiptTokens, uint256 tokenInAmount) =
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
         uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
@@ -265,7 +267,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
         // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
 
-        strategyManager.invest(tokenIn, address(strategy), amount, "");
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);

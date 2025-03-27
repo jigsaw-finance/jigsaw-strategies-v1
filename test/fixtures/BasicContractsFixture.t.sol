@@ -14,7 +14,6 @@ import { HoldingManager } from "@jigsaw/src/HoldingManager.sol";
 import { JigsawUSD } from "@jigsaw/src/JigsawUSD.sol";
 import { LiquidationManager } from "@jigsaw/src/LiquidationManager.sol";
 import { Manager } from "@jigsaw/src/Manager.sol";
-import { ManagerContainer } from "@jigsaw/src/ManagerContainer.sol";
 import { ReceiptToken } from "@jigsaw/src/ReceiptToken.sol";
 import { ReceiptTokenFactory } from "@jigsaw/src/ReceiptTokenFactory.sol";
 import { SharesRegistry } from "@jigsaw/src/SharesRegistry.sol";
@@ -46,7 +45,6 @@ abstract contract BasicContractsFixture is Test {
     HoldingManager internal holdingManager;
     LiquidationManager internal liquidationManager;
     Manager internal manager;
-    ManagerContainer internal managerContainer;
     JigsawUSD internal jUsd;
     ReceiptTokenFactory internal receiptTokenFactory;
     SampleOracle internal usdcOracle;
@@ -78,19 +76,18 @@ abstract contract BasicContractsFixture is Test {
         jUsdOracle = new SampleOracle();
 
         manager = new Manager(OWNER, address(weth), address(jUsdOracle), bytes(""));
-        managerContainer = new ManagerContainer(OWNER, address(manager));
 
-        jUsd = new JigsawUSD(OWNER, address(managerContainer));
+        jUsd = new JigsawUSD(OWNER, address(manager));
         jUsd.updateMintLimit(type(uint256).max);
 
-        holdingManager = new HoldingManager(OWNER, address(managerContainer));
-        liquidationManager = new LiquidationManager(OWNER, address(managerContainer));
-        stablesManager = new StablesManager(OWNER, address(managerContainer), address(jUsd));
-        strategyManager = new StrategyManager(OWNER, address(managerContainer));
+        holdingManager = new HoldingManager(OWNER, address(manager));
+        liquidationManager = new LiquidationManager(OWNER, address(manager));
+        stablesManager = new StablesManager(OWNER, address(manager), address(jUsd));
+        strategyManager = new StrategyManager(OWNER, address(manager));
 
         sharesRegistry = new SharesRegistry(
             OWNER,
-            address(managerContainer),
+            address(manager),
             address(usdc),
             address(usdcOracle),
             bytes(""),
@@ -103,7 +100,7 @@ abstract contract BasicContractsFixture is Test {
 
         wethSharesRegistry = new SharesRegistry(
             OWNER,
-            address(managerContainer),
+            address(manager),
             address(weth),
             address(wethOracle),
             bytes(""),
@@ -130,7 +127,7 @@ abstract contract BasicContractsFixture is Test {
         manager.setStrategyManager(address(strategyManager));
 
         strategyWithoutRewardsMock = new StrategyWithoutRewardsMock({
-            _managerContainer: address(managerContainer),
+            _manager: address(manager),
             _tokenIn: address(usdc),
             _tokenOut: address(usdc),
             _rewardToken: address(0),
@@ -151,9 +148,7 @@ abstract contract BasicContractsFixture is Test {
 
         // save deployed addresses to configs
         Strings.toHexString(uint160(OWNER), 20).write("./deployment-config/00_CommonConfig.json", ".INITIAL_OWNER");
-        Strings.toHexString(uint160(address(managerContainer)), 20).write(
-            "./deployment-config/00_CommonConfig.json", ".MANAGER_CONTAINER"
-        );
+        Strings.toHexString(uint160(address(manager)), 20).write("./deployment-config/00_CommonConfig.json", ".MANAGER");
         Strings.toHexString(uint160(jRewards), 20).write("./deployment-config/00_CommonConfig.json", ".JIGSAW_REWARDS");
         Strings.toHexString(uint160(address(strategyManager)), 20).write(
             "./deployment-config/00_CommonConfig.json", ".STRATEGY_MANAGER"

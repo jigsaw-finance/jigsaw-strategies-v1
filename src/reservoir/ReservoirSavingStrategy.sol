@@ -7,7 +7,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
-import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
@@ -36,7 +36,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Struct for the initializer params.
      * @param owner The address of the initial owner of the Strategy contract
-     * @param managerContainer The address of the contract that contains the manager contract
+     * @param manager The address of the Manager contract
      * @param creditEnforcer The address of the Reservoir's CreditEnforcer contract
      * @param pegStabilityModule The Reservoir's PegStabilityModule contract.
      * @param savingModule The Reservoir's SavingModule contract.
@@ -49,7 +49,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     struct InitializerParams {
         address owner;
-        address managerContainer;
+        address manager;
         address creditEnforcer;
         address pegStabilityModule;
         address savingModule;
@@ -154,7 +154,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
      * - `_params.creditEnforcer` must be valid (`"3036"` error code if invalid).
      * - `_params.pegStabilityModule` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
@@ -164,7 +164,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
     function initialize(
         InitializerParams memory _params
     ) public initializer {
-        require(_params.managerContainer != address(0), "3065");
+        require(_params.manager != address(0), "3065");
         require(_params.creditEnforcer != address(0), "3036");
         require(_params.pegStabilityModule != address(0), "3036");
         require(_params.savingModule != address(0), "3036");
@@ -175,7 +175,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
-        managerContainer = IManagerContainer(_params.managerContainer);
+        manager = IManager(_params.manager);
         creditEnforcer = ICreditEnforcer(_params.creditEnforcer);
         pegStabilityModule = _params.pegStabilityModule;
         savingModule = _params.savingModule;
@@ -187,7 +187,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
-                _receiptTokenFactory: _getManager().receiptTokenFactory(),
+                _receiptTokenFactory: manager.receiptTokenFactory(),
                 _receiptTokenName: "Reservoir Receipt Token",
                 _receiptTokenSymbol: "ReRT"
             })
@@ -196,7 +196,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
         jigsawStaker = IStakerLight(
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
-                _holdingManager: _getManager().holdingManager(),
+                _holdingManager: manager.holdingManager(),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration

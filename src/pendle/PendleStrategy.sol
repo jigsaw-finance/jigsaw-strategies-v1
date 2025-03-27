@@ -12,7 +12,7 @@ import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
-import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
@@ -35,7 +35,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Struct for the initializer params.
      * @param owner The address of the initial owner of the Strategy contract
-     * @param managerContainer The address of the contract that contains the manager contract
+     * @param manager The address of the Manager contract
      * @param pendleRouter The address of the Pendle's Router contract
      * @param pendleMarket The address of the Pendle's Market contract used for strategy
      * @param stakerFactory The address of the StakerLightFactory contract
@@ -47,7 +47,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     struct InitializerParams {
         address owner;
-        address managerContainer;
+        address manager;
         address pendleRouter;
         address pendleMarket;
         address stakerFactory;
@@ -153,16 +153,18 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
      * - `_params.pendleRouter` must be valid (`"3036"` error code if invalid).
      * - `_params.pendleMarket` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      * - `_params.rewardToken` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters.
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
-        require(_params.managerContainer != address(0), "3065");
+        require(_params.manager != address(0), "3065");
         require(_params.pendleRouter != address(0), "3036");
         require(_params.pendleMarket != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
@@ -171,7 +173,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
-        managerContainer = IManagerContainer(_params.managerContainer);
+        manager = IManager(_params.manager);
         pendleRouter = IPAllActionV3(_params.pendleRouter);
         pendleMarket = _params.pendleMarket;
         tokenIn = _params.tokenIn;
@@ -183,7 +185,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
-                _receiptTokenFactory: _getManager().receiptTokenFactory(),
+                _receiptTokenFactory: manager.receiptTokenFactory(),
                 _receiptTokenName: "Pendle Receipt Token",
                 _receiptTokenSymbol: "PeRT"
             })
@@ -192,7 +194,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         jigsawStaker = IStakerLight(
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
-                _holdingManager: _getManager().holdingManager(),
+                _holdingManager: manager.holdingManager(),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration
@@ -404,7 +406,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
 
         // Get fee data.
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        address feeAddr = _getManager().feeAddress();
+        address feeAddr = manager.feeAddress();
 
         for (uint256 i = 0; i < claimedAmounts.length; i++) {
             // Take protocol fee for all non zero rewards.

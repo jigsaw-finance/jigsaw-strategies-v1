@@ -10,7 +10,7 @@ import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
-import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
@@ -36,7 +36,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Struct for the initializer params.
      * @param owner The address of the initial owner of the Strategy contract
-     * @param managerContainer The address of the contract that contains the manager contract
+     * @param manager The address of the Manager contract
      * @param stakerFactory The address of the StakerLightFactory contract
      * @param rewardToken The address of the Aave reward token associated with the strategy
      * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
@@ -48,7 +48,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      */
     struct InitializerParams {
         address owner;
-        address managerContainer;
+        address manager;
         address stakerFactory;
         address rewardToken;
         address jigsawRewardToken;
@@ -123,7 +123,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
      * - `_params.lendingPool` must be valid (`"3036"` error code if invalid).
      * - `_params.rewardsController` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
@@ -133,7 +133,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
     function initialize(
         InitializerParams memory _params
     ) public initializer {
-        require(_params.managerContainer != address(0), "3065");
+        require(_params.manager != address(0), "3065");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
         require(_params.lendingPool != address(0), "3036");
@@ -141,7 +141,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
-        managerContainer = IManagerContainer(_params.managerContainer);
+        manager = IManager(_params.manager);
         rewardToken = _params.rewardToken;
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
@@ -152,7 +152,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
-                _receiptTokenFactory: _getManager().receiptTokenFactory(),
+                _receiptTokenFactory: manager.receiptTokenFactory(),
                 _receiptTokenName: "Aave Strategy Receipt Token",
                 _receiptTokenSymbol: "AaRT"
             })
@@ -161,7 +161,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         jigsawStaker = IStakerLight(
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
-                _holdingManager: _getManager().holdingManager(),
+                _holdingManager: manager.holdingManager(),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration
@@ -358,7 +358,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         if (rewardsList.length == 0) return (claimedAmounts, rewardsList);
 
         (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        address feeAddr = _getManager().feeAddress();
+        address feeAddr = manager.feeAddress();
 
         // Take performance fee for all the rewards.
         for (uint256 i = 0; i < rewardsList.length; i++) {

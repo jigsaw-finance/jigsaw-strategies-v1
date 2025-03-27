@@ -3,13 +3,14 @@ pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { IAutoPxEth } from "./interfaces/IAutoPxEth.sol";
 import { IPirexEth } from "./interfaces/IPirexEth.sol";
 import { IWETH9 } from "./interfaces/IWETH9.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
-import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
@@ -28,6 +29,7 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
  */
 contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     // -- Custom types --
 
@@ -36,7 +38,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     struct InitializerParams {
         address owner; // The address of the initial owner of the Strategy contract
-        address managerContainer; // The address of the contract that contains the manager contract
+        address manager; // The address of the Manager contract
         address stakerFactory; // The address of the StakerLightFactory contract
         address pirexEth; // The address of the PirexEth
         address autoPirexEth; // The address of the AutoPirexEth
@@ -44,18 +46,6 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of the PirexEth receipt token (pxEth)
-    }
-
-    /**
-     * @notice Struct containing parameters for a withdrawal operation.
-     */
-    struct WithdrawParams {
-        uint256 shareRatio; // The share ratio representing the proportion of the total investment owned by the user.
-        uint256 investment; // The amount of funds invested by the user.
-        uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
-        uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
-        uint256 balanceDiff; // The difference between balanceAfter and balanceBefore.
-        uint256 performanceFee; // Protocol's performanceFee applied to extra generated yield.
     }
 
     // -- Errors --
@@ -137,35 +127,25 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
      * - `_params.pirexEth` must be valid (`"3036"` error code if invalid).
      * - `_params.autoPirexEth` must be valid (`"3036"` error code if invalid).
-     * - `_params.rewardsController` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      *
-     * @param _params Struct containing all initialization parameters:
-     * - owner: The address of the initial owner of the Strategy contract.
-     * - managerContainer: The address of the contract that contains the manager contract.
-     * - stakerFactory: The address of the StakerLightFactory contract.
-     * - pirexEth: The address of the PirexEth.
-     * - autoPirexEth: The address of the AutoPirexEth.
-     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
-     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
-     * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the PirexEth receipt token (pxEth).
+     * @param _params Struct containing all initialization parameters.
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
-        require(_params.managerContainer != address(0), "3065");
+        require(_params.manager != address(0), "3065");
         require(_params.pirexEth != address(0), "3036");
-        require(_params.autoPirexEth != address(0), "3000");
+        require(_params.autoPirexEth != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
-        managerContainer = IManagerContainer(_params.managerContainer);
+        manager = IManager(_params.manager);
         pirexEth = IPirexEth(_params.pirexEth);
         autoPirexEth = IAutoPxEth(_params.autoPirexEth);
         tokenIn = _params.tokenIn;
@@ -175,16 +155,16 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
-                _receiptTokenFactory: _getManager().receiptTokenFactory(),
+                _receiptTokenFactory: manager.receiptTokenFactory(),
                 _receiptTokenName: "PirexEth Strategy Receipt Token",
-                _receiptTokenSymbol: "apxEth"
+                _receiptTokenSymbol: "DiRT"
             })
         );
 
         jigsawStaker = IStakerLight(
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
-                _holdingManager: _getManager().holdingManager(),
+                _holdingManager: manager.holdingManager(),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration
@@ -225,12 +205,7 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         recipients[_recipient].totalShares += shares;
 
         // Mint Strategy's receipt tokens to allow later withdrawal.
-        _mint({
-            _receiptToken: receiptToken,
-            _recipient: _recipient,
-            _amount: shares,
-            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
-        });
+        _mint({ _receiptToken: receiptToken, _recipient: _recipient, _amount: shares, _tokenDecimals: sharesDecimals });
 
         // Register `_recipient`'s deposit operation to generate jigsaw rewards.
         jigsawStaker.deposit({ _user: _recipient, _amount: shares });
@@ -261,24 +236,28 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
         require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
         WithdrawParams memory params = WithdrawParams({
+            shares: _shares,
+            totalShares: recipients[_recipient].totalShares,
             shareRatio: 0,
+            shareDecimals: sharesDecimals,
             investment: 0,
+            assetsToWithdraw: 0, // not used in Dinero strategy
             balanceBefore: 0,
-            balanceAfter: 0,
-            balanceDiff: 0,
-            performanceFee: 0
+            withdrawnAmount: 0,
+            yield: 0,
+            fee: 0
         });
 
         // Calculate the ratio between all user's shares and the amount of shares used for withdrawal.
         params.shareRatio = OperationsLib.getRatio({
-            numerator: _shares,
-            denominator: recipients[_recipient].totalShares,
-            precision: IERC20Metadata(tokenOut).decimals(),
+            numerator: params.shares,
+            denominator: params.totalShares,
+            precision: params.shareDecimals,
             rounding: OperationsLib.Rounding.Floor
         });
 
@@ -286,64 +265,62 @@ contract DineroStrategy is IStrategy, StrategyBaseUpgradeable {
         _burn({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _shares: _shares,
-            _totalShares: recipients[_recipient].totalShares,
-            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
+            _shares: params.shares,
+            _totalShares: params.totalShares,
+            _tokenDecimals: params.shareDecimals
         });
 
         // To accurately compute the protocol's fees from the yield generated by the strategy, we first need to
         // determine the percentage of the initial investment being withdrawn. This allows us to assess whether any
         // yield has been generated beyond the initial investment.
-        params.investment =
-            (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
-
+        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** params.shareDecimals);
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
         // Redeem pxETH via the AutoPirexEth contract using the recipient's `IHolding` contract.
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+        (, bytes memory returnData) = _genericCall({
+            _holding: _recipient,
             _contract: address(autoPirexEth),
             _call: abi.encodeCall(IAutoPxEth.redeem, (_shares, address(this), _recipient))
         });
 
-        // Ensure the external call was successful and decode any potential revert reason.
-        require(success, OperationsLib.getRevertMsg(returnData));
-
-        // Decode the returned data to get the amount of pxETH withdrawn from the AutoPirexEth contract.
-        uint256 pxEthWithdrawn = abi.decode(returnData, (uint256));
-
         // Use the PirexEth contract to instantly redeem the withdrawn pxETH for ETH.
-        (uint256 postFeeAmount,) = pirexEth.instantRedeemWithPxEth(pxEthWithdrawn, address(this));
-
-        // Swap ETH back to WETH.
-        IWETH9(tokenIn).deposit{ value: postFeeAmount }();
+        (uint256 postFeeAmount,) = pirexEth.instantRedeemWithPxEth(abi.decode(returnData, (uint256)), address(this));
 
         // Transfer WETH to the `_recipient`.
+        IWETH9(tokenIn).deposit{ value: postFeeAmount }();
         IERC20(tokenIn).safeTransfer(_recipient, postFeeAmount);
 
-        // Take protocol's fee if any.
-        params.balanceDiff = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
-        (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        if (params.balanceDiff > params.investment && params.performanceFee != 0) {
-            uint256 rewardAmount = params.balanceDiff - params.investment;
-            uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
-            if (fee > 0) {
-                address feeAddr = _getManager().feeAddress();
-                params.balanceDiff -= fee;
-                emit FeeTaken(tokenIn, feeAddr, fee);
-                IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
+        // Get the actually withdrawn amount and calculate the generated yield
+        params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
+        params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
+
+        // Take protocol's fee from generated yield if any.
+        if (params.yield > 0) {
+            params.fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(params.yield) });
+            if (params.fee > 0) {
+                params.withdrawnAmount -= params.fee;
+                params.yield -= params.fee.toInt256();
             }
         }
 
-        recipients[_recipient].totalShares -= _shares;
+        recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
 
-        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
-        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+        emit Withdraw({
+            asset: _asset,
+            recipient: _recipient,
+            shares: params.shares,
+            withdrawnAmount: params.withdrawnAmount,
+            initialInvestment: params.investment,
+            yield: params.yield
+        });
 
-        return (params.balanceDiff, params.investment);
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: params.shares });
+
+        return (params.withdrawnAmount, params.investment, params.yield, params.fee);
     }
 
     /**

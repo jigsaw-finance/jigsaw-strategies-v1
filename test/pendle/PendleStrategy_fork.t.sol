@@ -58,7 +58,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
             PendleStrategy.initialize,
             PendleStrategy.InitializerParams({
                 owner: OWNER,
-                managerContainer: address(managerContainer),
+                manager: address(manager),
                 pendleRouter: PENDLE_ROUTER,
                 pendleMarket: PENDLE_MARKET,
                 stakerFactory: address(stakerFactory),
@@ -80,7 +80,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
             OWNER,
-            address(managerContainer),
+            address(manager),
             address(tokenIn),
             address(usdcOracle),
             bytes(""),
@@ -108,6 +108,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
             tokenIn,
             address(strategy),
             amount,
+            0,
             abi.encode(
                 0,
                 defaultApprox,
@@ -169,6 +170,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
             tokenIn,
             address(strategy),
             amount,
+            0,
             abi.encode(
                 0,
                 defaultApprox,
@@ -277,6 +279,7 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
             tokenIn,
             address(strategy),
             amount,
+            0,
             abi.encode(
                 0,
                 defaultApprox,

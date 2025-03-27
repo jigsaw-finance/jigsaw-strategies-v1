@@ -3,9 +3,10 @@ pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
-import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 
@@ -25,6 +26,7 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
  */
 contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     // -- Custom types --
 
@@ -33,7 +35,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     struct InitializerParams {
         address owner; // The address of the initial owner of the Strategy contract
-        address managerContainer; // The address of the contract that contains the manager contract
+        address manager; // The address of the Manager contract
         address stakerFactory; // The address of the StakerLightFactory contract
         address ionPool; // The address of the Ion Pool
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
@@ -42,18 +44,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         address tokenOut; // The address of the Ion receipt token (iToken)
     }
 
-    /**
-     * @notice Struct containing parameters for a withdrawal operation.
-     */
-    struct WithdrawParams {
-        uint256 shareRatio; // The share ratio representing the proportion of the total investment owned by the user.
-        uint256 assetsToWithdraw; // The amount of tokeIn (initial deposit + yield) to be withdrawn.
-        uint256 investment; // The amount of funds invested by the user used to withdraw.
-        uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
-        uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
-        uint256 balanceDiff; // The difference of the balance before and after
-        uint256 performanceFee; // Protocol's performance fee
-    }
     // -- Errors --
 
     error OperationNotSupported();
@@ -117,31 +107,24 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
      * - `_params.ionPool` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      *
-     * @param _params Struct containing all initialization parameters:
-     * - owner: The address of the initial owner of the Strategy contract.
-     * - managerContainer: The address of the contract that contains the manager contract.
-     * - stakerFactory: The address of the StakerLightFactory contract.
-     * - ionPool: The address of the Ion Pool where tokens will be pooled.
-     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
-     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
-     * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the Ion receipt token (iToken) received as output from the strategy.
+     * @param _params Struct containing all initialization parameters.
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
-        require(_params.managerContainer != address(0), "3065");
+        require(_params.manager != address(0), "3065");
         require(_params.ionPool != address(0), "3036");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
+        require(_params.tokenOut == _params.ionPool, "3104");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
-        managerContainer = IManagerContainer(_params.managerContainer);
+        manager = IManager(_params.manager);
         ionPool = IIonPool(_params.ionPool);
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
@@ -150,7 +133,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
-                _receiptTokenFactory: _getManager().receiptTokenFactory(),
+                _receiptTokenFactory: manager.receiptTokenFactory(),
                 _receiptTokenName: "Ion Strategy Receipt Token",
                 _receiptTokenSymbol: "IoRT"
             })
@@ -159,7 +142,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         jigsawStaker = IStakerLight(
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
-                _holdingManager: _getManager().holdingManager(),
+                _holdingManager: manager.holdingManager(),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration
@@ -203,12 +186,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         recipients[_recipient].totalShares += shares;
 
         // Mint Strategy's receipt tokens to allow later withdrawal.
-        _mint({
-            _receiptToken: receiptToken,
-            _recipient: _recipient,
-            _amount: shares,
-            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
-        });
+        _mint({ _receiptToken: receiptToken, _recipient: _recipient, _amount: shares, _tokenDecimals: sharesDecimals });
 
         // Register `_recipient`'s deposit operation to generate jigsaw rewards.
         jigsawStaker.deposit({ _user: _recipient, _amount: shares });
@@ -225,40 +203,45 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     }
 
     /**
-     * @notice Withdraws deposited funds from the strategy.
+     * @notice Withdraws deposited funds.
      *
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
      * @param _asset The token to be withdrawn.
      *
-     * @return The amount of the asset obtained from the operation.
-     * @return The amount of the 'tokenIn()' token.
+     * @return withdrawnAmount The actual amount of asset withdrawn from the strategy.
+     * @return initialInvestment The amount of initial investment.
+     * @return yield The amount of yield generated by the user beyond their initial investment.
+     * @return fee The amount of fee charged by the strategy.
      */
     function withdraw(
         uint256 _shares,
         address _recipient,
         address _asset,
         bytes calldata
-    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
         uint256 totalSharesBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
         require(_shares <= totalSharesBefore, "2002");
 
         WithdrawParams memory params = WithdrawParams({
+            shares: _shares,
+            totalShares: recipients[_recipient].totalShares,
             shareRatio: 0,
-            assetsToWithdraw: 0,
+            shareDecimals: sharesDecimals,
             investment: 0,
+            assetsToWithdraw: 0, // not used in Ion strategy
             balanceBefore: 0,
-            balanceAfter: 0,
-            balanceDiff: 0,
-            performanceFee: 0
+            withdrawnAmount: 0,
+            yield: 0,
+            fee: 0
         });
 
         // Calculate the ratio between all user's shares and the amount of shares used for withdrawal.
         params.shareRatio = OperationsLib.getRatio({
-            numerator: _shares,
-            denominator: recipients[_recipient].totalShares,
-            precision: IERC20Metadata(tokenOut).decimals(),
+            numerator: params.shares,
+            denominator: params.totalShares,
+            precision: params.shareDecimals,
             rounding: OperationsLib.Rounding.Floor
         });
 
@@ -266,9 +249,9 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         _burn({
             _receiptToken: receiptToken,
             _recipient: _recipient,
-            _shares: _shares,
-            _totalShares: recipients[_recipient].totalShares,
-            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
+            _shares: params.shares,
+            _totalShares: params.totalShares,
+            _tokenDecimals: params.shareDecimals
         });
 
         // Since Ion generates yield in the same token as the initial deposit (tokenIn), we must calculate the
@@ -276,51 +259,52 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         // we apply the percentage of the user's total shares to be withdrawn relative to their entire shareholding to
         // the available balance in Ion, ensuring the correct proportion of assets is withdrawn.
         params.assetsToWithdraw =
-            IIonPool(tokenOut).balanceOf(_recipient) * params.shareRatio / (10 ** IERC20Metadata(tokenOut).decimals());
+            IIonPool(tokenOut).balanceOf(_recipient) * params.shareRatio / (10 ** params.shareDecimals);
 
         // To accurately compute the protocol's fees from the yield generated by the strategy, we first need to
         // determine the percentage of the initial investment being withdrawn. This allows us to assess whether any
         // yield has been generated beyond the initial investment.
-        params.investment =
-            (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** IERC20Metadata(tokenOut).decimals());
-
+        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** params.shareDecimals);
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
         // Perform the withdrawal operation from user's holding address.
-        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
+        _genericCall({
+            _holding: _recipient,
             _contract: address(ionPool),
             _call: abi.encodeCall(IIonPool.withdraw, (_recipient, params.assetsToWithdraw))
         });
 
-        // Assert the call succeeded.
-        require(success, OperationsLib.getRevertMsg(returnData));
-        params.balanceAfter = IERC20(tokenIn).balanceOf(_recipient);
-
         // Take protocol's fee if any.
-        params.balanceDiff = params.balanceAfter - params.balanceBefore;
-        (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        if (params.balanceDiff > params.investment && params.performanceFee != 0) {
-            uint256 rewardAmount = params.balanceDiff - params.investment;
-            uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
-            if (fee > 0) {
-                address feeAddr = _getManager().feeAddress();
-                params.balanceDiff -= fee;
-                emit FeeTaken(tokenIn, feeAddr, fee);
-                IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
+        params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
+        params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
+
+        // Take protocol's fee from generated yield if any.
+        if (params.yield > 0) {
+            params.fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(params.yield) });
+            if (params.fee > 0) {
+                params.withdrawnAmount -= params.fee;
+                params.yield -= params.fee.toInt256();
             }
         }
 
-        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
-
-        recipients[_recipient].totalShares =
-            _shares > recipients[_recipient].totalShares ? 0 : recipients[_recipient].totalShares - _shares;
+        recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
 
-        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
-        return (params.balanceDiff, params.investment);
+        emit Withdraw({
+            asset: _asset,
+            recipient: _recipient,
+            shares: params.shares,
+            withdrawnAmount: params.withdrawnAmount,
+            initialInvestment: params.investment,
+            yield: params.yield
+        });
+
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: params.shares });
+
+        return (params.withdrawnAmount, params.investment, params.yield, params.fee);
     }
 
     /**
