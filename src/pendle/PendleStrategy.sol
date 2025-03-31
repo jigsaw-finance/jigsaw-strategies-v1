@@ -382,11 +382,9 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** params.shareDecimals);
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
-        if (output.minTokenOut < getMinAllowedTokenOut({ _amount: params.investment })) {
-            revert InvalidMinTokenOut({
-                minTokenOut: output.minTokenOut,
-                minAllowedTokenOut: getMinAllowedTokenOut({ _amount: params.investment })
-            });
+        uint256 minAllowedTokenOut = getMinAllowedTokenOut({ _amount: _shares });
+        if (output.minTokenOut < minAllowedTokenOut) {
+            revert InvalidMinTokenOut({ minTokenOut: output.minTokenOut, minAllowedTokenOut: minAllowedTokenOut });
         }
 
         IHolding(_recipient).approve({
