@@ -7,6 +7,7 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import "@pendle/interfaces/IPAllActionV3.sol";
 import { IPMarket, IPYieldToken, IStandardizedYield } from "@pendle/interfaces/IPMarket.sol";
+import { PendleLpOracleLib } from "@pendle/oracles/PendleLpOracleLib.sol";
 
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
@@ -29,6 +30,7 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
+    using PendleLpOracleLib for IPMarket;
 
     // -- Custom types --
 
@@ -72,12 +74,35 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         LimitOrderData limit;
     }
 
+    // -- Events --
+
+    /**
+     * @notice Emitted when the slippage percentage is updated.
+     * @param oldValue The previous slippage percentage value.
+     * @param newValue The new slippage percentage value.
+     */
+    event SlippagePercentageSet(uint256 oldValue, uint256 newValue);
+
     // -- Errors --
 
     error InvalidTokenIn();
     error InvalidTokenOut();
     error PendleSwapNotEmpty();
     error SwapDataNotEmpty();
+
+    /**
+     * @notice The specified minimum LP tokens out is less than the minimum allowed LP tokens out.
+     * @param minLpOut The specified minimum LP tokens out provided.
+     * @param minAllowedLpOut The minimum allowed LP tokens out.
+     */
+    error InvalidMinLpOut(uint256 minLpOut, uint256 minAllowedLpOut);
+
+    /**
+     * @notice The specified minimum token out is less than the minimum allowed token out.
+     * @param minTokenOut The specified minimum token out provided.
+     * @param minAllowedTokenOut The minimum allowed token out.
+     */
+    error InvalidMinTokenOut(uint256 minTokenOut, uint256 minAllowedTokenOut);
 
     // -- State variables --
 
@@ -102,7 +127,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     IReceiptToken public override receiptToken;
 
     /**
-     * @notice The Pendle's CreditEnforcer contract.
+     * @notice The Pendle's Router contract.
      */
     IPAllActionV3 public pendleRouter;
 
@@ -130,6 +155,22 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice The keccak256 hash of the empty limit order data.
      */
     bytes32 public EMPTY_SWAP_DATA_HASH;
+
+    /**
+     * @notice Returns the maximum allowed slippage percentage.
+     * @dev Uses 2 decimal precision, where 1% is represented as 100.
+     */
+    uint256 public allowedSlippagePercentage;
+
+    /**
+     * @notice The slippage factor.
+     */
+    uint256 public constant SLIPPAGE_PRECISION = 1e4;
+
+    /**
+     * @notice The precision used for the Pendle LP price.
+     */
+    uint256 public constant PENDLE_LP_PRICE_PRECISION = 1e18;
 
     /**
      * @notice A mapping that stores participant details by address.
@@ -182,6 +223,9 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
         EMPTY_SWAP_DATA_HASH = 0x95e00231cb51f973e9db40dd7466e602a0dcf1466ba8363089a90b5cb5416a27;
 
+        // Set default allowed slippage percentage to 5%
+        _setSlippagePercentage({ _newVal: 500 });
+
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
@@ -233,6 +277,12 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         if (params.input.pendleSwap != address(0)) revert PendleSwapNotEmpty();
         if (params.input.tokenMintSy != tokenIn) revert InvalidTokenIn();
         if (keccak256(abi.encode(params.input.swapData)) != EMPTY_SWAP_DATA_HASH) revert SwapDataNotEmpty();
+        if (params.minLpOut < getMinAllowedLpOut({ _amount: _amount })) {
+            revert InvalidMinLpOut({
+                minLpOut: params.minLpOut,
+                minAllowedLpOut: getMinAllowedLpOut({ _amount: _amount })
+            });
+        }
 
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
@@ -332,11 +382,19 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** params.shareDecimals);
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
 
+        if (output.minTokenOut < getMinAllowedTokenOut({ _amount: params.investment })) {
+            revert InvalidMinTokenOut({
+                minTokenOut: output.minTokenOut,
+                minAllowedTokenOut: getMinAllowedTokenOut({ _amount: params.investment })
+            });
+        }
+
         IHolding(_recipient).approve({
             _tokenAddress: tokenOut,
             _destination: address(pendleRouter),
             _amount: params.shares
         });
+
         _genericCall({
             _holding: _recipient,
             _contract: address(pendleRouter),
@@ -424,6 +482,14 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         return (claimedAmounts, rewardsList);
     }
 
+    // -- Administration --
+
+    function setSlippagePercentage(
+        uint256 _newVal
+    ) external onlyOwner {
+        _setSlippagePercentage({ _newVal: _newVal });
+    }
+
     // -- Getters --
 
     /**
@@ -431,5 +497,84 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     function getReceiptTokenAddress() external view override returns (address) {
         return address(receiptToken);
+    }
+
+    /**
+     * @notice Calculates the minimum acceptable LP tokens received based on input amount and slippage tolerance.
+     * @dev Uses median of different timeframe rates to get a more stable price.
+     * @param _amount The amount of input tokens.
+     * @return The minimum acceptable LP tokens for the specified input amount.
+     */
+    function getMinAllowedLpOut(
+        uint256 _amount
+    ) public view returns (uint256) {
+        // Calculate expected LP tokens based on Pendle's LpToAssetRate
+        uint256 expectedLpOut = (_amount * PENDLE_LP_PRICE_PRECISION) / _getMedianLpToAssetRate();
+        // Calculate minLp amount with max allowed slippage
+        return _applySlippage(expectedLpOut);
+    }
+
+    /**
+     * @notice Calculates the minimum acceptable asset tokens received based on provided shares and slippage tolerance.
+     * @dev Uses median of different timeframe rates to get a more stable price.
+     * @param _amount The amount of shares.
+     * @return The minimum acceptable asset tokens received for specified shares amount.
+     */
+    function getMinAllowedTokenOut(
+        uint256 _amount
+    ) public view returns (uint256) {
+        // Calculate expected LP tokens based on Pendle's LpToAssetRate
+        uint256 expectedTokenOut = (_amount * _getMedianLpToAssetRate()) / PENDLE_LP_PRICE_PRECISION;
+        // Calculate min tokenOut amount with max allowed slippage
+        return _applySlippage(expectedTokenOut);
+    }
+
+    // -- Utility Functions --
+
+    /**
+     * @notice Gets the median LP to asset rate from Pendle market across different timeframes.
+     * @dev Uses 30 minutes, 1 hour, and 2 hour timeframes to calculate a stable median rate.
+     * @return The median LP to asset rate from the Pendle market.
+     */
+    function _getMedianLpToAssetRate() internal view returns (uint256) {
+        return _getMedian(
+            IPMarket(pendleMarket).getLpToAssetRate(30 minutes),
+            IPMarket(pendleMarket).getLpToAssetRate(1 hours),
+            IPMarket(pendleMarket).getLpToAssetRate(2 hours)
+        );
+    }
+
+    /**
+     * @notice Computes a median value from three numbers.
+     */
+    function _getMedian(uint256 _a, uint256 _b, uint256 _c) internal pure returns (uint256) {
+        if ((_a >= _b && _a <= _c) || (_a >= _c && _a <= _b)) return _a;
+        if ((_b >= _a && _b <= _c) || (_b >= _c && _b <= _a)) return _b;
+        return _c;
+    }
+
+    /**
+     * @notice Applies slippage tolerance to a given value.
+     * @dev Reduces the input value by the configured slippage percentage.
+     * @param _value The value to apply slippage to.
+     * @return The value after slippage has been applied (reduced).
+     */
+    function _applySlippage(
+        uint256 _value
+    ) private view returns (uint256) {
+        return _value - ((_value * allowedSlippagePercentage) / SLIPPAGE_PRECISION);
+    }
+
+    /**
+     * @notice Sets a new slippage percentage for the strategy.
+     * @dev Emits a SlippagePercentageSet event.
+     * @param _newVal The new slippage percentage value (must be <= SLIPPAGE_PRECISION).
+     */
+    function _setSlippagePercentage(
+        uint256 _newVal
+    ) private {
+        require(_newVal <= SLIPPAGE_PRECISION, "3002");
+        emit SlippagePercentageSet({ oldValue: allowedSlippagePercentage, newValue: _newVal });
+        allowedSlippagePercentage = _newVal;
     }
 }
