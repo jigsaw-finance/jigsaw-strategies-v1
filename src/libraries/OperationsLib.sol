@@ -58,23 +58,6 @@ library OperationsLib {
     }
 
     /**
-     * @notice Safely approve a token for spending by first setting approval to zero and then to the desired value.
-     *
-     * @param token The address of the token to approve.
-     * @param to The address to grant approval for spending.
-     * @param value The amount of tokens to approve.
-     */
-    function safeApprove(address token, address to, uint256 value) internal {
-        (bool successEmptyApproval,) =
-            token.call(abi.encodeWithSelector(bytes4(keccak256("approve(address,uint256)")), to, 0));
-        require(successEmptyApproval, "OperationsLib::safeApprove: approval reset failed");
-
-        (bool success, bytes memory data) =
-            token.call(abi.encodeWithSelector(bytes4(keccak256("approve(address,uint256)")), to, value));
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "OperationsLib::safeApprove: approve failed");
-    }
-
-    /**
      * @notice Decode and return the revert message from a failed transaction.
      * @param _returnData The return data of a failed external call.
      * @return The decoded revert message string.

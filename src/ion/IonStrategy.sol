@@ -181,7 +181,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 balanceBefore = ionPool.normalizedBalanceOf(_recipient);
 
         // Supply to the Ion Pool on behalf of the `_recipient`.
-        OperationsLib.safeApprove({ token: _asset, to: address(ionPool), value: _amount });
+        IERC20(_asset).forceApprove({ spender: address(ionPool), value: _amount });
         ionPool.supply({
             user: _recipient,
             amount: _amount,

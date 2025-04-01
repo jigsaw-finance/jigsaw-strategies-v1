@@ -195,7 +195,7 @@ contract AaveV3Strategy is IStrategy, StrategyBaseUpgradeable {
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
         // Supply to the Aave Lending Pool on behalf of the `_recipient`.
-        OperationsLib.safeApprove({ token: _asset, to: address(lendingPool), value: _amount });
+        IERC20(_asset).forceApprove({ spender: address(lendingPool), value: _amount });
         lendingPool.supply({ asset: _asset, amount: _amount, onBehalfOf: _recipient, referralCode: refCode });
 
         uint256 shares = IAToken(tokenOut).scaledBalanceOf(_recipient) - balanceBefore;

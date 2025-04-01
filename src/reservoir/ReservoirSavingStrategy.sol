@@ -236,7 +236,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
             uint256 rUsdBalanceBefore = IERC20(rUSD).balanceOf(address(this));
 
             // Mint rUSD
-            OperationsLib.safeApprove({ token: _asset, to: address(pegStabilityModule), value: _amount });
+            IERC20(_asset).forceApprove({ spender: address(pegStabilityModule), value: _amount });
             creditEnforcer.mintStablecoin({ amount: _amount });
 
             rUsdAmount = IERC20(rUSD).balanceOf(address(this)) - rUsdBalanceBefore;
@@ -244,7 +244,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
 
-        OperationsLib.safeApprove({ token: rUSD, to: address(savingModule), value: rUsdAmount });
+        IERC20(rUSD).forceApprove({ spender: address(savingModule), value: rUsdAmount });
         creditEnforcer.mintSavingcoin({ to: _recipient, amount: rUsdAmount });
 
         uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
@@ -346,7 +346,7 @@ contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
         // Get USDC back if it was used as tokenIn
         if (_asset != rUSD) {
             uint256 rUsdRedemptionAmount = IERC20(rUSD).balanceOf(address(this)) - rUsdBalanceBefore;
-            OperationsLib.safeApprove({ token: rUSD, to: address(pegStabilityModule), value: rUsdRedemptionAmount });
+            IERC20(rUSD).forceApprove({ spender: address(pegStabilityModule), value: rUsdRedemptionAmount });
 
             // Note: The `redeem` function can be paused by Reservoir protocol, making USDC unclaimable.
             // Note: This redemption process may leave a small dust amount of rUSD in the contract

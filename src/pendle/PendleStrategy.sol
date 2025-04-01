@@ -287,7 +287,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
-        OperationsLib.safeApprove({ token: _asset, to: address(pendleRouter), value: _amount });
+        IERC20(_asset).forceApprove({ spender: address(pendleRouter), value: _amount });
 
         pendleRouter.addLiquiditySingleToken({
             receiver: _recipient,
