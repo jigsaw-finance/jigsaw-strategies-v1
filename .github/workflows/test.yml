@@ -44,10 +44,10 @@ jobs:
 
       - name: Run Forge scripts
         run: |
-          forge test --match-path "test/scripts/**"
-          forge test --match-path "test/aave/**"
-          forge test --match-path "test/dinero/**"
-          forge test --match-path "test/ion/**"
-          forge test --match-path "test/pendle/**"
-          forge test --match-path "test/reservoir/**"
-          forge test --match-path "test/staker/**"
+          forge test -vvvv --match-contract AaveV3StrategyTest
+          forge test -vvvv --match-contract DineroStrategyTest
+          forge test -vvvv --match-contract IonStrategyTest
+          forge test -vvvv --match-contract PendleStrategyTest
+          forge test -vvvv --match-contract ReservoirSavingStrategyTest
+          forge test -vvvv --match-contract ReservoirMath
+          forge test -vvvv --match-contract DeployAllTest
