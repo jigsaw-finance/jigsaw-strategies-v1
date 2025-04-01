@@ -34,7 +34,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
 
         ownerFromConfig = commonConfig.readAddress(".INITIAL_OWNER");
-        managerFromConfig = commonConfig.readAddress(".MANAGER_CONTAINER");
+        managerFromConfig = commonConfig.readAddress(".MANAGER");
         jigsawRewardTokenFromConfig = commonConfig.readAddress(".JIGSAW_REWARDS");
     }
 
