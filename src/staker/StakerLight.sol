@@ -13,12 +13,14 @@ import { IStakerLight } from "./interfaces/IStakerLight.sol";
 
 /**
  * @title StakerLight
+ *
  * @notice StakerLight is a contract responsible for distributing Jigsaw rewards to Jigsaw strategy investors.
  * @notice This contract accepts Jigsaw Strategy's receipt tokens as `tokenIn` and distributes rewards accordingly.
  * @notice It is not intended for direct use; interaction should be done through the corresponding `Staker` contract.
  *
  * @dev This contract is called light due to the fact that it does not actually transfer the receipt tokens from the
  * user and is only used for accounting.
+ * @dev It is expected that rewards will not be distributed for periods when there are no stakers in the contract.
  * @dev This contract inherits functionalities from `Ownable2StepUpgradeable` and `ReentrancyGuardUpgradeable`.
  *
  * @author Hovooo (@hovooo)
@@ -75,11 +77,6 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
      * @notice Mapping of user addresses to their accrued rewards.
      */
     mapping(address user => uint256 amountAccrued) public override rewards;
-
-    /**
-     * @notice Total supply limit of the staking token.
-     */
-    uint256 public constant TOTAL_SUPPLY_LIMIT = 1e34;
 
     uint256 private _totalSupply;
     mapping(address user => uint256 amount) private _balances;
@@ -182,7 +179,6 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
         rewardToken = _rewardToken;
         strategy = _strategy;
         rewardsDuration = _rewardsDuration;
-        periodFinish = block.timestamp + rewardsDuration;
     }
 
     // -- Staker's operations  --
@@ -198,10 +194,6 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
         address _user,
         uint256 _amount
     ) external override nonReentrant onlyStrategy updateReward(_user) validAmount(_amount) {
-        // Ensure that deposit operation will never surpass supply limit
-        if (_totalSupply + _amount > TOTAL_SUPPLY_LIMIT) {
-            revert DepositSurpassesSupplyLimit(_amount, TOTAL_SUPPLY_LIMIT);
-        }
         _totalSupply += _amount;
 
         _balances[_user] += _amount;
@@ -267,9 +259,6 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
     function addRewards(
         uint256 _amount
     ) external override onlyOwner validAmount(_amount) updateReward(address(0)) {
-        // To mitigate any DOS issues, Admin must deposit 1 wei into the staker contract at the initialization
-        require(_totalSupply != 0, "Zero totalSupply");
-
         // Transfer assets from the owner's wallet to this contract.
         IERC20(rewardToken).safeTransferFrom({ from: msg.sender, to: address(this), value: _amount });
 
@@ -281,13 +270,10 @@ contract StakerLight is IStakerLight, Ownable2StepUpgradeable, ReentrancyGuardUp
         } else {
             uint256 remaining = periodFinish - block.timestamp;
             uint256 leftover = remaining * rewardRate;
-            rewardRate = (_amount + leftover) / duration;
+            rewardRate = (_amount + leftover) / remaining;
         }
 
         if (rewardRate == 0) revert RewardAmountTooSmall();
-
-        uint256 balance = IERC20(rewardToken).balanceOf(address(this));
-        if (rewardRate > (balance / duration)) revert RewardRateTooBig();
 
         lastUpdateTime = block.timestamp;
         emit RewardAdded(_amount);
