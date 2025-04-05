@@ -3,6 +3,7 @@ pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import "@pendle/interfaces/IPAllActionV3.sol";
@@ -30,6 +31,7 @@ import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
+    using Math for uint256;
     using PendleLpOracleLib for IPMarket;
 
     // -- Custom types --
@@ -507,7 +509,7 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount
     ) public view returns (uint256) {
         // Calculate expected LP tokens based on Pendle's LpToAssetRate
-        uint256 expectedLpOut = (_amount * PENDLE_LP_PRICE_PRECISION) / _getMedianLpToAssetRate();
+        uint256 expectedLpOut = _amount.mulDiv(PENDLE_LP_PRICE_PRECISION, _getMedianLpToAssetRate(), Math.Rounding.Ceil);
         // Calculate minLp amount with max allowed slippage
         return _applySlippage(expectedLpOut);
     }
@@ -522,7 +524,8 @@ contract PendleStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _amount
     ) public view returns (uint256) {
         // Calculate expected LP tokens based on Pendle's LpToAssetRate
-        uint256 expectedTokenOut = (_amount * _getMedianLpToAssetRate()) / PENDLE_LP_PRICE_PRECISION;
+        uint256 expectedTokenOut =
+            _amount.mulDiv(_getMedianLpToAssetRate(), PENDLE_LP_PRICE_PRECISION, Math.Rounding.Ceil);
         // Calculate min tokenOut amount with max allowed slippage
         return _applySlippage(expectedTokenOut);
     }
