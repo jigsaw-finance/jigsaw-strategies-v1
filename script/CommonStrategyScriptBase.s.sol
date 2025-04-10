@@ -221,7 +221,34 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
     }
 
     function _populateAaveArray() internal {
-        // Populate the individual initialization params per each Aave strategy, e.g.:
+        // Populate the individual initialization params per each Aave strategy
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, //USDC
+                tokenOut: 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
+            })
+        );
+
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7, //USDT
+                tokenOut: 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a
+            })
+        );
+
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, //wBTC
+                tokenOut: 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8
+            })
+        );
+
         aaveStrategyParams.push(
             AaveStrategyParams({
                 rewardToken: address(0),
@@ -248,51 +275,6 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 tokenOut: 0xBdfa7b7893081B35Fb54027489e2Bc7A38275129
             })
         );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, //wBTC
-                tokenOut: 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7, //USDT
-                tokenOut: 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, //USDC
-                tokenOut: 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x6B175474E89094C44Da98b954EedeAC495271d0F, //DAI
-                tokenOut: 0x018008bfb33d285247A21d44E50697654f754e63
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x9D39A5DE30e57443BfF2A8307A4256c8797A3497, //sUSDe
-                tokenOut: 0x4579a27aF00A62C0EB156349f31B345c08386419
-            })
-        );
     }
 
     function _populateReservoirSavingStrategy() internal {
@@ -303,7 +285,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 pegStabilityModule: 0x4809010926aec940b550D34a46A52739f996D75D,
                 savingModule: 0x5475611Dffb8ef4d697Ae39df9395513b6E947d7,
                 rUSD: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34,
-                jigsawRewardDuration: 365 days,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
                 tokenIn: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34, // rUSD as tokenIn
                 tokenOut: 0x738d1115B90efa71AE468F1287fc864775e23a31 // srUSD as tokenOut
              })
@@ -315,21 +297,10 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 pegStabilityModule: 0x4809010926aec940b550D34a46A52739f996D75D,
                 savingModule: 0x5475611Dffb8ef4d697Ae39df9395513b6E947d7,
                 rUSD: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34,
-                jigsawRewardDuration: 365 days,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
                 tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC as tokenIn
                 tokenOut: 0x738d1115B90efa71AE468F1287fc864775e23a31 // srUSD as tokenOut
              })
-        );
-    }
-
-    function _populatePendleArray() internal {
-        pendleStrategyParams.push(
-            PendleStrategyParams({
-                pendleMarket: 0x048680F64d6DFf1748ba6D9a01F578433787e24B,
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0, // USD0++
-                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
-            })
         );
     }
 
@@ -342,6 +313,17 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
                 tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, //wETH
                 tokenOut: 0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6
+            })
+        );
+    }
+
+    function _populatePendleArray() internal {
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0x048680F64d6DFf1748ba6D9a01F578433787e24B,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0, // USD0++
+                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
     }
