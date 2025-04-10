@@ -29,7 +29,6 @@ contract DeployImpl is CommonStrategyScriptBase {
         string memory _strategy
     ) external broadcast returns (address implementation) {
         if (keccak256(bytes(_strategy)) == AAVE_STRATEGY) return address(new AaveV3Strategy());
-        if (keccak256(bytes(_strategy)) == ION_STRATEGY) return address(new IonStrategy());
         if (keccak256(bytes(_strategy)) == PENDLE_STRATEGY) return address(new PendleStrategy());
         if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY) return address(new ReservoirSavingStrategy());
         if (keccak256(bytes(_strategy)) == DINERO_STRATEGY) return address(new DineroStrategy());

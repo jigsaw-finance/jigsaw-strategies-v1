@@ -41,7 +41,6 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
     function test_all_initializations() public {
         aave_initialization();
         dinero_initialization();
-        ion_initialization();
         pendle_initialization();
         reservoir_initialization();
     }
@@ -105,32 +104,6 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         }
     }
 
-    function ion_initialization() public {
-        DeployImpl implDeployer = new DeployImpl();
-        address implementation = implDeployer.run("IonStrategy");
-
-        // Save implementation address to deployments
-        Strings.toHexString(uint160(implementation), 20).write("./deployments.json", ".IonStrategy_IMPL");
-
-        proxyDeployer = new DeployProxy();
-        strategies = proxyDeployer.run({ _strategy: "IonStrategy" });
-
-        _populateIonArray();
-
-        for (uint256 i = 0; i < ionStrategyParams.length; i++) {
-            IonStrategy strategy = IonStrategy(strategies[i]);
-            IStakerLight staker = strategy.jigsawStaker();
-
-            assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.manager()), managerFromConfig, "ManagerContainer init wrong");
-            assertEq(address(strategy.ionPool()), ionStrategyParams[i].ionPool, "Ion Pool initialized wrong");
-            assertEq(strategy.tokenIn(), ionStrategyParams[i].tokenIn, "tokenIn initialized wrong");
-            assertEq(strategy.tokenOut(), ionStrategyParams[i].tokenOut, "tokenOut initialized wrong");
-            assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
-            assertEq(staker.rewardsDuration(), ionStrategyParams[i].jigsawRewardDuration, "RewardsDuration init wrong");
-        }
-    }
-
     function pendle_initialization() public {
         DeployImpl implDeployer = new DeployImpl();
         address implementation = implDeployer.run("PendleStrategy");
@@ -156,7 +129,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             assertEq(address(strategy.pendleMarket()), pendleStrategyParams[i].pendleMarket, "PendleRouter wrong");
             assertEq(address(strategy.rewardToken()), pendleStrategyParams[i].rewardToken, "PendleRouter wrong");
             assertEq(strategy.tokenIn(), pendleStrategyParams[i].tokenIn, "tokenIn initialized wrong");
-            assertEq(strategy.tokenOut(), pendleStrategyParams[i].tokenOut, "tokenOut initialized wrong");
+            assertEq(strategy.tokenOut(), pendleStrategyParams[i].pendleMarket, "tokenOut initialized wrong");
             assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
             assertEq(staker.rewardsDuration(), pendleStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong");
         }
@@ -218,31 +191,4 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             StakerLightFactory(factory).referenceImplementation(), staker, "ReferenceImplementation in factory wrong"
         );
     }
-}
-
-interface IIonPool {
-    function withdraw(address receiverOfUnderlying, uint256 amount) external;
-    function supply(address user, uint256 amount, bytes32[] calldata proof) external;
-    function owner() external returns (address);
-    function whitelist() external returns (address);
-    function updateSupplyCap(
-        uint256 newSupplyCap
-    ) external;
-    function updateIlkDebtCeiling(uint8 ilkIndex, uint256 newCeiling) external;
-    function balanceOf(
-        address user
-    ) external view returns (uint256);
-    function normalizedBalanceOf(
-        address user
-    ) external returns (uint256);
-    function totalSupply() external view returns (uint256);
-    function debt() external view returns (uint256);
-    function supplyFactorUnaccrued() external view returns (uint256);
-    function getIlkAddress(
-        uint256 ilkIndex
-    ) external view returns (address);
-    function decimals() external view returns (uint8);
-    function balanceOfUnaccrued(
-        address user
-    ) external view returns (uint256);
 }

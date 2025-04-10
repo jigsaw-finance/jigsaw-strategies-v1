@@ -5,7 +5,6 @@ import { Script, stdJson as StdJson } from "forge-std/Script.sol";
 
 import { AaveV3Strategy } from "../src/aave/AaveV3Strategy.sol";
 import { DineroStrategy } from "../src/dinero/DineroStrategy.sol";
-import { IonStrategy } from "../src/ion/IonStrategy.sol";
 import { PendleStrategy } from "../src/pendle/PendleStrategy.sol";
 import { ReservoirSavingStrategy } from "../src/reservoir/ReservoirSavingStrategy.sol";
 
@@ -21,18 +20,10 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address tokenOut; // The address of the Aave receipt token (aToken)
     }
 
-    struct IonStrategyParams {
-        address ionPool; // Ion pool used for strategy;
-        uint256 jigsawRewardDuration; // the duration of the jigsaw rewards (jPoints) distribution;
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the Ion receipt token (iToken)
-    }
-
     struct PendleStrategyParams {
         address pendleMarket; // The address of the Pendle's Market contract.
         uint256 jigsawRewardDuration; // the duration of the jigsaw rewards (jPoints) distribution;
         address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the Pendle receipt token
         address rewardToken; // The address of the Pendle primary reward token
     }
 
@@ -54,14 +45,14 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address tokenOut; // The address of the PirexEth receipt token (pxEth)
     }
 
+    uint256 constant DEFAULT_REWARDS_DURATION = 75 days;
+
     bytes32 constant AAVE_STRATEGY = keccak256("AaveV3Strategy");
-    bytes32 constant ION_STRATEGY = keccak256("IonStrategy");
     bytes32 constant PENDLE_STRATEGY = keccak256("PendleStrategy");
     bytes32 constant RESERVOIR_STRATEGY = keccak256("ReservoirSavingStrategy");
     bytes32 constant DINERO_STRATEGY = keccak256("DineroStrategy");
 
     AaveStrategyParams[] internal aaveStrategyParams;
-    IonStrategyParams[] internal ionStrategyParams;
     PendleStrategyParams[] internal pendleStrategyParams;
     ReservoirSavingStrategyParams[] internal reservoirSavingStrategyParams;
     DineroStrategyParams[] internal dineroStrategyParams;
@@ -131,32 +122,6 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
             return data;
         }
 
-        if (keccak256(bytes(_strategy)) == ION_STRATEGY) {
-            _populateIonArray();
-
-            data = new bytes[](ionStrategyParams.length);
-
-            for (uint256 i = 0; i < ionStrategyParams.length; i++) {
-                _validateIonPool(ionStrategyParams[i].ionPool);
-                _validateErc20(ionStrategyParams[i].tokenIn);
-
-                data[i] = abi.encodeCall(
-                    IonStrategy.initialize,
-                    IonStrategy.InitializerParams({
-                        owner: owner,
-                        manager: manager,
-                        stakerFactory: stakerFactory,
-                        jigsawRewardToken: jigsawRewardToken,
-                        ionPool: ionStrategyParams[i].ionPool,
-                        jigsawRewardDuration: ionStrategyParams[i].jigsawRewardDuration,
-                        tokenIn: ionStrategyParams[i].tokenIn
-                    })
-                );
-            }
-
-            return data;
-        }
-
         if (keccak256(bytes(_strategy)) == PENDLE_STRATEGY) {
             string memory pendleConfig = vm.readFile("./deployment-config/02_PendleStrategyConfig.json");
             address pendleRouter = pendleConfig.readAddress(".PENDLE_ROUTER");
@@ -182,7 +147,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                         pendleMarket: pendleStrategyParams[i].pendleMarket,
                         jigsawRewardDuration: pendleStrategyParams[i].jigsawRewardDuration,
                         tokenIn: pendleStrategyParams[i].tokenIn,
-                        tokenOut: pendleStrategyParams[i].tokenOut,
+                        tokenOut: pendleStrategyParams[i].pendleMarket,
                         rewardToken: pendleStrategyParams[i].rewardToken
                     })
                 );
@@ -260,34 +225,72 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         aaveStrategyParams.push(
             AaveStrategyParams({
                 rewardToken: address(0),
-                jigsawRewardDuration: 365 days,
-                tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, //wETH
+                tokenOut: 0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8
+            })
+        );
+
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0, //wstETH
+                tokenOut: 0x0B925eD163218f6662a35e0f0371Ac234f9E9371
+            })
+        );
+
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee, //weETH
+                tokenOut: 0xBdfa7b7893081B35Fb54027489e2Bc7A38275129
+            })
+        );
+
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, //wBTC
+                tokenOut: 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8
+            })
+        );
+
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7, //USDT
+                tokenOut: 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a
+            })
+        );
+
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, //USDC
                 tokenOut: 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
             })
         );
-    }
 
-    function _populateIonArray() internal {
-        // Populate the individual initialization params per each Ion strategy, e.g.:
-        ionStrategyParams.push(
-            IonStrategyParams({
-                ionPool: 0x0000000000eaEbd95dAfcA37A39fd09745739b78,
-                jigsawRewardDuration: 365 days,
-                tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
-                tokenOut: 0x0000000000eaEbd95dAfcA37A39fd09745739b78
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x6B175474E89094C44Da98b954EedeAC495271d0F, //DAI
+                tokenOut: 0x018008bfb33d285247A21d44E50697654f754e63
             })
         );
-    }
 
-    function _populatePendleArray() internal {
-        // Populate the individual initialization params per each Pendle strategy, e.g.:
-        pendleStrategyParams.push(
-            PendleStrategyParams({
-                pendleMarket: 0x676106576004EF54B4bD39Ce8d2B34069F86eb8f,
-                jigsawRewardDuration: 365 days,
-                tokenIn: 0xD9A442856C234a39a81a089C06451EBAa4306a72,
-                tokenOut: 0x676106576004EF54B4bD39Ce8d2B34069F86eb8f,
-                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+        aaveStrategyParams.push(
+            AaveStrategyParams({
+                rewardToken: address(0),
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x9D39A5DE30e57443BfF2A8307A4256c8797A3497, //sUSDe
+                tokenOut: 0x4579a27aF00A62C0EB156349f31B345c08386419
             })
         );
     }
@@ -319,14 +322,25 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         );
     }
 
+    function _populatePendleArray() internal {
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0x048680F64d6DFf1748ba6D9a01F578433787e24B,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0, // USD0++
+                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+            })
+        );
+    }
+
     function _populateDineroArray() internal {
         // Populate the initialization params for the DineroStrategy, e.g.:
         dineroStrategyParams.push(
             DineroStrategyParams({
                 pirexEth: 0xD664b74274DfEB538d9baC494F3a4760828B02b0,
                 autoPirexEth: 0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6,
-                jigsawRewardDuration: 365 days,
-                tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, //wETH
                 tokenOut: 0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6
             })
         );
