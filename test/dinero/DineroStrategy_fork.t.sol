@@ -35,7 +35,7 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
         address strategyImplementation = address(new DineroStrategy());
         DineroStrategy.InitializerParams memory initParams = DineroStrategy.InitializerParams({
             owner: OWNER,
-            managerContainer: address(managerContainer),
+            manager: address(manager),
             stakerFactory: address(stakerFactory),
             pirexEth: address(PIREX_ETH),
             autoPirexEth: address(AUTO_PIREX_ETH),
@@ -54,7 +54,16 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
         strategyManager.addStrategy(address(strategy));
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
-            OWNER, address(managerContainer), address(tokenIn), address(usdcOracle), bytes(""), 50_000
+            OWNER,
+            address(manager),
+            address(tokenIn),
+            address(usdcOracle),
+            bytes(""),
+            ISharesRegistry.RegistryConfig({
+                collateralizationRate: 50_000,
+                liquidationBuffer: 5e3,
+                liquidatorBonus: 8e3
+            })
         );
         stablesManager.registerOrUpdateShareRegistry(address(tokenInSharesRegistry), address(tokenIn), true);
         registries[address(tokenIn)] = address(tokenInSharesRegistry);
@@ -70,7 +79,8 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+        (uint256 receiptTokens, uint256 tokenInAmount) =
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
         uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
@@ -113,7 +123,7 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        strategyManager.invest(tokenIn, address(strategy), amount, "");
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
@@ -137,11 +147,11 @@ contract DineroStrategyTest is Test, BasicContractsFixture {
             : _getFeeAbsolute(postRedemptionFeeAssetAmt - investedAmountBefore, manager.performanceFee());
 
         vm.prank(user, user);
-        (uint256 assetAmount,) = strategyManager.claimInvestment({
+        (uint256 assetAmount,,,) = strategyManager.claimInvestment({
             _holding: userHolding,
+            _token: tokenIn,
             _strategy: address(strategy),
             _shares: totalShares,
-            _asset: tokenIn,
             _data: ""
         });
 

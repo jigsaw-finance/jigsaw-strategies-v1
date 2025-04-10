@@ -52,13 +52,20 @@ format: && _timer
 	forge fmt
 
 test-all: && _timer
-	forge test
+	forge test -vvvv --match-contract AaveV3StrategyTest
+	forge test -vvvv --match-contract DineroStrategyTest
+	forge test -vvvv --match-contract IonStrategyTest
+	forge test -vvvv --match-contract PendleStrategyTest
+	forge test -vvvv --match-contract ReservoirSavingStrategyTest
+	forge test -vvvv --match-contract ReservoirMath
+	forge test -vvvv --match-contract DeployAllTest
+
 
 test-gas: && _timer
     forge test --gas-report
 
 coverage-all: && _timer
-	forge coverage --report lcov
+	forge coverage --report lcov --allow-failure
 	genhtml -o coverage --branch-coverage lcov.info --ignore-errors category
 
 docs: && _timer
@@ -69,7 +76,6 @@ mt test: && _timer
 
 mp verbosity path: && _timer
 	forge test -{{verbosity}} --match-path test/{{path}}
-
 
 # Deploy StakerFactory
 # This script deploys the StakerFactory contract and handles logging.

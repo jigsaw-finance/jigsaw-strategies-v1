@@ -3,6 +3,7 @@ pragma solidity 0.8.22;
 
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
@@ -15,16 +16,18 @@ import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
-import { IIonPool } from "./interfaces/IIonPool.sol";
+import { ICreditEnforcer } from "./interfaces/ICreditEnforcer.sol";
+import { IPegStabilityModule } from "./interfaces/IPegStabilityModule.sol";
+import { ISavingModule } from "./interfaces/ISavingModule.sol";
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 
 /**
- * @title IonStrategy
- * @dev Strategy used for Ion Pool.
+ * @title ReservoirSavingStrategy
+ * @dev Strategy used for srUSD minting.
  * @author Hovooo (@hovooo)
  */
-contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
+contract ReservoirSavingStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
@@ -34,21 +37,28 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice Struct for the initializer params.
      * @param owner The address of the initial owner of the Strategy contract
      * @param manager The address of the Manager contract
+     * @param creditEnforcer The address of the Reservoir's CreditEnforcer contract
+     * @param pegStabilityModule The Reservoir's PegStabilityModule contract.
+     * @param savingModule The Reservoir's SavingModule contract.
+     * @param rUSD The Reservoir's rUSD stablecoin.
      * @param stakerFactory The address of the StakerLightFactory contract
-     * @param ionPool The address of the Ion Pool
      * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
-     * @param jigsawRewardDuration The address of the initial Jigsaw reward distribution duration for the strategy
+     * @param jigsawRewardDuration The initial Jigsaw reward distribution duration for the strategy
      * @param tokenIn The address of the LP token
-     * @dev The `tokenOut` field is not used in the Ion strategy as it is the same as `ionPool`.
+     * @param tokenOut The address of Reservoir's receipt token
      */
     struct InitializerParams {
         address owner;
         address manager;
+        address creditEnforcer;
+        address pegStabilityModule;
+        address savingModule;
+        address rUSD;
         address stakerFactory;
-        address ionPool;
         address jigsawRewardToken;
         uint256 jigsawRewardDuration;
         address tokenIn;
+        address tokenOut;
     }
 
     // -- Errors --
@@ -58,17 +68,17 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- State variables --
 
     /**
-     * @notice The LP token address.
+     * @notice The tokenIn address for the strategy.
      */
     address public override tokenIn;
 
     /**
-     * @notice The Ion receipt token address.
+     * @notice The tokenOut address (srUSD) for the strategy.
      */
     address public override tokenOut;
 
     /**
-     * @notice The reward token offered to users.
+     * @notice The Reservoir's reward token offered to users.
      */
     address public override rewardToken;
 
@@ -78,9 +88,24 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     IReceiptToken public override receiptToken;
 
     /**
-     * @notice The Ion Pool contract.
+     * @notice The Reservoir's CreditEnforcer contract.
      */
-    IIonPool public ionPool;
+    ICreditEnforcer public creditEnforcer;
+
+    /**
+     * @notice The Reservoir's PegStabilityModule contract.
+     */
+    address public pegStabilityModule;
+
+    /**
+     * @notice The Reservoir's SavingModule contract.
+     */
+    address public savingModule;
+
+    /**
+     * @notice The Reservoir's Stablecoin rUSD.
+     */
+    address public rUSD;
 
     /**
      * @notice The Jigsaw Rewards Controller contract.
@@ -91,6 +116,21 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice The number of decimals of the strategy's shares.
      */
     uint256 public override sharesDecimals;
+
+    /**
+     * @notice The factor used to adjust values from 18 decimal precision (shares) to 6 decimal precision (USDC).
+     */
+    uint256 public constant DECIMAL_DIFF = 1e12;
+
+    /**
+     * @notice The precision used for the Reservoir's fee.
+     */
+    uint256 public constant RESERVOIR_FEE_PRECISION = 1e6;
+
+    /**
+     * @notice The precision used for the Reservoir's rUSD price.
+     */
+    uint256 public constant RESERVOIR_PRICE_PRECISION = 1e8;
 
     /**
      * @notice A mapping that stores participant details by address.
@@ -106,18 +146,17 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Initialization --
 
     /**
-     * @notice Initializes the Ion Strategy contract with necessary parameters.
-     *
-     * @notice IonPool is an upgradeable contract for each of its markets. This introduces upgrade risk
-     * that users should be aware of, as changes to the implementation could affect deposited funds.
+     * @notice Initializes the Reservoir Stablecoin Strategy contract with necessary parameters.
      *
      * @dev Configures core components such as manager, tokens, pools, and reward systems
      * needed for the strategy to operate.
+     *
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
      * - `_params.manager` must be valid (`"3065"` error code if invalid).
-     * - `_params.ionPool` must be valid (`"3036"` error code if invalid).
+     * - `_params.creditEnforcer` must be valid (`"3036"` error code if invalid).
+     * - `_params.pegStabilityModule` must be valid (`"3036"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      *
      * @param _params Struct containing all initialization parameters.
@@ -126,23 +165,31 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         InitializerParams memory _params
     ) public initializer {
         require(_params.manager != address(0), "3065");
-        require(_params.ionPool != address(0), "3036");
+        require(_params.creditEnforcer != address(0), "3036");
+        require(_params.pegStabilityModule != address(0), "3036");
+        require(_params.savingModule != address(0), "3036");
+        require(_params.rUSD != address(0), "3036");
+        require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
+        require(_params.tokenOut != address(0), "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
         manager = IManager(_params.manager);
-        ionPool = IIonPool(_params.ionPool);
+        creditEnforcer = ICreditEnforcer(_params.creditEnforcer);
+        pegStabilityModule = _params.pegStabilityModule;
+        savingModule = _params.savingModule;
+        rUSD = _params.rUSD;
         tokenIn = _params.tokenIn;
-        tokenOut = _params.ionPool;
-        sharesDecimals = IERC20Metadata(_params.ionPool).decimals();
+        tokenOut = _params.tokenOut;
+        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
                 _receiptTokenFactory: manager.receiptTokenFactory(),
-                _receiptTokenName: "Ion Strategy Receipt Token",
-                _receiptTokenSymbol: "IoRT"
+                _receiptTokenName: "Reservoir Receipt Token",
+                _receiptTokenSymbol: "ReRT"
             })
         );
 
@@ -162,10 +209,12 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Deposits funds into the strategy.
      *
+     * @dev Some strategies won't return any receipt tokens; in this case, 'tokenOutAmount' will be 0.
+     * @dev 'tokenInAmount' will be equal to '_amount' if '_asset' is the same as the strategy's 'tokenIn()'.
+     *
      * @param _asset The token to be invested.
      * @param _amount The amount of the token to be invested.
      * @param _recipient The address on behalf of which the funds are deposited.
-     * @param _data Extra data, e.g., a referral code.
      *
      * @return The amount of receipt tokens obtained.
      * @return The amount of the 'tokenIn()' token.
@@ -174,28 +223,42 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         address _asset,
         uint256 _amount,
         address _recipient,
-        bytes calldata _data
-    ) external override onlyValidAmount(_amount) nonReentrant onlyStrategyManager returns (uint256, uint256) {
+        bytes calldata
+    ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
+
         IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
-        uint256 balanceBefore = ionPool.normalizedBalanceOf(_recipient);
 
-        // Supply to the Ion Pool on behalf of the `_recipient`.
-        IERC20(_asset).forceApprove({ spender: address(ionPool), value: _amount });
-        ionPool.supply({
-            user: _recipient,
-            amount: _amount,
-            proof: _data.length > 0 ? abi.decode(_data, (bytes32[])) : new bytes32[](0)
-        });
+        uint256 rUsdAmount = _amount;
 
-        uint256 shares = ionPool.normalizedBalanceOf(_recipient) - balanceBefore;
+        // If user deposits USDC, rUSD needs to be minted first to be later used for srUSD minting
+        if (_asset != rUSD) {
+            uint256 rUsdBalanceBefore = IERC20(rUSD).balanceOf(address(this));
+
+            // Mint rUSD
+            IERC20(_asset).forceApprove({ spender: address(pegStabilityModule), value: _amount });
+            creditEnforcer.mintStablecoin({ amount: _amount });
+
+            rUsdAmount = IERC20(rUSD).balanceOf(address(this)) - rUsdBalanceBefore;
+        }
+
+        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
+
+        IERC20(rUSD).forceApprove({ spender: address(savingModule), value: rUsdAmount });
+        creditEnforcer.mintSavingcoin({ to: _recipient, amount: rUsdAmount });
+
+        uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
+
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += shares;
 
-        // Mint Strategy's receipt tokens to allow later withdrawal.
-        _mint({ _receiptToken: receiptToken, _recipient: _recipient, _amount: shares, _tokenDecimals: sharesDecimals });
+        _mint({
+            _receiptToken: receiptToken,
+            _recipient: _recipient,
+            _amount: shares,
+            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
+        });
 
-        // Register `_recipient`'s deposit operation to generate jigsaw rewards.
         jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
         emit Deposit({
@@ -206,11 +269,12 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             shares: shares,
             recipient: _recipient
         });
+
         return (shares, _amount);
     }
 
     /**
-     * @notice Withdraws deposited funds.
+     * @notice Withdraws deposited funds from the strategy.
      *
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
@@ -228,8 +292,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
         bytes calldata
     ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
-        uint256 totalSharesBefore = IIonPool(tokenOut).normalizedBalanceOf(_recipient);
-        require(_shares <= totalSharesBefore, "2002");
+        require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
         WithdrawParams memory params = WithdrawParams({
             shares: _shares,
@@ -237,14 +300,13 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             shareRatio: 0,
             shareDecimals: sharesDecimals,
             investment: 0,
-            assetsToWithdraw: 0, // not used in Ion strategy
+            assetsToWithdraw: 0, // not used in Reservoir strategy
             balanceBefore: 0,
             withdrawnAmount: 0,
             yield: 0,
             fee: 0
         });
 
-        // Calculate the ratio between all user's shares and the amount of shares used for withdrawal.
         params.shareRatio = OperationsLib.getRatio({
             numerator: params.shares,
             denominator: params.totalShares,
@@ -252,7 +314,6 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             rounding: OperationsLib.Rounding.Floor
         });
 
-        // Burn Strategy's receipt tokens used for withdrawal.
         _burn({
             _receiptToken: receiptToken,
             _recipient: _recipient,
@@ -261,26 +322,39 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             _tokenDecimals: params.shareDecimals
         });
 
-        // Since Ion generates yield in the same token as the initial deposit (tokenIn), we must calculate the
-        // amount of tokenIn (including both the initial deposit and accrued yield) to be withdrawn. To achieve this,
-        // we apply the percentage of the user's total shares to be withdrawn relative to their entire shareholding to
-        // the available balance in Ion, ensuring the correct proportion of assets is withdrawn.
-        params.assetsToWithdraw =
-            IIonPool(tokenOut).balanceOf(_recipient) * params.shareRatio / (10 ** params.shareDecimals);
+        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** params.shareDecimals;
+        // Calculate rUSD to withdraw for specified shares, accounting for srUSD price fluctuation and redeem fee.
+        params.assetsToWithdraw = _getAssetsToWithdraw({
+            _shares: params.shares,
+            _currentPrice: ISavingModule(savingModule).currentPrice(),
+            _redeemFee: ISavingModule(savingModule).redeemFee()
+        });
 
-        // To accurately compute the protocol's fees from the yield generated by the strategy, we first need to
-        // determine the percentage of the initial investment being withdrawn. This allows us to assess whether any
-        // yield has been generated beyond the initial investment.
-        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / (10 ** params.shareDecimals);
         params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
+        uint256 rUsdBalanceBefore = IERC20(rUSD).balanceOf(address(this));
 
-        // Perform the withdrawal operation from user's holding address.
-        // Note: The `withdraw` function can be paused by Ion protocol, reverting the transaction.
+        // Approve the amount of shares to be redeemed and call redeem on the SavingModule contract.
+        IHolding(_recipient).approve({ _tokenAddress: tokenOut, _destination: savingModule, _amount: _shares });
         _genericCall({
             _holding: _recipient,
-            _contract: address(ionPool),
-            _call: abi.encodeCall(IIonPool.withdraw, (_recipient, params.assetsToWithdraw))
+            _contract: savingModule,
+            _call: abi.encodeCall(
+                ISavingModule.redeem, (_asset == rUSD ? _recipient : address(this), params.assetsToWithdraw)
+            )
         });
+
+        // Get USDC back if it was used as tokenIn
+        if (_asset != rUSD) {
+            uint256 rUsdRedemptionAmount = IERC20(rUSD).balanceOf(address(this)) - rUsdBalanceBefore;
+            IERC20(rUSD).forceApprove({ spender: address(pegStabilityModule), value: rUsdRedemptionAmount });
+
+            // Note: The `redeem` function can be paused by Reservoir protocol, making USDC unclaimable.
+            // Note: This redemption process may leave a small dust amount of rUSD in the contract
+            IPegStabilityModule(pegStabilityModule).redeem({
+                to: _recipient,
+                amount: rUsdRedemptionAmount / DECIMAL_DIFF
+            });
+        }
 
         // Take protocol's fee if any.
         params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
@@ -295,7 +369,7 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
             }
         }
 
-        recipients[_recipient].totalShares -= _shares;
+        recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
@@ -316,7 +390,52 @@ contract IonStrategy is IStrategy, StrategyBaseUpgradeable {
     }
 
     /**
-     * @notice Claims rewards from the Ion Pool.
+     * @notice Calculates the amount of assets to withdraw based exactly on specified shares amount
+     * @param _shares The amount of shares to convert to assets
+     * @param _currentPrice The current price of srUSD
+     * @param _redeemFee The current redemption fee
+     * @return assetsToWithdraw The amount of assets that can be withdrawn
+     */
+    function _getAssetsToWithdraw(
+        uint256 _shares,
+        uint256 _currentPrice,
+        uint256 _redeemFee
+    ) internal pure returns (uint256 assetsToWithdraw) {
+        // Initial estimate: Convert shares to assets considering the current price and redemption fee
+        // This formula gives us a starting point that's likely close to the correct value
+        assetsToWithdraw = (_shares * _currentPrice * RESERVOIR_FEE_PRECISION)
+            / (RESERVOIR_PRICE_PRECISION * (RESERVOIR_FEE_PRECISION + _redeemFee));
+
+        // Decrement the assets amount until we find the maximum valid withdrawal
+        // This ensures we don't try to withdraw more than specified shares
+        while (_previewRedeem(assetsToWithdraw, _currentPrice, _redeemFee) > _shares) {
+            assetsToWithdraw--;
+        }
+    }
+
+    /**
+     * @notice Previews the amount of srUSD that would be burned for a given redemption
+     * @param _amount The amount of assets to redeem
+     * @param _currentPrice The current price of srUSD
+     * @param _redeemFee The current redemption fee
+     * @return srUSDToBurn The amount of srUSD that would be burned
+     */
+    function _previewRedeem(
+        uint256 _amount,
+        uint256 _currentPrice,
+        uint256 _redeemFee
+    ) internal pure returns (uint256 srUSDToBurn) {
+        // Step 1: Calculate the base amount of srUSD needed for the redemption
+        // We use Math.ceilDiv to round up, ensuring we don't underestimate the shares needed
+        srUSDToBurn = Math.ceilDiv(_amount * RESERVOIR_PRICE_PRECISION, _currentPrice);
+
+        // Step 2: Apply the redemption fee to get the total srUSD that will be burned
+        // This accounts for the fee taken by the Reservoir protocol during redemption
+        srUSDToBurn = srUSDToBurn * (1e6 + _redeemFee) / 1e6;
+    }
+
+    /**
+     * @notice Claims rewards from the Reservoir Pool.
      * @return The amounts of rewards claimed.
      * @return The addresses of the reward tokens.
      */

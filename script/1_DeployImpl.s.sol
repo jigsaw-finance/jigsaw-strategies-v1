@@ -20,7 +20,7 @@ contract DeployImpl is CommonStrategyScriptBase {
      *        - `AAVE_STRATEGY` for AaveV3Strategy
      *        - `ION_STRATEGY` for IonStrategy
      *        - `PENDLE_STRATEGY` for PendleStrategy
-     *        - `RESERVOIR_STRATEGY` for ReservoirStablecoinStrategy
+     *        - `RESERVOIR_STRATEGY` for ReservoirSavingStrategy
      *        - `DINERO_STRATEGY` for DineroStrategy
      *
      * @return implementation The address of the deployed strategy contract.
@@ -29,9 +29,8 @@ contract DeployImpl is CommonStrategyScriptBase {
         string memory _strategy
     ) external broadcast returns (address implementation) {
         if (keccak256(bytes(_strategy)) == AAVE_STRATEGY) return address(new AaveV3Strategy());
-        if (keccak256(bytes(_strategy)) == ION_STRATEGY) return address(new IonStrategy());
         if (keccak256(bytes(_strategy)) == PENDLE_STRATEGY) return address(new PendleStrategy());
-        if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY) return address(new ReservoirStablecoinStrategy());
+        if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY) return address(new ReservoirSavingStrategy());
         if (keccak256(bytes(_strategy)) == DINERO_STRATEGY) return address(new DineroStrategy());
         revert("Unknown strategy");
     }

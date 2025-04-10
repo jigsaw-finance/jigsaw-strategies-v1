@@ -8,6 +8,6 @@
   "IonStrategy_PROXIES": "",
   "PendleStrategy_IMPL": "",
   "PendleStrategy_PROXIES": "",
-  "ReservoirStablecoinStrategy_IMPL": "",
-  "ReservoirStablecoinStrategy_PROXIES": ""
+  "ReservoirSavingStrategy_IMPL": "",
+  "ReservoirSavingStrategy_PROXIES": ""
 }
