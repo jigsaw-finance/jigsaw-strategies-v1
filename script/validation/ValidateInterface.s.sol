@@ -4,8 +4,9 @@ pragma solidity 0.8.22;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // -- Jigsaw --
+
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
-import { IManagerContainer } from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 
 // -- Aave --
 import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
@@ -46,11 +47,13 @@ abstract contract ValidateInterface {
 
     // -- Jigsaw validation --
 
-    function _validateManagerContainer(
-        address managerContainer
+    function _validateManager(
+        address manager
     ) internal view {
-        require(managerContainer.code.length > 0, "Manager container address must have code");
-        IManagerContainer(managerContainer).manager();
+        require(manager.code.length > 0, "Manager address must have code");
+        IManager(manager).WETH();
+        IManager(manager).jUsdOracle();
+        IManager(manager).allowedInvokers(address(this));
     }
 
     function _validateStakerFactory(

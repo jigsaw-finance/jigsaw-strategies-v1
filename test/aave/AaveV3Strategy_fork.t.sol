@@ -43,7 +43,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
             AaveV3Strategy.initialize,
             AaveV3Strategy.InitializerParams({
                 owner: OWNER,
-                managerContainer: address(managerContainer),
+                manager: address(manager),
                 stakerFactory: address(stakerFactory),
                 lendingPool: lendingPool,
                 rewardsController: rewardsController,
@@ -64,7 +64,16 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         strategyManager.addStrategy(address(strategy));
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
-            OWNER, address(managerContainer), address(tokenIn), address(usdcOracle), bytes(""), 50_000
+            OWNER,
+            address(manager),
+            address(tokenIn),
+            address(usdcOracle),
+            bytes(""),
+            ISharesRegistry.RegistryConfig({
+                collateralizationRate: 50_000,
+                liquidationBuffer: 5e3,
+                liquidatorBonus: 8e3
+            })
         );
         stablesManager.registerOrUpdateShareRegistry(address(tokenInSharesRegistry), address(tokenIn), true);
         registries[address(tokenIn)] = address(tokenInSharesRegistry);
@@ -74,7 +83,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
     // Test initialization
     function test_initialization() public view {
         assertEq(strategy.owner(), OWNER, "Wrong owner");
-        assertEq(address(strategy.managerContainer()), address(managerContainer), "Wrong managerContainer");
+        assertEq(address(strategy.manager()), address(manager), "Wrong manager");
         assertEq(address(strategy.lendingPool()), lendingPool, "Wrong lendingPool");
         assertEq(address(strategy.rewardsController()), rewardsController, "Wrong rewardsController");
         assertEq(strategy.rewardToken(), address(0), "Wrong rewardToken");
@@ -102,7 +111,8 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+        (uint256 receiptTokens, uint256 tokenInAmount) =
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         uint256 expectedShares = IAToken(tokenOut).scaledBalanceOf(userHolding) - tokenOutBalanceBefore;
         (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
@@ -161,7 +171,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        strategyManager.invest(tokenIn, address(strategy), amount, abi.encode("random ref"));
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, abi.encode("random ref"));
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
@@ -173,11 +183,11 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
             _getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
 
         vm.prank(user, user);
-        (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
+        (uint256 assetAmount, uint256 tokenInAmount,,) = strategyManager.claimInvestment({
             _holding: userHolding,
+            _token: tokenIn,
             _strategy: address(strategy),
             _shares: totalShares,
-            _asset: tokenIn,
             _data: ""
         });
 

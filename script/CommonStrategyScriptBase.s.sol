@@ -87,11 +87,11 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         string memory deployments = vm.readFile("./deployments.json");
 
         address owner = commonConfig.readAddress(".INITIAL_OWNER");
-        address managerContainer = commonConfig.readAddress(".MANAGER_CONTAINER");
+        address manager = commonConfig.readAddress(".MANAGER");
         address jigsawRewardToken = commonConfig.readAddress(".JIGSAW_REWARDS");
         address stakerFactory = deployments.readAddress(".STAKER_FACTORY");
 
-        _validateManagerContainer(managerContainer);
+        _validateManager(manager);
         _validateErc20(jigsawRewardToken);
         _validateStakerFactory(stakerFactory);
 
@@ -115,7 +115,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                     AaveV3Strategy.initialize,
                     AaveV3Strategy.InitializerParams({
                         owner: owner,
-                        managerContainer: managerContainer,
+                        manager: manager,
                         stakerFactory: stakerFactory,
                         lendingPool: aaveLendingPool,
                         rewardsController: aaveRewardsController,
@@ -144,13 +144,12 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                     IonStrategy.initialize,
                     IonStrategy.InitializerParams({
                         owner: owner,
-                        managerContainer: managerContainer,
+                        manager: manager,
                         stakerFactory: stakerFactory,
                         jigsawRewardToken: jigsawRewardToken,
                         ionPool: ionStrategyParams[i].ionPool,
                         jigsawRewardDuration: ionStrategyParams[i].jigsawRewardDuration,
-                        tokenIn: ionStrategyParams[i].tokenIn,
-                        tokenOut: ionStrategyParams[i].tokenOut
+                        tokenIn: ionStrategyParams[i].tokenIn
                     })
                 );
             }
@@ -176,7 +175,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                     PendleStrategy.initialize,
                     PendleStrategy.InitializerParams({
                         owner: owner,
-                        managerContainer: managerContainer,
+                        manager: manager,
                         stakerFactory: stakerFactory,
                         jigsawRewardToken: jigsawRewardToken,
                         pendleRouter: pendleRouter,
@@ -208,7 +207,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                     ReservoirSavingStrategy.initialize,
                     ReservoirSavingStrategy.InitializerParams({
                         owner: owner,
-                        managerContainer: managerContainer,
+                        manager: manager,
                         stakerFactory: stakerFactory,
                         jigsawRewardToken: jigsawRewardToken,
                         creditEnforcer: reservoirSavingStrategyParams[i].creditEnforcer,
@@ -238,7 +237,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                     DineroStrategy.initialize,
                     DineroStrategy.InitializerParams({
                         owner: owner,
-                        managerContainer: managerContainer,
+                        manager: manager,
                         stakerFactory: stakerFactory,
                         jigsawRewardToken: jigsawRewardToken,
                         pirexEth: dineroStrategyParams[i].pirexEth,
