@@ -51,6 +51,9 @@ build: && _timer
 format: && _timer
 	forge fmt
 
+test-elixir: && _timer
+    forge test -vvvvv --match-test "test_elixir_deposit_when_authorized"
+
 test-all: && _timer
 	forge test -vvvv --match-contract AaveV3StrategyTest
 	forge test -vvvv --match-contract DineroStrategyTest
