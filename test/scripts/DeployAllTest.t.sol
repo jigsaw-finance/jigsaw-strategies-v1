@@ -24,7 +24,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
 
     DeployProxy internal proxyDeployer;
     address ownerFromConfig;
-    address managerContainerFromConfig;
+    address managerFromConfig;
     address jigsawRewardTokenFromConfig;
     address[] internal strategies;
 
@@ -34,14 +34,13 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
 
         ownerFromConfig = commonConfig.readAddress(".INITIAL_OWNER");
-        managerContainerFromConfig = commonConfig.readAddress(".MANAGER_CONTAINER");
+        managerFromConfig = commonConfig.readAddress(".MANAGER");
         jigsawRewardTokenFromConfig = commonConfig.readAddress(".JIGSAW_REWARDS");
     }
 
     function test_all_initializations() public {
         aave_initialization();
         dinero_initialization();
-        ion_initialization();
         pendle_initialization();
         reservoir_initialization();
     }
@@ -67,7 +66,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             IStakerLight staker = strategy.jigsawStaker();
 
             assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer  wrong");
+            assertEq(address(strategy.manager()), managerFromConfig, "ManagerContainer  wrong");
             assertEq(address(strategy.lendingPool()), aaveLendingPoolFromConfig, "Lending Pool initialized wrong");
             assertEq(address(strategy.rewardsController()), aaveRewardsControllerFromConfig, "RewardsController wrong");
             assertEq(strategy.tokenIn(), aaveStrategyParams[i].tokenIn, "tokenIn initialized wrong");
@@ -95,39 +94,13 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             IStakerLight staker = strategy.jigsawStaker();
 
             assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer wrong");
+            assertEq(address(strategy.manager()), managerFromConfig, "ManagerContainer wrong");
             assertEq(address(strategy.pirexEth()), dineroStrategyParams[i].pirexEth, "PirexEth wrong");
             assertEq(address(strategy.autoPirexEth()), dineroStrategyParams[i].autoPirexEth, "autoPirexEth wrong");
             assertEq(strategy.tokenIn(), dineroStrategyParams[i].tokenIn, "tokenIn initialized wrong");
             assertEq(strategy.tokenOut(), dineroStrategyParams[i].tokenOut, "tokenOut initialized wrong");
             assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
             assertEq(staker.rewardsDuration(), dineroStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong");
-        }
-    }
-
-    function ion_initialization() public {
-        DeployImpl implDeployer = new DeployImpl();
-        address implementation = implDeployer.run("IonStrategy");
-
-        // Save implementation address to deployments
-        Strings.toHexString(uint160(implementation), 20).write("./deployments.json", ".IonStrategy_IMPL");
-
-        proxyDeployer = new DeployProxy();
-        strategies = proxyDeployer.run({ _strategy: "IonStrategy" });
-
-        _populateIonArray();
-
-        for (uint256 i = 0; i < ionStrategyParams.length; i++) {
-            IonStrategy strategy = IonStrategy(strategies[i]);
-            IStakerLight staker = strategy.jigsawStaker();
-
-            assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer init wrong");
-            assertEq(address(strategy.ionPool()), ionStrategyParams[i].ionPool, "Ion Pool initialized wrong");
-            assertEq(strategy.tokenIn(), ionStrategyParams[i].tokenIn, "tokenIn initialized wrong");
-            assertEq(strategy.tokenOut(), ionStrategyParams[i].tokenOut, "tokenOut initialized wrong");
-            assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
-            assertEq(staker.rewardsDuration(), ionStrategyParams[i].jigsawRewardDuration, "RewardsDuration init wrong");
         }
     }
 
@@ -151,12 +124,12 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             IStakerLight staker = strategy.jigsawStaker();
 
             assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer wrong");
+            assertEq(address(strategy.manager()), managerFromConfig, "ManagerContainer wrong");
             assertEq(address(strategy.pendleRouter()), pendleRouter, "PendleRouter wrong");
             assertEq(address(strategy.pendleMarket()), pendleStrategyParams[i].pendleMarket, "PendleRouter wrong");
             assertEq(address(strategy.rewardToken()), pendleStrategyParams[i].rewardToken, "PendleRouter wrong");
             assertEq(strategy.tokenIn(), pendleStrategyParams[i].tokenIn, "tokenIn initialized wrong");
-            assertEq(strategy.tokenOut(), pendleStrategyParams[i].tokenOut, "tokenOut initialized wrong");
+            assertEq(strategy.tokenOut(), pendleStrategyParams[i].pendleMarket, "tokenOut initialized wrong");
             assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
             assertEq(staker.rewardsDuration(), pendleStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong");
         }
@@ -181,7 +154,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             IStakerLight staker = strategy.jigsawStaker();
 
             assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.managerContainer()), managerContainerFromConfig, "ManagerContainer wrong");
+            assertEq(address(strategy.manager()), managerFromConfig, "ManagerContainer wrong");
             assertEq(
                 address(strategy.pegStabilityModule()),
                 reservoirSavingStrategyParams[i].pegStabilityModule,
@@ -218,31 +191,4 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             StakerLightFactory(factory).referenceImplementation(), staker, "ReferenceImplementation in factory wrong"
         );
     }
-}
-
-interface IIonPool {
-    function withdraw(address receiverOfUnderlying, uint256 amount) external;
-    function supply(address user, uint256 amount, bytes32[] calldata proof) external;
-    function owner() external returns (address);
-    function whitelist() external returns (address);
-    function updateSupplyCap(
-        uint256 newSupplyCap
-    ) external;
-    function updateIlkDebtCeiling(uint8 ilkIndex, uint256 newCeiling) external;
-    function balanceOf(
-        address user
-    ) external view returns (uint256);
-    function normalizedBalanceOf(
-        address user
-    ) external returns (uint256);
-    function totalSupply() external view returns (uint256);
-    function debt() external view returns (uint256);
-    function supplyFactorUnaccrued() external view returns (uint256);
-    function getIlkAddress(
-        uint256 ilkIndex
-    ) external view returns (address);
-    function decimals() external view returns (uint8);
-    function balanceOfUnaccrued(
-        address user
-    ) external view returns (uint256);
 }

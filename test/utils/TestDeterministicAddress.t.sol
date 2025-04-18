@@ -58,13 +58,12 @@ contract TestDeterministicAddress is StdInvariant, Test {
                         IonStrategy.initialize,
                         IonStrategy.InitializerParams({
                             owner: 0x3412d07beF5d0DcDb942aC1765D0b8f19D8CA2C4,
-                            managerContainer: 0xB23B5406c67b31DB4BC223afa20fc75ebBa50CA9,
+                            manager: 0xB23B5406c67b31DB4BC223afa20fc75ebBa50CA9,
                             stakerFactory: 0xE41fCFCe505457DB0DF31aD6D3D20606D8Fb1c6E,
                             ionPool: 0x0000000000eaEbd95dAfcA37A39fd09745739b78,
                             jigsawRewardToken: 0x371BC93e9661d445fC046918231483faDF1Dbd96,
                             jigsawRewardDuration: 5_184_000,
-                            tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
-                            tokenOut: 0x0000000000eaEbd95dAfcA37A39fd09745739b78
+                            tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0
                         })
                     )
                 )

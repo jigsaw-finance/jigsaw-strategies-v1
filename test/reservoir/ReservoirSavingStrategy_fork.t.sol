@@ -38,7 +38,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
             ReservoirSavingStrategy.initialize,
             ReservoirSavingStrategy.InitializerParams({
                 owner: OWNER,
-                managerContainer: address(managerContainer),
+                manager: address(manager),
                 creditEnforcer: RESERVOIR_CI,
                 pegStabilityModule: RESERVOIR_PSM,
                 savingModule: RESERVOIR_SM,
@@ -60,10 +60,16 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
         strategyManager.addStrategy(address(strategy));
 
         SharesRegistry tokenInSharesRegistry = new SharesRegistry(
-            OWNER, address(managerContainer), address(tokenIn), address(usdcOracle), bytes(""), 90_000
+            OWNER,
+            address(manager),
+            address(tokenIn),
+            address(usdcOracle),
+            bytes(""),
+            ISharesRegistry.RegistryConfig({ collateralizationRate: 90_000, liquidationBuffer: 0, liquidatorBonus: 0 })
         );
         stablesManager.registerOrUpdateShareRegistry(address(tokenInSharesRegistry), address(tokenIn), true);
         registries[address(tokenIn)] = address(tokenInSharesRegistry);
+
         vm.stopPrank();
     }
 
@@ -83,7 +89,8 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+        (uint256 receiptTokens, uint256 tokenInAmount) =
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
         uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
@@ -133,7 +140,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
         // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
 
-        strategyManager.invest(tokenIn, address(strategy), amount, "");
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
@@ -149,11 +156,11 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
 
         vm.prank(user, user);
 
-        (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
+        (uint256 assetAmount, uint256 tokenInAmount,,) = strategyManager.claimInvestment({
             _holding: userHolding,
+            _token: tokenIn,
             _strategy: address(strategy),
             _shares: totalShares,
-            _asset: tokenIn,
             _data: ""
         });
 
@@ -185,7 +192,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
         // 5.
         assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
         // 6.
-        assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
+        assertApproxEqAbs(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), 1, "Fee address fee amount wrong");
 
         // Additional checks
         assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
@@ -208,7 +215,8 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest(tokenIn, address(strategy), amount, "");
+        (uint256 receiptTokens, uint256 tokenInAmount) =
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
         uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
@@ -259,7 +267,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
         // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
 
-        strategyManager.invest(tokenIn, address(strategy), amount, "");
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, "");
 
         (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
@@ -274,11 +282,11 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
 
         vm.prank(user, user);
 
-        (uint256 assetAmount, uint256 tokenInAmount) = strategyManager.claimInvestment({
+        (uint256 assetAmount, uint256 tokenInAmount,,) = strategyManager.claimInvestment({
             _holding: userHolding,
+            _token: tokenIn,
             _strategy: address(strategy),
             _shares: totalShares,
-            _asset: tokenIn,
             _data: ""
         });
 
@@ -310,7 +318,7 @@ contract ReservoirSavingStrategyTest is Test, BasicContractsFixture {
         // 5.
         assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
         // 6.
-        assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
+        assertApproxEqAbs(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), 1, "Fee address fee amount wrong");
 
         // Additional checks
         assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");

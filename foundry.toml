@@ -8,7 +8,7 @@ evm_version = "cancun"
 ast = true
 build_info = true
 extra_output = ["storageLayout"]
-optimizer-runs = 100_000
+optimizer-runs = 200
 
 [fmt]
 bracket_spacing = true

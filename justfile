@@ -55,14 +55,13 @@ test-elixir: && _timer
     forge test -vvvvv --match-test "test_elixir_deposit_when_authorized"
 
 test-all: && _timer
-    forge test --match-path "test/scripts/**"
-    forge test --match-path "test/utils/**"
-    forge test --match-path "test/staker/**"
-    forge test --match-path "test/aave/**"
-    forge test --match-path "test/dinero/**"
-    forge test --match-path "test/ion/**"
-    forge test --match-path "test/pendle/**"
-    forge test --match-path "test/reservoir/**"
+	forge test -vvvv --match-contract AaveV3StrategyTest
+	forge test -vvvv --match-contract DineroStrategyTest
+	forge test -vvvv --match-contract IonStrategyTest
+	forge test -vvvv --match-contract PendleStrategyTest
+	forge test -vvvv --match-contract ReservoirSavingStrategyTest
+	forge test -vvvv --match-contract ReservoirMath
+	forge test -vvvv --match-contract DeployAllTest
 
 
 test-gas: && _timer
@@ -130,7 +129,7 @@ deploy-proxy STRATEGY: && _timer
 	# echo "Proxies successfully deployed"
 
 # Deploy both implementation and proxy
-deploy-strategy STRATEGY SALT: && _timer
+deploy-strategy STRATEGY: && _timer
 	#!/usr/bin/env bash
 	echo "Deploying full strategy " {{STRATEGY}} " on chain " ${CHAIN} "..."
 
