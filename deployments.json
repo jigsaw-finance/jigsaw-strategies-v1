@@ -33,8 +33,14 @@
       "TokenInSymbol": "weETH"
     }
   ],
-  "DineroStrategy_IMPL": "",
-  "DineroStrategy_PROXIES": "",
+  "DineroStrategy_IMPL": "0xa7948D45490c363FFef0c4531209472a8c0071Bc",
+  "DineroStrategy_PROXIES": [
+    {
+      "Strategy": "0x883Fc3E0C4719c0A113F2ef4bB19a26781E88E4D",
+      "TokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "TokenInSymbol": "wETH"
+    }
+  ],
   "PendleStrategy_IMPL": "0x954f081ddA5af104dE425D3E61b2f541Ce3d6878",
   "PendleStrategy_PROXIES": [
     {
