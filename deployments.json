@@ -37,8 +37,14 @@
   "DineroStrategy_PROXIES": "",
   "IonStrategy_IMPL": "",
   "IonStrategy_PROXIES": "",
-  "PendleStrategy_IMPL": "",
-  "PendleStrategy_PROXIES": "",
+  "PendleStrategy_IMPL": "0x954f081ddA5af104dE425D3E61b2f541Ce3d6878",
+  "PendleStrategy_PROXIES": [
+    {
+      "Strategy": "0x30C57337482110Cd7891bAC5236743cc71781804",
+      "TokenIn": "0x35d8949372d46b7a3d5a56006ae77b215fc69bc0",
+      "TokenInSymbol": "USD0++"
+    }
+  ],
   "ReservoirSavingStrategy_IMPL": "",
   "ReservoirSavingStrategy_PROXIES": ""
 }
