@@ -1,7 +1,38 @@
 {
-  "STAKER_FACTORY": "",
-  "AaveV3Strategy_IMPL": "",
-  "AaveV3Strategy_PROXIES": "",
+  "STAKER_FACTORY": "0x45B0c63997b335faEa579f6BA84Ae6cf2A504e8b",
+  "AaveV3Strategy_IMPL": "0xE4DA2a3Fab7A946AE9d39B37c8C551c3B7E22638",
+  "AaveV3Strategy_PROXIES": [
+    {
+      "Strategy": "0x37AAd25a5DA6738E1B7E5Af29604618D00232A9d",
+      "TokenIn": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "TokenInSymbol": "USDC"
+    },
+    {
+      "Strategy": "0x05329BbE8b9DEcf80A09ee84998250e6B137Bda2",
+      "TokenIn": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      "TokenInSymbol": "USDT"
+    },
+    {
+      "Strategy": "0x1CACe39d1D0A43Bb95f40e3F2B623cB0E138318a",
+      "TokenIn": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "TokenInSymbol": "wBTC"
+    },
+    {
+      "Strategy": "0x0EE2B97EA5e8c69bE42539439E052A1C6627bBd7",
+      "TokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "TokenInSymbol": "wETH"
+    },
+    {
+      "Strategy": "0xDD9C98758c39D7b631ac93c6537d950C02DdB13C",
+      "TokenIn": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+      "TokenInSymbol": "wstETH"
+    },
+    {
+      "Strategy": "0x99e15e69ceDd7233E00AcA77c0312072C3FB087c",
+      "TokenIn": "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",
+      "TokenInSymbol": "weETH"
+    }
+  ],
   "DineroStrategy_IMPL": "",
   "DineroStrategy_PROXIES": "",
   "IonStrategy_IMPL": "",

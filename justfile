@@ -131,7 +131,7 @@ deploy-strategy STRATEGY: && _timer
 	echo "Deploying full strategy " {{STRATEGY}} " on chain " ${CHAIN} "..."
 
 	# Step 1: Deploy implementation
-	just deploy-impl {{STRATEGY}} ${CHAIN}
+	just deploy-impl {{STRATEGY}}
 
 	# Step 2: Deploy proxy
-	just deploy-proxy {{STRATEGY}} ${CHAIN}
+	just deploy-proxy {{STRATEGY}}
