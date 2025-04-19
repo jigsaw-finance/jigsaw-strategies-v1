@@ -35,8 +35,6 @@
   ],
   "DineroStrategy_IMPL": "",
   "DineroStrategy_PROXIES": "",
-  "IonStrategy_IMPL": "",
-  "IonStrategy_PROXIES": "",
   "PendleStrategy_IMPL": "0x954f081ddA5af104dE425D3E61b2f541Ce3d6878",
   "PendleStrategy_PROXIES": [
     {
@@ -45,6 +43,17 @@
       "TokenInSymbol": "USD0++"
     }
   ],
-  "ReservoirSavingStrategy_IMPL": "",
-  "ReservoirSavingStrategy_PROXIES": ""
+  "ReservoirSavingStrategy_IMPL": "0x612b311499Bd992DF1d197e3d262E2b55a40ca04",
+  "ReservoirSavingStrategy_PROXIES": [
+    {
+      "Strategy": "0x0a1754Fab76bd3963F5413523B4054B6670F5434",
+      "TokenIn": "0x09D4214C03D01F49544C0448DBE3A27f768F2b34",
+      "TokenInSymbol": "rUSD"
+    },
+    {
+      "Strategy": "0x8EE9Cc2D6788EEf59593d77733592314BE317209",
+      "TokenIn": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "TokenInSymbol": "USDC"
+    }
+  ]
 }
