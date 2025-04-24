@@ -4,29 +4,33 @@ pragma abicoder v2;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
-import { StdStorage, stdStorage } from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-import { ElixirStrategy } from "../../src/elixir/ElixirStrategy.sol";
-
-import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {ElixirStrategy} from "../../src/elixir/ElixirStrategy.sol";
+import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+import { StdStorage, stdStorage } from "forge-std/Test.sol";
+import { SampleOracleUniswap } from "@jigsaw/test/utils/mocks/SampleOracleUniswap.sol";
 
 contract ElixirStrategyTest is Test, BasicContractsFixture {
     using SafeERC20 for IERC20;
-    // Mainnet USDT
 
+    // Mainnet USDC
     address internal tokenIn = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
     // sdeUSD token
     address internal tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326;
+
     // deUSD token
     address internal deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
 
     address internal uniswapRouter = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+
+    address internal deUsdUsdcPool = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6;
 
     address internal user = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
@@ -47,7 +51,9 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             tokenIn: tokenIn,
             tokenOut: tokenOut,
             deUSD: deUSD,
-            uniswapRouter: uniswapRouter
+            uniswapRouter: uniswapRouter,
+            oracle: address(new SampleOracle()),
+            pool: deUsdUsdcPool
         });
 
         bytes memory data = abi.encodeCall(ElixirStrategy.initialize, initParams);
@@ -88,10 +94,17 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
         uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
 
+        // Add multi pool version here
+        bytes memory data = abi.encode(
+            amount * strategy.DECIMAL_DIFF(), // amountOutMinimum
+            uint256(block.timestamp), // deadline
+            abi.encodePacked(tokenIn, poolFee, deUSD)
+        );
+
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
         (uint256 receiptTokens, uint256 tokenInAmount) =
-            strategyManager.invest(tokenIn, address(strategy), amount, 0, abi.encodePacked(tokenIn, poolFee, deUSD));
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, data);
 
         uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
         uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
@@ -108,7 +121,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
         // allow 5% difference for tokenOut balance
         assertApproxEqRel(
-            IERC20(tokenOut).balanceOf(userHolding), amount * 1e12, 0.05e18, "Holding token out balance wrong"
+            IERC20(tokenOut).balanceOf(userHolding), amount * strategy.DECIMAL_DIFF(), 0.05e18, "Holding token out balance wrong"
         );
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
@@ -121,8 +134,8 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         // Additional checks
         assertApproxEqRel(
             tokenOutBalanceAfter,
-            amount * 1e12, // TODO: decimals are different
-            1e18, // TODO: ensure delta is correct
+            amount * strategy.DECIMAL_DIFF(),
+            1e18,
             "Wrong balance in Elixir after stake"
         );
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
@@ -134,22 +147,34 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         uint256 _amount
     ) public notOwnerNotZero(user) {
         // added to prevent USDT safeTransferFrom revert issue
-        uint256 amount = bound(_amount, 1e6, 100_000e6);
+        uint256 amount = bound(_amount, 1e6, 1e6);
         address userHolding = initiateUser(user, tokenIn, amount);
+
+        bytes memory data = abi.encode(
+            amount * strategy.DECIMAL_DIFF(), // amountOutMinimum
+            uint256(block.timestamp), // deadline
+            abi.encodePacked(tokenIn, poolFee, deUSD)
+        );
 
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
-
-        strategyManager.invest(tokenIn, address(strategy), amount, 0, abi.encodePacked(tokenIn, poolFee, deUSD));
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, data);
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
 
-        _transferInRewards(100_000e18);
+        _transferInRewards(100_00e18);
         skip(90 days);
 
+        vm.prank(user, user);
         strategy.cooldown(userHolding, totalShares);
         skip(7 days);
+
+        bytes memory dataClaimInvest = abi.encode(
+            amount, // amountOutMinimum
+            uint256(block.timestamp), // deadline
+            abi.encodePacked(deUSD, poolFee, tokenIn)
+        );
 
         vm.prank(user, user);
         strategyManager.claimInvestment({
@@ -157,7 +182,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             _token: tokenIn,
             _strategy: address(strategy),
             _shares: totalShares,
-            _data: abi.encodePacked(deUSD, poolFee, tokenIn)
+            _data: dataClaimInvest
         });
 
         (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
