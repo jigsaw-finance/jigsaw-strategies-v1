@@ -67,7 +67,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         address deUSD; // The Elixir's deUSD stablecoin.
         address uniswapRouter; // The address of the UniswapV3 Router
         address oracle; // The address of the UniswapV3 Oracle
-        address pool; // The address of the UniswapV3 Pool
+        address[] initialPools; // The address array of the UniswapV3 pools
     }
 
     // -- Errors --
@@ -207,17 +207,14 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.deUSD != address(0), "3036");
         require(_params.uniswapRouter != address(0), "3000");
         require(_params.oracle != address(0), "3000");
-        require(_params.pool != address(0), "3000");
-
-        address[] memory initialPools = new address[](1);
-        initialPools[0] = _params.pool;
+        require(_params.initialPools.length > 0, "3000");
 
         oracle = new UniswapV3Oracle({
             _initialOwner: _params.owner,
             _jUSD: _params.tokenIn,
             _quoteToken: _params.deUSD,
             _quoteTokenOracle: _params.oracle,
-            _uniswapV3Pools: initialPools
+            _uniswapV3Pools: _params.initialPools
         });
 
         __StrategyBase_init({_initialOwner: _params.owner});

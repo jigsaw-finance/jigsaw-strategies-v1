@@ -19,18 +19,23 @@ import { SampleOracleUniswap } from "@jigsaw/test/utils/mocks/SampleOracleUniswa
 contract ElixirStrategyTest is Test, BasicContractsFixture {
     using SafeERC20 for IERC20;
 
-    // Mainnet USDC
-    address internal tokenIn = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    // Mainnet USDT
+    address internal tokenIn = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
 
     // sdeUSD token
     address internal tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326;
+
+    // Mainnet USDC
+    address internal USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
     // deUSD token
     address internal deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
 
     address internal uniswapRouter = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 
-    address internal deUsdUsdcPool = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6;
+    address internal DEUSD_USDC_POOL = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6; // deUSD/USDT pool
+
+    address internal USDC_POOL = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6; // USDT/USDC pool
 
     address internal user = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
@@ -40,6 +45,11 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
     function setUp() public {
         init();
+
+        address[] memory pools = new address[](2);
+
+        pools[0] = USDC_POOL;
+        pools[1] = DEUSD_USDC_POOL;
 
         address strategyImplementation = address(new ElixirStrategy());
         ElixirStrategy.InitializerParams memory initParams = ElixirStrategy.InitializerParams({
@@ -53,7 +63,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             deUSD: deUSD,
             uniswapRouter: uniswapRouter,
             oracle: address(new SampleOracle()),
-            pool: deUsdUsdcPool
+            initialPools: pools
         });
 
         bytes memory data = abi.encodeCall(ElixirStrategy.initialize, initParams);
@@ -98,7 +108,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         bytes memory data = abi.encode(
             amount * strategy.DECIMAL_DIFF(), // amountOutMinimum
             uint256(block.timestamp), // deadline
-            abi.encodePacked(tokenIn, poolFee, deUSD)
+            abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD)
         );
 
         // Invest into the tested strategy vie strategyManager
@@ -153,7 +163,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         bytes memory data = abi.encode(
             amount * strategy.DECIMAL_DIFF(), // amountOutMinimum
             uint256(block.timestamp), // deadline
-            abi.encodePacked(tokenIn, poolFee, deUSD)
+            abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD)
         );
 
         // Invest into the tested strategy vie strategyManager
@@ -173,7 +183,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         bytes memory dataClaimInvest = abi.encode(
             amount, // amountOutMinimum
             uint256(block.timestamp), // deadline
-            abi.encodePacked(deUSD, poolFee, tokenIn)
+            abi.encodePacked(deUSD, poolFee, USDC, poolFee, tokenIn)
         );
 
         vm.prank(user, user);
