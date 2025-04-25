@@ -320,9 +320,27 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
     function _populatePendleArray() internal {
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0x048680F64d6DFf1748ba6D9a01F578433787e24B,
+                pendleMarket: 0x461bc2ac3f80801BC11B0F20d63B73feF60C8076,
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0, // USD0++
+                tokenIn: 0x7C1156E515aA1A2E851674120074968C905aAF37, // lvlUSD
+                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+            })
+        );
+
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0xA77c0DE4d26B7C97D1D42ABD6733201206122E25,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xaD55aebc9b8c03FC43cd9f62260391c13c23e7c0, // cUSDO
+                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+            })
+        );
+
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0x88C4F34B86907b7221c0061f7a0bBeC9391Ea727,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34, // RUSD
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );

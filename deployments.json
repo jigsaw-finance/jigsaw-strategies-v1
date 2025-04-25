@@ -42,13 +42,7 @@
     }
   ],
   "PendleStrategy_IMPL": "0x954f081ddA5af104dE425D3E61b2f541Ce3d6878",
-  "PendleStrategy_PROXIES": [
-    {
-      "Strategy": "0x30C57337482110Cd7891bAC5236743cc71781804",
-      "TokenIn": "0x35d8949372d46b7a3d5a56006ae77b215fc69bc0",
-      "TokenInSymbol": "USD0++"
-    }
-  ],
+  "PendleStrategy_PROXIES": "[0xe12b93B12b369f1Fe0Eb4FCC9878DE3F605B9d1E, 0xB588C4D441ED64bED86AE0732A387085c703e8B6, 0xE801d4cF6DbF22666cB481D866F9218fc8e1069d]",
   "ReservoirSavingStrategy_IMPL": "0x612b311499Bd992DF1d197e3d262E2b55a40ca04",
   "ReservoirSavingStrategy_PROXIES": [
     {
