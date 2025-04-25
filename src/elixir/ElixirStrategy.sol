@@ -32,7 +32,8 @@ import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 /**
  * @title ElixirStrategy
- * @dev Strategy used for deUSD minting.
+ * @dev Strategy used for deUSD minting and staking mechanisms.
+ * @notice Implements deposit, withdrawal, and reward management for Elixir's deUSD strategy.
  * @author Hovooo (@hovooo)
  */
 contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
@@ -72,10 +73,29 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 
     // -- Errors --
 
+    /**
+        * @notice Thrown when an unsupported operation is attempted.
+     */
     error OperationNotSupported();
+
+    /**
+     * @notice Thrown when the swap path length is invalid.
+     */
     error InvalidSwapPathLength();
+
+    /**
+     * @notice Thrown when the first token in the swap path is invalid.
+     */
     error InvalidFirstTokenInPath();
+
+    /**
+     * @notice Thrown when the last token in the swap path is invalid.
+     */
     error InvalidLastTokenInPath();
+
+    /**
+     * @notice Thrown when the minimum output amount is invalid.
+     */
     error InvalidAmountOutMin();
 
     // -- Events --
@@ -141,7 +161,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice The UniswapV3Oracle contract.
      */
-
     UniswapV3Oracle public oracle;
 
     /**
@@ -177,6 +196,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 
     // -- Constructor --
 
+    /**
+     * @notice Disables initializers to prevent misuse.
+     */
     constructor() {
         _disableInitializers();
     }
@@ -272,7 +294,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        // Transfer USDTs from recipient to this contract
         IHolding(_recipient).transfer({_token: _asset, _to: address(this), _amount: _amount});
         uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
 
@@ -435,7 +456,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _recipient The address on behalf of which the funds are withdrawn.
      * @param _shares The amount of shares to withdraw.
      */
-    function cooldown(address _recipient, uint256 _shares) external {
+    function cooldown(address _recipient, uint256 _shares) external nonReentrant {
         require(
             msg.sender == owner() ||
             msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
@@ -450,6 +471,10 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 
     // -- Administration --
 
+    /**
+     * @notice Sets a new slippage percentage for the strategy.
+     * @param _newVal The new slippage percentage value (must be <= SLIPPAGE_PRECISION).
+     */
     function setSlippagePercentage(
         uint256 _newVal
     ) external onlyOwner {
@@ -496,6 +521,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _amountIn The desired amount of `tokenIn`.
      * @param _recipient The address of recipient.
      * @param _swapData Encoded data used for UniswapV3 swap.
+     * @param _swapDirection The direction of the swap.
      *
      * @return amountOut The amount of `_tokenIn` spent to receive the desired `amountOut` of `tokenOut`.
      */
@@ -555,15 +581,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 
         // Emit event indicating successful exact output swap.
         emit ExactInputSwap({holding: _recipient, path: swapPath, amountIn: _amountIn, amountOut: amountOut});
-    }
-
-    /**
-     * @notice Computes a median value from three numbers.
-     */
-    function _getMedian(uint256 _a, uint256 _b, uint256 _c) internal pure returns (uint256) {
-        if ((_a >= _b && _a <= _c) || (_a >= _c && _a <= _b)) return _a;
-        if ((_b >= _a && _b <= _c) || (_b >= _c && _b <= _a)) return _b;
-        return _c;
     }
 
     /**

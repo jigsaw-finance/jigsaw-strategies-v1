@@ -97,7 +97,6 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     function test_elixir_deposit_when_authorized(
         uint256 _amount
     ) public notOwnerNotZero(user) {
-        // added to prevent USDT safeTransferFrom revert issue
         uint256 amount = bound(_amount, 1e6, 10e6);
         address userHolding = initiateUser(user, tokenIn, amount);
 
@@ -220,6 +219,41 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
         // Additional checks
         assertEq(tokenInBalanceAfter, expectedWithdrawal, "Incorrect asset amount returned");
+    }
+
+    function test_elixir_deposit_reverts_when_invalidSwapPathLength() public {
+        uint256 amount = 10e6;
+        initiateUser(user, tokenIn, amount);
+
+        bytes memory invalidData = abi.encode(amount, block.timestamp + 1 days, bytes("short"));
+
+        deal(tokenIn, user, amount);
+
+        vm.expectRevert(ElixirStrategy.InvalidSwapPathLength.selector);
+        vm.prank(user, user);
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, invalidData);
+    }
+
+    function test_elixir_updatesSlippagePercentageCorrectly() public {
+        uint256 newSlippage = 300;
+        vm.prank(OWNER);
+        strategy.setSlippagePercentage(newSlippage);
+
+        assertEq(strategy.allowedSlippagePercentage(), newSlippage);
+    }
+
+    function test_elixir_revertsOnExceedingSlippageLimit() public {
+        uint256 invalidSlippage = 20000; // Exceeds SLIPPAGE_PRECISION
+
+        vm.prank(OWNER, OWNER);
+        vm.expectRevert(bytes("3002"));
+        strategy.setSlippagePercentage(invalidSlippage);
+    }
+
+    function test_elixir_revertsOnClaimRewards() public {
+        vm.prank(user, user);
+        vm.expectRevert(ElixirStrategy.OperationNotSupported.selector);
+        strategy.claimRewards(address(0), "");
     }
 
     function _transferInRewards(
