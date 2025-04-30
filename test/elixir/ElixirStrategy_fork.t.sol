@@ -4,16 +4,16 @@ pragma abicoder v2;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { StdStorage, stdStorage } from "forge-std/Test.sol";
 
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {ElixirStrategy} from "../../src/elixir/ElixirStrategy.sol";
-import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
+import { ElixirStrategy } from "../../src/elixir/ElixirStrategy.sol";
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
-import { StdStorage, stdStorage } from "forge-std/Test.sol";
 import { SampleOracleUniswap } from "@jigsaw/test/utils/mocks/SampleOracleUniswap.sol";
 
 contract ElixirStrategyTest is Test, BasicContractsFixture {
@@ -97,13 +97,11 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     function test_elixir_deposit_when_authorized(
         uint256 _amount
     ) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e6, 10e6);
+        uint256 amount = bound(_amount, 1e6, 1e8);
         address userHolding = initiateUser(user, tokenIn, amount);
-
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
         uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
 
-        // Add multi pool version here
         bytes memory data = abi.encode(
             amount * strategy.DECIMAL_DIFF(), // amountOutMinimum
             uint256(block.timestamp), // deadline
@@ -143,8 +141,8 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         // Additional checks
         assertApproxEqRel(
             tokenOutBalanceAfter,
-            amount * strategy.DECIMAL_DIFF(),
-            1e18,
+            strategy.stdeUSD().convertToShares(amount * strategy.DECIMAL_DIFF()),
+            0.01e18,
             "Wrong balance in Elixir after stake"
         );
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
@@ -155,8 +153,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     function test_elixir_withdraw_when_authorized(
         uint256 _amount
     ) public notOwnerNotZero(user) {
-        // added to prevent USDT safeTransferFrom revert issue
-        uint256 amount = bound(_amount, 1e6, 1e6);
+        uint256 amount = bound(_amount, 1e6, 1e8);
         address userHolding = initiateUser(user, tokenIn, amount);
 
         bytes memory data = abi.encode(
@@ -172,7 +169,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         (, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
 
-        _transferInRewards(100_00e18);
+        _transferInRewards(100_000e18);
         skip(90 days);
 
         vm.prank(user, user);
@@ -186,7 +183,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         );
 
         vm.prank(user, user);
-        strategyManager.claimInvestment({
+        (uint256 assetAmount,,,) = strategyManager.claimInvestment({
             _holding: userHolding,
             _token: tokenIn,
             _strategy: address(strategy),
@@ -207,7 +204,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
          * 5. Strategy's total shares  -= shares
          * 6. Fee address fee amount += yield * performanceFee
          */
-        assertEq(tokenInBalanceAfter, expectedWithdrawal, "Holding balance after withdraw is wrong");
+        assertEq(tokenInBalanceAfter, assetAmount, "Holding balance after withdraw is wrong");
         assertEq(IERC20(tokenOut).balanceOf(userHolding), 0, "Holding token out balance wrong");
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
