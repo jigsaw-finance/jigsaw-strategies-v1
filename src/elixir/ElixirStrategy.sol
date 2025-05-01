@@ -1,31 +1,33 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import { TickMath } from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import { BytesLib } from "@uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
-import { TickMath } from '@uniswap/v3-core/contracts/libraries/TickMath.sol';
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { UniswapV3Oracle } from "@jigsaw/src/oracles/uniswap/UniswapV3Oracle.sol";
-import { FullMath } from "@jigsaw/lib/v3-core/contracts/libraries/FullMath.sol";
+import { IUniswapV3Pool } from "@jigsaw/lib/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import { FixedPoint96 } from "@jigsaw/lib/v3-core/contracts/libraries/FixedPoint96.sol";
+import { FullMath } from "@jigsaw/lib/v3-core/contracts/libraries/FullMath.sol";
+import { GenericUniswapV3Oracle } from "@jigsaw/src/oracles/uniswap/GenericUniswapV3Oracle.sol";
+
+import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
+import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { ISwapManager } from "@jigsaw/src/interfaces/core/ISwapManager.sol";
-import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
-import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
-import { IUniswapV3Pool } from "@jigsaw/lib/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
-import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
-import { IStdeUSDMin } from "./interfaces/IStdeUSDMin.sol";
-import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
 import { OperationsLib } from "../libraries/OperationsLib.sol";
+import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
+import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
+import { IStdeUSDMin } from "./interfaces/IStdeUSDMin.sol";
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
@@ -74,7 +76,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     // -- Errors --
 
     /**
-        * @notice Thrown when an unsupported operation is attempted.
+     * @notice Thrown when an unsupported operation is attempted.
      */
     error OperationNotSupported();
 
@@ -159,19 +161,14 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     IStdeUSDMin public stdeUSD;
 
     /**
-     * @notice The UniswapV3Oracle contract.
+     * @notice The GenericUniswapV3Oracle contract.
      */
-    UniswapV3Oracle public oracle;
+    GenericUniswapV3Oracle public oracle;
 
     /**
      * @notice The number of decimals of the strategy's shares.
      */
     uint256 public override sharesDecimals;
-
-    /**
-     * @notice The factor used to adjust values from 18 decimal precision (shares) to 6 decimal precision (USDC).
-     */
-    uint256 public constant DECIMAL_DIFF = 1e12;
 
     /**
      * @notice Returns the maximum allowed slippage percentage.
@@ -229,17 +226,17 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.deUSD != address(0), "3036");
         require(_params.uniswapRouter != address(0), "3000");
         require(_params.oracle != address(0), "3000");
-        require(_params.initialPools.length > 0, "3000");
+        require(_params.initialPools.length != 0, "3000");
 
-        oracle = new UniswapV3Oracle({
+        __StrategyBase_init({ _initialOwner: _params.owner });
+
+        oracle = new GenericUniswapV3Oracle({
             _initialOwner: _params.owner,
-            _jUSD: _params.tokenIn,
+            _underlying: _params.tokenIn,
             _quoteToken: _params.deUSD,
             _quoteTokenOracle: _params.oracle,
             _uniswapV3Pools: _params.initialPools
         });
-
-        __StrategyBase_init({_initialOwner: _params.owner});
 
         manager = IManager(_params.manager);
         tokenIn = _params.tokenIn;
@@ -251,7 +248,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         uniswapRouter = _params.uniswapRouter;
 
         // Set default allowed slippage percentage to 5%
-        _setSlippagePercentage({_newVal: 500});
+        _setSlippagePercentage({ _newVal: 500 });
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -294,7 +291,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        IHolding(_recipient).transfer({_token: _asset, _to: address(this), _amount: _amount});
+        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
         uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
 
         // Swap USDT to deUSD on Uniswap
@@ -308,19 +305,19 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 
         uint256 deUSDAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
         uint256 balanceBefore = stdeUSD.balanceOf(_recipient);
-        IERC20(deUSD).forceApprove({spender: tokenOut, value: deUSDAmount});
+        IERC20(deUSD).forceApprove({ spender: tokenOut, value: deUSDAmount });
 
         // Stake deUSD to receive stdeUSD (Elixir's staked deUSD receipt token)
-        stdeUSD.deposit({assets: deUSDAmount, receiver: _recipient});
+        stdeUSD.deposit({ assets: deUSDAmount, receiver: _recipient });
 
         uint256 shares = stdeUSD.balanceOf(_recipient) - balanceBefore;
 
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += shares;
 
-        _mint({_receiptToken: receiptToken, _recipient: _recipient, _amount: shares, _tokenDecimals: sharesDecimals});
+        _mint({ _receiptToken: receiptToken, _recipient: _recipient, _amount: shares, _tokenDecimals: sharesDecimals });
 
-        jigsawStaker.deposit({_user: _recipient, _amount: shares});
+        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
 
         emit Deposit({
             asset: _asset,
@@ -412,7 +409,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 
         // Take protocol's fee from generated yield if any.
         if (params.yield > 0) {
-            params.fee = _takePerformanceFee({_token: tokenIn, _recipient: _recipient, _yield: uint256(params.yield)});
+            params.fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(params.yield) });
             if (params.fee > 0) {
                 params.withdrawnAmount -= params.fee;
                 params.yield -= params.fee.toInt256();
@@ -434,7 +431,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         });
 
         // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({_user: _recipient, _amount: _shares});
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
 
         return (params.withdrawnAmount, params.investment, params.yield, params.fee);
     }
@@ -458,9 +455,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     function cooldown(address _recipient, uint256 _shares) external nonReentrant {
         require(
-            msg.sender == owner() ||
-            msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
-            "1001");
+            msg.sender == owner() || msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
+            "1001"
+        );
 
         _genericCall({
             _holding: _recipient,
@@ -478,7 +475,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     function setSlippagePercentage(
         uint256 _newVal
     ) external onlyOwner {
-        _setSlippagePercentage({_newVal: _newVal});
+        _setSlippagePercentage({ _newVal: _newVal });
     }
 
     // -- Getters --
@@ -492,12 +489,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 
     /**
      * @notice Calculates the minimum acceptable amount
-     * @dev Uses median of different timeframe rates to get a more stable price.
      * @param _amount The amount of shares.
      * @return The minimum acceptable asset tokens received for specified shares amount.
      */
     function getAllowedAmountOutMin(uint256 _amount, SwapDirection _swapDirection) public view returns (uint256) {
-        (, uint256 rate) =  oracle.peek(bytes(""));
+        // Get tokenIn rate to get  minimum acceptable amount out
+        (, uint256 rate) = oracle.peek(bytes(""));
         uint256 expectedTokenOut = _swapDirection == SwapDirection.FromTokenIn
             ? _amount.mulDiv(1e18, rate, Math.Rounding.Ceil)
             : _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil);
@@ -534,7 +531,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     ) private returns (uint256 amountOut) {
         // Decode the data to get the swap path
         (uint256 amountOutMinimum, uint256 deadline, bytes memory swapPath) =
-                            abi.decode(_swapData, (uint256, uint256, bytes));
+            abi.decode(_swapData, (uint256, uint256, bytes));
 
         // Validate swap path length
         // Minimum path length is 43 bytes (length of smallest encoded pool key = address[20] + fee[3] + address[20])
@@ -557,11 +554,10 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         }
 
         // Validate amountOutMin is within allowed slippage
-        uint256 allowedAmountOutMin = getAllowedAmountOutMin(_amountIn, _swapDirection);
-        if (amountOutMinimum < allowedAmountOutMin) revert InvalidAmountOutMin();
+        if (amountOutMinimum < getAllowedAmountOutMin(_amountIn, _swapDirection)) revert InvalidAmountOutMin();
 
         // Approve the router to spend `_tokenIn`.
-        IERC20(_tokenIn).forceApprove({spender: uniswapRouter, value: _amountIn});
+        IERC20(_tokenIn).forceApprove({ spender: uniswapRouter, value: _amountIn });
 
         // A path is a  encoded as (tokenIn, fee, tokenOut/tokenIn, fee, tokenOut).
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
@@ -580,7 +576,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         }
 
         // Emit event indicating successful exact output swap.
-        emit ExactInputSwap({holding: _recipient, path: swapPath, amountIn: _amountIn, amountOut: amountOut});
+        emit ExactInputSwap({ holding: _recipient, path: swapPath, amountIn: _amountIn, amountOut: amountOut });
     }
 
     /**
@@ -604,7 +600,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         uint256 _newVal
     ) private {
         require(_newVal <= SLIPPAGE_PRECISION, "3002");
-        emit SlippagePercentageSet({oldValue: allowedSlippagePercentage, newValue: _newVal});
+        emit SlippagePercentageSet({ oldValue: allowedSlippagePercentage, newValue: _newVal });
         allowedSlippagePercentage = _newVal;
     }
 }
