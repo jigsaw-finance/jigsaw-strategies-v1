@@ -51,9 +51,6 @@ build: && _timer
 format: && _timer
 	forge fmt
 
-test-elixir: && _timer
-    forge test -vvvvv --match-test "test_elixir_deposit_when_authorized"
-
 test-all: && _timer
 	forge test -vvvv --match-contract AaveV3StrategyTest
 	forge test -vvvv --match-contract DineroStrategyTest
@@ -61,15 +58,15 @@ test-all: && _timer
 	forge test -vvvv --match-contract PendleStrategyTest
 	forge test -vvvv --match-contract ReservoirSavingStrategyTest
 	forge test -vvvv --match-contract ReservoirMath
+	forge test -vvvv --match-contract ElixirStrategyTest
 	forge test -vvvv --match-contract DeployAllTest
-
 
 test-gas: && _timer
     forge test --gas-report
 
 coverage-all: && _timer
 	forge coverage --report lcov --allow-failure
-	genhtml -o coverage --branch-coverage lcov.info --ignore-errors category
+	genhtml -o coverage --branch-coverage lcov.info --ignore-errors inconsistent
 
 docs: && _timer
 	forge doc --build

@@ -1,28 +1,59 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.22;
+pragma solidity ^0.8.20;
 
-import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {IHolding} from "@jigsaw/src/interfaces/core/IHolding.sol";
-import {IManagerContainer} from "@jigsaw/src/interfaces/core/IManagerContainer.sol";
-import {IReceiptToken} from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
+import { TickMath } from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import { BytesLib } from "@uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 
-import {IStakerLightFactory} from "../staker/interfaces/IStakerLightFactory.sol";
-import {IStakerLight} from "../staker/interfaces/IStakerLight.sol";
-import {IStrategy} from "@jigsaw/src/interfaces/core/IStrategy.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import {OperationsLib} from "../libraries/OperationsLib.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {StrategyBaseUpgradeable} from "../StrategyBaseUpgradeable.sol";
-import {StrategyConfigLib} from "../libraries/StrategyConfigLib.sol";
+import { IUniswapV3Pool } from "@jigsaw/lib/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import { FixedPoint96 } from "@jigsaw/lib/v3-core/contracts/libraries/FixedPoint96.sol";
+import { FullMath } from "@jigsaw/lib/v3-core/contracts/libraries/FullMath.sol";
+import { GenericUniswapV3Oracle } from "@jigsaw/src/oracles/uniswap/GenericUniswapV3Oracle.sol";
+
+import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
+import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
+import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
+import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
+import { ISwapManager } from "@jigsaw/src/interfaces/core/ISwapManager.sol";
+
+import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
+import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
+import { ISdeUsdMin } from "./interfaces/ISdeUsdMin.sol";
+
+import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
+
+import { OperationsLib } from "../libraries/OperationsLib.sol";
+import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 /**
  * @title ElixirStrategy
- * @dev Strategy used for deUSD minting.
+ * @dev Strategy used for deUSD minting and staking mechanisms.
+ * @notice Implements deposit, withdrawal, and reward management for Elixir's deUSD strategy.
  * @author Hovooo (@hovooo)
  */
 contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
+    using Math for uint256;
+    using BytesLib for bytes;
+
+    // -- Enums --
+
+    /**
+     * @notice The direction of the swap.
+     */
+    enum SwapDirection {
+        FromTokenIn,
+        ToTokenIn
+    }
 
     // -- Custom types --
 
@@ -31,40 +62,62 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      */
     struct InitializerParams {
         address owner; // The address of the initial owner of the Strategy contract
-        address managerContainer; // The address of the contract that contains the manager contract
+        address manager; // The address of the manager contract
         address stakerFactory; // The address of the StakerLightFactory contract
         address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
         uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
         address tokenIn; // The address of the LP token
         address tokenOut; // The address of Elixir's receipt token
         address deUSD; // The Elixir's deUSD stablecoin.
+        address uniswapRouter; // The address of the UniswapV3 Router
+        address oracle; // The address of the UniswapV3 Oracle
+        address[] initialPools; // The address array of the UniswapV3 pools
     }
 
-    /**
-     * @notice Struct containing parameters for a withdrawal operation.
-     */
-    struct WithdrawParams {
-        uint256 shareRatio; // The share ratio representing the proportion of the total investment owned by the user.
-        uint256 assetsToWithdraw; // The amount of assets to withdraw based on the share ratio.
-        uint256 investment; // The amount of funds invested by the user.
-        uint256 balanceBefore; // The user's balance in the system before the withdrawal transaction.
-        uint256 balanceAfter; // The user's balance in the system after the withdrawal transaction is completed.
-        uint256 balanceDiff; // The difference between balanceAfter and balanceBefore.
-        uint256 performanceFee; // Protocol's performanceFee applied to extra generated yield.
-    }
     // -- Errors --
 
+    /**
+     * @notice Thrown when an unsupported operation is attempted.
+     */
     error OperationNotSupported();
+
+    /**
+     * @notice Thrown when the swap path length is invalid.
+     */
+    error InvalidSwapPathLength();
+
+    /**
+     * @notice Thrown when the first token in the swap path is invalid.
+     */
+    error InvalidFirstTokenInPath();
+
+    /**
+     * @notice Thrown when the last token in the swap path is invalid.
+     */
+    error InvalidLastTokenInPath();
+
+    /**
+     * @notice Thrown when the minimum output amount is invalid.
+     */
+    error InvalidAmountOutMin();
 
     // -- Events --
 
     /**
-     * @notice Emitted when a performance fee is taken.
-     * @param token The token from which the fee is taken.
-     * @param feeAddress The address that receives the fee.
-     * @param amount The amount of the fee.
+     * @notice Emitted when the slippage percentage is updated.
+     * @param oldValue The previous slippage percentage value.
+     * @param newValue The new slippage percentage value.
      */
-    event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
+    event SlippagePercentageSet(uint256 oldValue, uint256 newValue);
+
+    /**
+     * @notice Emitted when exact input swap is executed on UniswapV3 Pool.
+     * @param holding The holding address associated with the user.
+     * @param path The optimal path for the multi-hop swap.
+     * @param amountIn The amount of the input token used for the swap.
+     * @param amountOut The amount of the output token received after the swap.
+     */
+    event ExactInputSwap(address indexed holding, bytes path, uint256 amountIn, uint256 amountOut);
 
     // -- State variables --
 
@@ -94,9 +147,24 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     address public deUSD;
 
     /**
+     * @notice The Uniswap Router.
+     */
+    address public uniswapRouter;
+
+    /**
      * @notice The Jigsaw Rewards Controller contract.
      */
     IStakerLight public jigsawStaker;
+
+    /**
+     * @notice The sdeUSD Controller contract.
+     */
+    ISdeUsdMin public sdeUSD;
+
+    /**
+     * @notice The GenericUniswapV3Oracle contract.
+     */
+    GenericUniswapV3Oracle public oracle;
 
     /**
      * @notice The number of decimals of the strategy's shares.
@@ -104,9 +172,20 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     uint256 public override sharesDecimals;
 
     /**
-     * @notice The factor used to adjust values from 18 decimal precision (shares) to 6 decimal precision (USDC).
+     * @notice Returns the maximum allowed slippage percentage.
+     * @dev Uses 2 decimal precision, where 1% is represented as 100.
      */
-    uint256 public constant DECIMAL_DIFF = 1e12;
+    uint256 public allowedSlippagePercentage;
+
+    /**
+     * @notice The slippage factor.
+     */
+    uint256 public constant SLIPPAGE_PRECISION = 1e4;
+
+    /**
+     * @notice The length of the bytes encoded address.
+     */
+    uint256 private constant ADDR_SIZE = 20;
 
     /**
      * @notice A mapping that stores participant details by address.
@@ -115,6 +194,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
 
     // -- Constructor --
 
+    /**
+     * @notice Disables initializers to prevent misuse.
+     */
     constructor() {
         _disableInitializers();
     }
@@ -124,46 +206,55 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Initializes the Elixir Strategy contract with necessary parameters.
      *
-     * @dev Configures core components such as manager, tokens, pools, and reward systems
-     * needed for the strategy to operate.
+     * @dev Configures core components such as manager, tokens, pools, and reward systems needed for the strategy to
+     * operate.
      *
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_params.managerContainer` must be valid (`"3065"` error code if invalid).
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
      *
-     * @param _params Struct containing all initialization parameters:
-     * - owner: The address of the initial owner of the Strategy contract.
-     * - managerContainer: The address of the contract that contains the manager contract.
-     * - stakerFactory: The address of the StakerLightFactory contract.
-     * - jigsawRewardToken: The address of the Jigsaw reward token associated with the strategy.
-     * - jigsawRewardDuration: The initial duration for the Jigsaw reward distribution.
-     * - tokenIn: The address of the LP token used as input for the strategy.
-     * - tokenOut: The address of the receipt token received as output from the strategy.
+     * @param _params Struct containing all initialization parameters.
      */
     function initialize(
         InitializerParams memory _params
     ) public initializer {
-        require(_params.managerContainer != address(0), "3065");
+        require(_params.manager != address(0), "3065");
         require(_params.jigsawRewardToken != address(0), "3000");
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
         require(_params.deUSD != address(0), "3036");
+        require(_params.uniswapRouter != address(0), "3000");
+        require(_params.oracle != address(0), "3000");
+        require(_params.initialPools.length != 0, "3000");
 
-        __StrategyBase_init({_initialOwner: _params.owner});
+        __StrategyBase_init({ _initialOwner: _params.owner });
 
-        managerContainer = IManagerContainer(_params.managerContainer);
+        oracle = new GenericUniswapV3Oracle({
+            _initialOwner: _params.owner,
+            _underlying: _params.tokenIn,
+            _quoteToken: _params.deUSD,
+            _quoteTokenOracle: _params.oracle,
+            _uniswapV3Pools: _params.initialPools
+        });
+
+        manager = IManager(_params.manager);
         tokenIn = _params.tokenIn;
         tokenOut = _params.tokenOut;
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
         rewardToken = address(0);
         deUSD = _params.deUSD;
+        sdeUSD = ISdeUsdMin(_params.tokenOut);
+        uniswapRouter = _params.uniswapRouter;
+
+        // Set default allowed slippage percentage to 5%
+        _setSlippagePercentage({ _newVal: 500 });
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
                 _initialOwner: _params.owner,
-                _receiptTokenFactory: _getManager().receiptTokenFactory(),
+                _receiptTokenFactory: manager.receiptTokenFactory(),
                 _receiptTokenName: "Elixir Receipt Token",
                 _receiptTokenSymbol: "ElRT"
             })
@@ -172,7 +263,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         jigsawStaker = IStakerLight(
             IStakerLightFactory(_params.stakerFactory).createStakerLight({
                 _initialOwner: _params.owner,
-                _holdingManager: _getManager().holdingManager(),
+                _holdingManager: manager.holdingManager(),
                 _rewardToken: _params.jigsawRewardToken,
                 _strategy: address(this),
                 _rewardsDuration: _params.jigsawRewardDuration
@@ -185,12 +276,10 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     /**
      * @notice Deposits funds into the strategy.
      *
-     * @dev Some strategies won't return any receipt tokens; in this case, 'tokenOutAmount' will be 0.
-     * @dev 'tokenInAmount' will be equal to '_amount' if '_asset' is the same as the strategy's 'tokenIn()'.
-     *
      * @param _asset The token to be invested.
      * @param _amount The amount of the token to be invested.
      * @param _recipient The address on behalf of which the funds are deposited.
+     * @param _data Encoded data used for UniswapV3 swap.
      *
      * @return The amount of receipt tokens obtained.
      * @return The amount of the 'tokenIn()' token.
@@ -199,52 +288,48 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         address _asset,
         uint256 _amount,
         address _recipient,
-        bytes calldata // Maybe need custom typed data
+        bytes calldata _data
     ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-//        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
-//        uint256 deUsdBalanceBefore = IERC20(tokenIn).balanceOf(address(this));
+        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
+        uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
 
-//        // Transfer USDTs from recipient to this contract twice ???
-//        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
-//
-//        // Swap USDT to deUSD on Uniswap
-//        // swapExactInputMultihop();
-//
-//        uint256 deUSDAmount = IERC20(tokenOut).balanceOf(address(this)) - deUsdBalanceBefore;
-//
-//        uint256 balanceBefore = IERC20(tokenOut).balanceOf(_recipient);
-//
-//        // stake deUSD, get sdeUSD
-//        // OperationsLib.safeApprove({ token: rUSD, to: address(savingModule), value: rUsdAmount });
-//        // creditEnforcer.mintSavingcoin({ to: _recipient, amount: rUsdAmount }); // pseudo code
-//
-//        uint256 shares = IERC20(tokenOut).balanceOf(_recipient) - balanceBefore;
-//
-//        recipients[_recipient].investedAmount += _amount;
-//        recipients[_recipient].totalShares += shares;
-//
-//        _mint({
-//            _receiptToken: receiptToken,
-//            _recipient: _recipient,
-//            _amount: shares,
-//            _tokenDecimals: IERC20Metadata(tokenOut).decimals()
-//        });
-//
-//        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
-//
-//        emit Deposit({
-//            asset: _asset,
-//            tokenIn: tokenIn,
-//            assetAmount: _amount,
-//            tokenInAmount: _amount,
-//            shares: shares,
-//            recipient: _recipient
-//        });
-//
-//        return (shares, _amount);
-        return (0, _amount);
+        // Swap USDT to deUSD on Uniswap
+        _swapExactInputMultihop({
+            _tokenIn: _asset,
+            _amountIn: _amount,
+            _recipient: address(this),
+            _swapData: _data,
+            _swapDirection: SwapDirection.FromTokenIn
+        });
+
+        uint256 deUSDAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
+        uint256 balanceBefore = sdeUSD.balanceOf(_recipient);
+        IERC20(deUSD).forceApprove({ spender: tokenOut, value: deUSDAmount });
+
+        // Stake deUSD to receive sdeUSD (Elixir's staked deUSD receipt token)
+        sdeUSD.deposit({ assets: deUSDAmount, receiver: _recipient });
+
+        uint256 shares = sdeUSD.balanceOf(_recipient) - balanceBefore;
+
+        recipients[_recipient].investedAmount += _amount;
+        recipients[_recipient].totalShares += shares;
+
+        _mint({ _receiptToken: receiptToken, _recipient: _recipient, _amount: shares, _tokenDecimals: sharesDecimals });
+
+        jigsawStaker.deposit({ _user: _recipient, _amount: shares });
+
+        emit Deposit({
+            asset: _asset,
+            tokenIn: tokenIn,
+            assetAmount: _amount,
+            tokenInAmount: _amount,
+            shares: shares,
+            recipient: _recipient
+        });
+
+        return (shares, _amount);
     }
 
     /**
@@ -256,109 +341,100 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
      * @param _asset The token to be withdrawn.
+     * @param _data The data containing the token output .
      *
-     * @return The amount of the asset obtained from the operation.
-     * @return The amount of the 'tokenIn()' token.
+     * @return withdrawnAmount The actual amount of asset withdrawn from the strategy.
+     * @return initialInvestment The amount of initial investment.
+     * @return yield The amount of yield generated by the user beyond their initial investment.
+     * @return fee The amount of fee charged by the strategy.
      */
     function withdraw(
         uint256 _shares,
         address _recipient,
         address _asset,
-        bytes calldata
-    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256) {
+        bytes calldata _data
+    ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
-        require(_shares <= IERC20(tokenOut).balanceOf(_recipient), "2002");
 
-//        WithdrawParams memory params = WithdrawParams({
-//            shareRatio: 0,
-//            assetsToWithdraw: 0,
-//            investment: 0,
-//            balanceBefore: 0,
-//            balanceAfter: 0,
-//            balanceDiff: 0,
-//            performanceFee: 0
-//        });
-//
-//        uint256 tokenOutDecimals = IERC20Metadata(tokenOut).decimals();
-//
-//        params.shareRatio = OperationsLib.getRatio({
-//            numerator: _shares,
-//            denominator: recipients[_recipient].totalShares,
-//            precision: tokenOutDecimals,
-//            rounding: OperationsLib.Rounding.Floor
-//        });
-//
-//        _burn({
-//            _receiptToken: receiptToken,
-//            _recipient: _recipient,
-//            _shares: _shares,
-//            _totalShares: recipients[_recipient].totalShares,
-//            _tokenDecimals: tokenOutDecimals
-//        });
-//
-//        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** tokenOutDecimals;
-//        // Calculate rUSD to withdraw for shares, accounting for deUSD price fluctuation and redeem fee, and round up.
-//
-//        // USDT tokenIn
-//        // steUSD tokenOut - vary price related to deUSD
-//
-//
-//        // Important to double check
-//        params.assetsToWithdraw = (_shares * ISavingModule(savingModule).currentPrice() * 1e6)
-//            / (1e8 * (1e6 + ISavingModule(savingModule).redeemFee()));
-//
-//        params.balanceBefore = IERC20(tokenIn).balanceOf(_recipient);
-//        uint256 rUsdBalanceBefore = IERC20(rUSD).balanceOf(address(this));
-//
-//        IHolding(_recipient).approve({
-//            _tokenAddress: tokenOut,
-//            _destination: savingModule,
-//            _amount: params.assetsToWithdraw
-//        });
-//
-//        (bool success, bytes memory returnData) = IHolding(_recipient).genericCall({
-//            _contract: savingModule,
-//            _call: abi.encodeCall(
-//                ISavingModule.redeem, (_asset == rUSD ? _recipient : address(this), params.assetsToWithdraw)
-//            )
-//        });
-//        require(success, OperationsLib.getRevertMsg(returnData));
-//
-//        // Get USDC back if it was used as tokenIn
-//        if (_asset != rUSD) {
-//            uint256 rUsdRedemptionAmount = IERC20(rUSD).balanceOf(address(this)) - rUsdBalanceBefore;
-//            OperationsLib.safeApprove({ token: rUSD, to: address(pegStabilityModule), value: rUsdRedemptionAmount });
-//            IPegStabilityModule(pegStabilityModule).redeem({
-//                to: _recipient,
-//                amount: rUsdRedemptionAmount / DECIMAL_DIFF
-//            });
-//        }
-//
-//        // Take protocol's fee if any.
-//        params.balanceDiff = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
-//        (params.performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-//        if (params.balanceDiff > params.investment && params.performanceFee != 0) {
-//            uint256 rewardAmount = params.balanceDiff - params.investment;
-//            uint256 fee = OperationsLib.getFeeAbsolute(rewardAmount, params.performanceFee);
-//            if (fee > 0) {
-//                address feeAddr = _getManager().feeAddress();
-//                params.balanceDiff -= fee;
-//                emit FeeTaken(tokenIn, feeAddr, fee);
-//                IHolding(_recipient).transfer(tokenIn, feeAddr, fee);
-//            }
-//        }
-//
-//        recipients[_recipient].totalShares -= _shares;
-//        recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
-//            ? 0
-//            : recipients[_recipient].investedAmount - params.investment;
-//
-//        emit Withdraw({ asset: _asset, recipient: _recipient, shares: _shares, amount: params.balanceDiff });
-//        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-//        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
-//
-//        return (params.balanceDiff, params.investment);
-        return (0, 0);
+        WithdrawParams memory params = WithdrawParams({
+            shares: _shares,
+            totalShares: recipients[_recipient].totalShares,
+            shareRatio: 0,
+            shareDecimals: sharesDecimals,
+            investment: 0,
+            assetsToWithdraw: 0,
+            balanceBefore: 0,
+            withdrawnAmount: 0,
+            yield: 0,
+            fee: 0
+        });
+
+        params.shareRatio = OperationsLib.getRatio({
+            numerator: params.shares,
+            denominator: params.totalShares,
+            precision: params.shareDecimals,
+            rounding: OperationsLib.Rounding.Floor
+        });
+
+        _burn({
+            _receiptToken: receiptToken,
+            _recipient: _recipient,
+            _shares: params.shares,
+            _totalShares: params.totalShares,
+            _tokenDecimals: params.shareDecimals
+        });
+
+        params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** params.shareDecimals;
+        uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
+
+        _genericCall({
+            _holding: _recipient,
+            _contract: tokenOut,
+            _call: abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+        });
+
+        uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
+
+        // Swap deUSD to USDT on Uniswap
+        _swapExactInputMultihop({
+            _tokenIn: deUSD,
+            _amountIn: deUsdAmount,
+            _recipient: _recipient,
+            _swapData: _data,
+            _swapDirection: SwapDirection.ToTokenIn
+        });
+
+        // Take protocol's fee from generated yield if any.
+        params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
+        params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
+
+        // Take protocol's fee from generated yield if any.
+        if (params.yield > 0) {
+            params.fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(params.yield) });
+            if (params.fee > 0) {
+                params.withdrawnAmount -= params.fee;
+                params.yield -= params.fee.toInt256();
+            }
+        }
+
+        recipients[_recipient].totalShares -= _shares;
+        recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
+            ? 0
+            : recipients[_recipient].investedAmount - params.investment;
+
+        emit Withdraw({
+            asset: _asset,
+            recipient: _recipient,
+            shares: params.shares,
+            withdrawnAmount: params.withdrawnAmount,
+            initialInvestment: params.investment,
+            yield: params.yield
+        });
+
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+
+        return (params.withdrawnAmount, params.investment, params.yield, params.fee);
     }
 
     /**
@@ -373,6 +449,36 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         revert OperationNotSupported();
     }
 
+    /**
+     * @notice Starts a cooldown to claim the converted underlying asset.
+     * @param _recipient The address on behalf of which the funds are withdrawn.
+     * @param _shares The amount of shares to withdraw.
+     */
+    function cooldown(address _recipient, uint256 _shares) external nonReentrant {
+        require(
+            msg.sender == owner() || msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
+            "1001"
+        );
+
+        _genericCall({
+            _holding: _recipient,
+            _contract: tokenOut,
+            _call: abi.encodeCall(ISdeUsdMin.cooldownShares, _shares)
+        });
+    }
+
+    // -- Administration --
+
+    /**
+     * @notice Sets a new slippage percentage for the strategy.
+     * @param _newVal The new slippage percentage value (must be <= SLIPPAGE_PRECISION).
+     */
+    function setSlippagePercentage(
+        uint256 _newVal
+    ) external onlyOwner {
+        _setSlippagePercentage({ _newVal: _newVal });
+    }
+
     // -- Getters --
 
     /**
@@ -382,126 +488,120 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         return address(receiptToken);
     }
 
-//    // -- Utilities --
-//
-//    /**
-//     * @notice Swaps a minimum possible amount of `_tokenIn` for a fixed amount of `tokenOut` via `_swapPath`.
-//     *
-//     * @notice Requirements:
-//     * - The jUSD UniswapV3 Pool must be valid.
-//     * - The caller must be Liquidation Manager Contract.
-//     *
-//     * @notice Effects:
-//     * - Approves and transfers `tokenIn` from the `_userHolding`.
-//     * - Approves UniswapV3 Router to transfer `tokenIn` from address(this) to perform the `exactOutput` swap.
-//     * - Executes the `exactOutput` swap
-//     * - Handles any excess tokens.
-//     *
-//     * @param _tokenIn The address of the inbound asset.
-//     * @param _swapPath The optimal path for the multi-hop swap.
-//     * @param _userHolding The holding address associated with the user.
-//     * @param _deadline The timestamp representing the latest time by which the swap operation must be completed.
-//     * @param _amountOut The desired amount of `tokenOut`.
-//     * @param _amountInMaximum The maximum amount of `_tokenIn` to be swapped for the specified `_amountOut`.
-//     *
-//     * @return amountIn The amount of `_tokenIn` spent to receive the desired `amountOut` of `tokenOut`.
-//     */
-//    function swapExactInputMultihop(
-//        address _tokenIn,
-//        bytes calldata _swapPath,
-//        address _userHolding,
-//        uint256 _deadline,
-//        uint256 _amountOut,
-//        uint256 _amountInMaximum
-//    ) private validPool(_swapPath, _amountOut) returns (uint256 amountIn) {
-//        // Ensure the caller is Liquidation Manager Contract.
-//        require(msg.sender == IManager(managerContainer.manager()).liquidationManager(), "1000");
-//
-//        // Initialize tempData struct.
-//        SwapTempData memory tempData = SwapTempData({
-//            tokenIn: _tokenIn,
-//            swapPath: _swapPath,
-//            userHolding: _userHolding,
-//            deadline: _deadline,
-//            amountOut: _amountOut,
-//            amountInMaximum: _amountInMaximum,
-//            router: swapRouter
-//        });
-//
-//        // Holding must approve Swap Manager to transfer tokenIn from it.
-//        IHolding(tempData.userHolding).approve({
-//            _tokenAddress: tempData.tokenIn,
-//            _destination: address(this),
-//            _amount: tempData.amountInMaximum
-//        });
-//
-//        // Transfer the specified `amountInMaximum` to this contract.
-//        TransferHelper.safeTransferFrom({
-//            token: tempData.tokenIn,
-//            from: tempData.userHolding,
-//            to: address(this),
-//            value: tempData.amountInMaximum
-//        });
-//
-//        // Approve the Router to spend `amountInMaximum` from address(this).
-//        TransferHelper.safeApprove({ token: tempData.tokenIn, to: tempData.router, value: tempData.amountInMaximum });
-//
-//        // The parameter path is encoded as (tokenOut, fee, tokenIn/tokenOut, fee, tokenIn).
-//        ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
-//            path: tempData.swapPath,
-//            recipient: tempData.userHolding,
-//            deadline: tempData.deadline,
-//            amountOut: tempData.amountOut,
-//            amountInMaximum: tempData.amountInMaximum
-//        });
-//
-//        // Execute the swap, returning the amountIn actually spent.
-//        try ISwapRouter(tempData.router).exactOutput(params) returns (uint256 _amountIn) {
-//            amountIn = _amountIn;
-//        } catch {
-//            revert("3084");
-//        }
-//
-//        // Emit event indicating successful exact output swap.
-//        emit exactOutputSwap({
-//            holding: tempData.userHolding,
-//            path: tempData.swapPath,
-//            amountIn: amountIn,
-//            amountOut: tempData.amountOut
-//        });
-//
-//        // If the swap did not require the full amountInMaximum to achieve the exact amountOut make a refund.
-//        if (amountIn < tempData.amountInMaximum) {
-//            // Decrease allowance of the Swap Manager.
-//            IHolding(tempData.userHolding).approve(tempData.tokenIn, address(this), 0);
-//            // Decrease allowance of the router.
-//            TransferHelper.safeApprove(tempData.tokenIn, address(tempData.router), 0);
-//            // Make the refund.
-//            IERC20(tempData.tokenIn).safeTransfer(tempData.userHolding, tempData.amountInMaximum - amountIn);
-//        }
-//    }
-//
-//    /**
-//     * @notice Validates that jUSD UniswapV3 Pool is valid for the swap.
-//     *
-//     *   @notice Requirements:
-//     *  - `_path` must be of correct length.
-//     *  - jUSD UniswapV3 Pool specified in the `_path` has enough liquidity.
-//     */
-//    modifier validPool(bytes calldata _path, uint256 _amount) {
-//        // The shortest possible path is of 43 bytes, as an address takes 20 bytes and uint24 takes 3 bytes.
-//        require(_path.length >= 43, "3077");
-//        // Initialize tempData struct.
-//        ValidPoolTempData memory tempData = ValidPoolTempData({
-//            jUsd: _getStablesManager().jUSD(),
-//            tokenA: address(bytes20(_path[0 : 20])),
-//            fee: uint24(bytes3(_path[20 : 23])),
-//            tokenB: address(bytes20(_path[23 : 43]))
-//        });
-//        // The first address in the path must be jUsd
-//        require(tempData.tokenA == address(tempData.jUsd), "3077");
-//        // There should be enough jUsd in the pool to perform self-liquidation.
-//        require(tempData.jUsd.balanceOf(_getPool(tempData.tokenA, tempData.tokenB, tempData.fee)) >= _amount, "3083");
-//        _;
-//    }
+    /**
+     * @notice Calculates the minimum acceptable amount
+     * @param _amount The amount of shares.
+     * @return The minimum acceptable asset tokens received for specified shares amount.
+     */
+    function getAllowedAmountOutMin(uint256 _amount, SwapDirection _swapDirection) public view returns (uint256) {
+        // Get tokenIn rate to get  minimum acceptable amount out
+        (, uint256 rate) = oracle.peek(bytes(""));
+        uint256 expectedTokenOut = _swapDirection == SwapDirection.FromTokenIn
+            ? _amount.mulDiv(1e18, rate, Math.Rounding.Ceil)
+            : _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil);
+
+        // Calculate min tokenOut amount with max allowed slippage
+        return _applySlippage(expectedTokenOut);
+    }
+
+    // -- Utilities --
+
+    /**
+     * @notice Swaps a fixed amount of `_tokenIn` for a maximum possible amount of `tokenOut` via `_swapPath`.
+     *
+     * @notice Effects:
+     * - Approves and transfers `tokenIn` from the `_userHolding`.
+     * - Approves UniswapV3 Router to transfer `tokenIn` from address(this) to perform the `exactInput` swap.
+     * - Executes the `exactInput` swap
+     * - Handles any excess tokens.
+     *
+     * @param _tokenIn The address of the inbound asset.
+     * @param _amountIn The desired amount of `tokenIn`.
+     * @param _recipient The address of recipient.
+     * @param _swapData Encoded data used for UniswapV3 swap.
+     * @param _swapDirection The direction of the swap.
+     *
+     * @return amountOut The amount of `_tokenIn` spent to receive the desired `amountOut` of `tokenOut`.
+     */
+    function _swapExactInputMultihop(
+        address _tokenIn,
+        uint256 _amountIn,
+        address _recipient,
+        bytes calldata _swapData,
+        SwapDirection _swapDirection
+    ) private returns (uint256 amountOut) {
+        // Decode the data to get the swap path
+        (uint256 amountOutMinimum, uint256 deadline, bytes memory swapPath) =
+            abi.decode(_swapData, (uint256, uint256, bytes));
+
+        // Validate swap path length
+        // Minimum path length is 43 bytes (length of smallest encoded pool key = address[20] + fee[3] + address[20])
+        if (swapPath.length < 43) revert InvalidSwapPathLength();
+
+        // Validate token path integrity for FromTokenIn direction:
+        // - First token must be tokenIn
+        // - Last token must be `deUSD` that's later used for staking
+        if (_swapDirection == SwapDirection.FromTokenIn) {
+            if (swapPath.toAddress(0) != tokenIn) revert InvalidFirstTokenInPath();
+            if (swapPath.toAddress(swapPath.length - ADDR_SIZE) != deUSD) revert InvalidLastTokenInPath();
+        }
+
+        // Validate token path integrity for ToTokenIn direction:
+        // - First token must be tokenOut
+        // - Last token must be `deUSD` that's later used for unstaking
+        if (_swapDirection == SwapDirection.ToTokenIn) {
+            if (swapPath.toAddress(0) != deUSD) revert InvalidFirstTokenInPath();
+            if (swapPath.toAddress(swapPath.length - ADDR_SIZE) != tokenIn) revert InvalidLastTokenInPath();
+        }
+
+        // Validate amountOutMin is within allowed slippage
+        if (amountOutMinimum < getAllowedAmountOutMin(_amountIn, _swapDirection)) revert InvalidAmountOutMin();
+
+        // Approve the router to spend `_tokenIn`.
+        IERC20(_tokenIn).forceApprove({ spender: uniswapRouter, value: _amountIn });
+
+        // A path is a  encoded as (tokenIn, fee, tokenOut/tokenIn, fee, tokenOut).
+        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+            path: swapPath,
+            recipient: _recipient,
+            deadline: deadline,
+            amountIn: _amountIn,
+            amountOutMinimum: amountOutMinimum
+        });
+
+        // Execute the swap, returning the amountIn actually spent.
+        try ISwapRouter(uniswapRouter).exactInput(params) returns (uint256 _amountOut) {
+            amountOut = _amountOut;
+        } catch {
+            revert("3084");
+        }
+
+        // Emit event indicating successful exact output swap.
+        emit ExactInputSwap({ holding: _recipient, path: swapPath, amountIn: _amountIn, amountOut: amountOut });
+    }
+
+    /**
+     * @notice Applies slippage tolerance to a given value.
+     * @dev Reduces the input value by the configured slippage percentage.
+     * @param _value The value to apply slippage to.
+     * @return The value after slippage has been applied (reduced).
+     */
+    function _applySlippage(
+        uint256 _value
+    ) private view returns (uint256) {
+        return _value - ((_value * allowedSlippagePercentage) / SLIPPAGE_PRECISION);
+    }
+
+    /**
+     * @notice Sets a new slippage percentage for the strategy.
+     * @dev Emits a SlippagePercentageSet event.
+     * @param _newVal The new slippage percentage value (must be <= SLIPPAGE_PRECISION).
+     */
+    function _setSlippagePercentage(
+        uint256 _newVal
+    ) private {
+        require(_newVal <= SLIPPAGE_PRECISION, "3002");
+        emit SlippagePercentageSet({ oldValue: allowedSlippagePercentage, newValue: _newVal });
+        allowedSlippagePercentage = _newVal;
+    }
 }
