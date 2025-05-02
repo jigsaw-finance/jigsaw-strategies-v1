@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
-interface IStdeUSDMin is IERC4626 {
+interface ISdeUsdMin is IERC4626 {
     function cooldownShares(
         uint256 shares
     ) external returns (uint256 assets);

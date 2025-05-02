@@ -6,10 +6,10 @@ import "../fixtures/BasicContractsFixture.t.sol";
 
 import { StdStorage, stdStorage } from "forge-std/Test.sol";
 
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import { ElixirStrategy } from "../../src/elixir/ElixirStrategy.sol";
 import { StakerLight } from "../../src/staker/StakerLight.sol";
@@ -39,7 +39,9 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
     address internal user = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
-    uint24 public constant poolFee = 100;
+    uint24 internal constant poolFee = 100;
+
+    uint256 internal DECIMAL_DIFF = 1e12;
 
     ElixirStrategy internal strategy;
 
@@ -103,7 +105,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
 
         bytes memory data = abi.encode(
-            amount * strategy.DECIMAL_DIFF(), // amountOutMinimum
+            amount * DECIMAL_DIFF, // amountOutMinimum
             uint256(block.timestamp), // deadline
             abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD)
         );
@@ -126,9 +128,10 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
          * 5. Strategy's total shares  += shares
          */
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
-        // allow 5% difference for tokenOut balance
-        assertApproxEqRel(
-            IERC20(tokenOut).balanceOf(userHolding), amount * strategy.DECIMAL_DIFF(), 0.05e18, "Holding token out balance wrong"
+        assertGe(
+            IERC20(tokenOut).balanceOf(userHolding),
+            strategy.getAllowedAmountOutMin(amount, ElixirStrategy.SwapDirection.FromTokenIn),
+            "Holding token out balance wrong"
         );
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
@@ -141,7 +144,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         // Additional checks
         assertApproxEqRel(
             tokenOutBalanceAfter,
-            strategy.stdeUSD().convertToShares(amount * strategy.DECIMAL_DIFF()),
+            strategy.sdeUSD().convertToShares(amount * DECIMAL_DIFF),
             0.01e18,
             "Wrong balance in Elixir after stake"
         );
@@ -157,12 +160,12 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         address userHolding = initiateUser(user, tokenIn, amount);
 
         bytes memory data = abi.encode(
-            amount * strategy.DECIMAL_DIFF(), // amountOutMinimum
+            amount * DECIMAL_DIFF, // amountOutMinimum
             uint256(block.timestamp), // deadline
             abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD)
         );
 
-        // Invest into the tested strategy vie strategyManager
+        // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
         strategyManager.invest(tokenIn, address(strategy), amount, 0, data);
 
@@ -240,7 +243,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     }
 
     function test_elixir_revertsOnExceedingSlippageLimit() public {
-        uint256 invalidSlippage = 20000; // Exceeds SLIPPAGE_PRECISION
+        uint256 invalidSlippage = 20_000; // Exceeds SLIPPAGE_PRECISION
 
         vm.prank(OWNER, OWNER);
         vm.expectRevert(bytes("3002"));
@@ -256,25 +259,25 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     function _transferInRewards(
         uint256 _amount
     ) internal {
-        IStdeUSD stdeUSD = IStdeUSD(address(strategy.stdeUSD()));
-        address defaultAdmin = stdeUSD.owner();
+        ISdeUsd sdeUSD = ISdeUsd(address(strategy.sdeUSD()));
+        address defaultAdmin = sdeUSD.owner();
 
         address rewarder = vm.randomAddress();
         deal(deUSD, rewarder, _amount);
 
         vm.startPrank(defaultAdmin);
-        stdeUSD.grantRole(keccak256("REWARDER_ROLE"), rewarder);
+        sdeUSD.grantRole(keccak256("REWARDER_ROLE"), rewarder);
         vm.stopPrank();
 
         vm.startPrank(rewarder, rewarder);
         IERC20(deUSD).approve(tokenOut, _amount);
 
-        stdeUSD.transferInRewards(_amount);
+        sdeUSD.transferInRewards(_amount);
         vm.stopPrank();
     }
 }
 
-interface IStdeUSD is IERC4626 {
+interface ISdeUsd is IERC4626 {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/

@@ -24,12 +24,13 @@ import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { ISwapManager } from "@jigsaw/src/interfaces/core/ISwapManager.sol";
 
-import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
-import { IStdeUSDMin } from "./interfaces/IStdeUSDMin.sol";
+import { ISdeUsdMin } from "./interfaces/ISdeUsdMin.sol";
 
 import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
+
+import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
 /**
@@ -156,9 +157,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
     IStakerLight public jigsawStaker;
 
     /**
-     * @notice The stdeUSD Controller contract.
+     * @notice The sdeUSD Controller contract.
      */
-    IStdeUSDMin public stdeUSD;
+    ISdeUsdMin public sdeUSD;
 
     /**
      * @notice The GenericUniswapV3Oracle contract.
@@ -244,7 +245,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
         rewardToken = address(0);
         deUSD = _params.deUSD;
-        stdeUSD = IStdeUSDMin(_params.tokenOut);
+        sdeUSD = ISdeUsdMin(_params.tokenOut);
         uniswapRouter = _params.uniswapRouter;
 
         // Set default allowed slippage percentage to 5%
@@ -304,13 +305,13 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         });
 
         uint256 deUSDAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
-        uint256 balanceBefore = stdeUSD.balanceOf(_recipient);
+        uint256 balanceBefore = sdeUSD.balanceOf(_recipient);
         IERC20(deUSD).forceApprove({ spender: tokenOut, value: deUSDAmount });
 
-        // Stake deUSD to receive stdeUSD (Elixir's staked deUSD receipt token)
-        stdeUSD.deposit({ assets: deUSDAmount, receiver: _recipient });
+        // Stake deUSD to receive sdeUSD (Elixir's staked deUSD receipt token)
+        sdeUSD.deposit({ assets: deUSDAmount, receiver: _recipient });
 
-        uint256 shares = stdeUSD.balanceOf(_recipient) - balanceBefore;
+        uint256 shares = sdeUSD.balanceOf(_recipient) - balanceBefore;
 
         recipients[_recipient].investedAmount += _amount;
         recipients[_recipient].totalShares += shares;
@@ -389,7 +390,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         _genericCall({
             _holding: _recipient,
             _contract: tokenOut,
-            _call: abi.encodeCall(IStdeUSDMin.unstake, (address(this)))
+            _call: abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
         });
 
         uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
@@ -462,7 +463,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         _genericCall({
             _holding: _recipient,
             _contract: tokenOut,
-            _call: abi.encodeCall(IStdeUSDMin.cooldownShares, _shares)
+            _call: abi.encodeCall(ISdeUsdMin.cooldownShares, _shares)
         });
     }
 
