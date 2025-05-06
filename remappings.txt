@@ -4,7 +4,7 @@ forge-std/=lib/jigsaw-protocol-v1/lib/forge-std/src/
 
 @openzeppelin/contracts-upgradeable/=lib/jigsaw-protocol-v1/lib/openzeppelin-contracts-upgradeable/contracts/
 @openzeppelin/contracts/=lib/jigsaw-protocol-v1/lib/openzeppelin-contracts/contracts/
-openzeppelin-foundry-upgrades=lib/openzeppelin-foundry-upgrades/src/
+@openzeppelin-foundry-upgrades=lib/openzeppelin-foundry-upgrades/src/
 
 @uniswap/v3-core/=lib/jigsaw-protocol-v1/lib/v3-core/
 @uniswap/v3-periphery/=lib/jigsaw-protocol-v1/lib/v3-periphery/
