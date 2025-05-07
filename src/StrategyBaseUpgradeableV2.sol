@@ -12,10 +12,10 @@ import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
 import { OperationsLib } from "./libraries/OperationsLib.sol";
+import { FeeManager } from "./extensions/CustomFee.sol";
 
 /**
- * @custom:oz-upgrades-from StrategyBaseUpgradeable
- * @title StrategyBase Contract used for common functionality through Jigsaw Strategies .
+ * @title StrategyBase v2 Contract used for common functionality through Jigsaw Strategies .
  * @author Hovooo (@hovooo)
  */
 abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
@@ -50,15 +50,20 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
     IManager public manager;
 
     /**
+    * @notice Contract that contains the custom fee for the holder.
+     */
+    FeeManager public feeManager;
+
+    /**
      * @notice Default decimals used for computations.
      */
     uint256 constant DEFAULT_DECIMALS = 18;
 
     /**
      * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
-     * StrategyBaseUpgradeable to use up those slots without affecting the storage layout of child contracts.
+     * StrategyBaseUpgradeableV2 to use up those slots without affecting the storage layout of child contracts.
      */
-    uint256[49] __gap;
+    uint256[48] __gap;
 
     // -- Initialization --
 
@@ -73,6 +78,7 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
         __Ownable2Step_init();
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
+        feeManager = new FeeManager(_initialOwner);
     }
 
     // -- Administration --
@@ -178,7 +184,15 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
      * @return fee The amount of fees taken.
      */
     function _takePerformanceFee(address _token, address _recipient, uint256 _yield) internal returns (uint256 fee) {
-        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        uint256 performanceFee;
+
+        if(feeManager.recipientCustomFee(_recipient) != 0) {
+            performanceFee = feeManager.recipientCustomFee(_recipient);
+        } else {
+            (performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        }
+
+        (performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
         if (performanceFee != 0) {
             fee = OperationsLib.getFeeAbsolute(_yield, performanceFee);
             if (fee > 0) {

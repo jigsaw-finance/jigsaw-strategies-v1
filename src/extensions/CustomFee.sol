@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title CustomFee Contract used for custom fee functionality through Jigsaw Strategies .
+ * @title FeeManager Contract used for custom fee functionality through Jigsaw Strategies .
  * @author Hovooo (@hovooo)
  */
-contract CustomFee is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
+contract FeeManager is Ownable2Step, ReentrancyGuard {
     /**
      * @notice Emitted when the default fee is updated.
      * @param oldFee The previous fee.
@@ -28,15 +29,10 @@ contract CustomFee is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     mapping(address recipient => uint256 customFee) public recipientCustomFee;
 
     /**
-     * @notice Initializes the CustomFee contract.
+     * @notice Creates a new FeeManager contract.
      * @param _initialOwner The address of the initial owner of the contract.
      */
-    function __CustomFee_init(
-        address _initialOwner
-    ) internal onlyInitializing {
-        __Ownable_init(_initialOwner);
-        __Ownable2Step_init();
-        __ReentrancyGuard_init();
+    constructor(address _initialOwner) Ownable(_initialOwner) {
     }
 
     /**
