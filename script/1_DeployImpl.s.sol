@@ -18,10 +18,14 @@ contract DeployImpl is CommonStrategyScriptBase {
      *
      * @param _strategy The name of the strategy to deploy. Must match one of the pre-defined constants:
      *        - `AAVE_STRATEGY` for AaveV3Strategy
-     *        - `ION_STRATEGY` for IonStrategy
      *        - `PENDLE_STRATEGY` for PendleStrategy
      *        - `RESERVOIR_STRATEGY` for ReservoirSavingStrategy
      *        - `DINERO_STRATEGY` for DineroStrategy
+     *
+     *        - `AAVE_STRATEGY_V2` for AaveV3StrategyV2
+     *        - `PENDLE_STRATEGY_V2` for PendleStrategyV2
+     *        - `RESERVOIR_STRATEGY_V2` for ReservoirSavingStrategyV2
+     *        - `DINERO_STRATEGY_V2` for DineroStrategyV2
      *
      * @return implementation The address of the deployed strategy contract.
      */
@@ -32,6 +36,10 @@ contract DeployImpl is CommonStrategyScriptBase {
         if (keccak256(bytes(_strategy)) == PENDLE_STRATEGY) return address(new PendleStrategy());
         if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY) return address(new ReservoirSavingStrategy());
         if (keccak256(bytes(_strategy)) == DINERO_STRATEGY) return address(new DineroStrategy());
+        if (keccak256(bytes(_strategy)) == AAVE_STRATEGY_V2) return address(new AaveV3StrategyV2());
+        if (keccak256(bytes(_strategy)) == PENDLE_STRATEGY_V2) return address(new PendleStrategyV2());
+        if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY_V2) return address(new ReservoirSavingStrategyV2());
+        if (keccak256(bytes(_strategy)) == DINERO_STRATEGY_V2) return address(new DineroStrategyV2());
         revert("Unknown strategy");
     }
 }

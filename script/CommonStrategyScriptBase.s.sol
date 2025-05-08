@@ -8,6 +8,11 @@ import { DineroStrategy } from "../src/dinero/DineroStrategy.sol";
 import { PendleStrategy } from "../src/pendle/PendleStrategy.sol";
 import { ReservoirSavingStrategy } from "../src/reservoir/ReservoirSavingStrategy.sol";
 
+import { AaveV3StrategyV2 } from "../src/aave/AaveV3StrategyV2.sol";
+import { DineroStrategyV2 } from "../src/dinero/DineroStrategyV2.sol";
+import { PendleStrategyV2 } from "../src/pendle/PendleStrategyV2.sol";
+import { ReservoirSavingStrategyV2 } from "../src/reservoir/ReservoirSavingStrategyV2.sol";
+
 import { ValidateInterface } from "./validation/ValidateInterface.s.sol";
 
 contract CommonStrategyScriptBase is Script, ValidateInterface {
@@ -51,6 +56,11 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
     bytes32 constant PENDLE_STRATEGY = keccak256("PendleStrategy");
     bytes32 constant RESERVOIR_STRATEGY = keccak256("ReservoirSavingStrategy");
     bytes32 constant DINERO_STRATEGY = keccak256("DineroStrategy");
+
+    bytes32 constant AAVE_STRATEGY_V2 = keccak256("AaveV3StrategyV2");
+    bytes32 constant PENDLE_STRATEGY_V2 = keccak256("PendleStrategyV2");
+    bytes32 constant RESERVOIR_STRATEGY_V2 = keccak256("ReservoirSavingStrategyV2");
+    bytes32 constant DINERO_STRATEGY_V2 = keccak256("DineroStrategyV2");
 
     AaveStrategyParams[] internal aaveStrategyParams;
     PendleStrategyParams[] internal pendleStrategyParams;
