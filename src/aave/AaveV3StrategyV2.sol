@@ -26,6 +26,7 @@ import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
  * @title AaveV3StrategyV2
  * @dev Strategy used for Aave lending pool.
  * @author Hovooo (@hovooo)
+ * @custom:oz-upgrades-from AaveV3Strategy
  */
 contract AaveV3StrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     using SafeERC20 for IERC20;

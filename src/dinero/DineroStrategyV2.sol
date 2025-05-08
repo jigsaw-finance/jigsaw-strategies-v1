@@ -26,6 +26,7 @@ import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
  * @title DineroStrategyV2
  * @dev Strategy used for Dinero protocol's autoPxEth.
  * @author Hovooo (@hovooo)
+ * @custom:oz-upgrades-from DineroStrategy
  */
 contract DineroStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     using SafeERC20 for IERC20;

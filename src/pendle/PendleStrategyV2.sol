@@ -27,6 +27,7 @@ import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
  * @title PendleStrategyV2
  * @dev Strategy used for investments into Pendle strategy.
  * @author Hovooo (@hovooo)
+ * @custom:oz-upgrades-from PendleStrategy
  */
 contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     using SafeERC20 for IERC20;

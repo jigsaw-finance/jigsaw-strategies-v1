@@ -17,6 +17,7 @@ import { FeeManager } from "./extensions/CustomFee.sol";
 /**
  * @title StrategyBase v2 Contract used for common functionality through Jigsaw Strategies .
  * @author Hovooo (@hovooo)
+ * @custom:oz-upgrades-from StrategyBaseUpgradeable
  */
 abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;

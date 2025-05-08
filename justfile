@@ -68,6 +68,11 @@ coverage-all: && _timer
 	forge coverage --report lcov --allow-failure
 	genhtml -o coverage --branch-coverage lcov.info --ignore-errors inconsistent
 
+validate-upograde: && _timer
+    forge clean
+    forge build
+    npx @openzeppelin/upgrades-core validate out/build-info --exclude "lib/**" --unsafeAllow "constructor, missing-initializer, state-variable-assignment"
+
 docs: && _timer
 	forge doc --build
 

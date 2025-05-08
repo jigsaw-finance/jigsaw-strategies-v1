@@ -38,6 +38,7 @@ import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
  * @dev Strategy used for deUSD minting and staking mechanisms.
  * @notice Implements deposit, withdrawal, and reward management for Elixir's deUSD strategy.
  * @author Hovooo (@hovooo)
+ * @custom:oz-upgrades-from ElixirStrategy
  */
 contract ElixirStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     using SafeERC20 for IERC20;

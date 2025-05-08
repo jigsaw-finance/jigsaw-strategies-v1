@@ -26,6 +26,7 @@ import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
  * @title ReservoirSavingStrategyV2
  * @dev Strategy used for srUSD minting.
  * @author Hovooo (@hovooo)
+ * @custom:oz-upgrades-from ReservoirSavingStrategy
  */
 contract ReservoirSavingStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     using SafeERC20 for IERC20;
