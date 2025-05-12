@@ -3,108 +3,122 @@ pragma solidity 0.8.22;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
+import { IFeeManager } from "./interfaces/IFeeManager.sol";
+
 /**
- * @title FeeManager Contract used for custom fee functionality through Jigsaw Strategies.
+ * @title FeeManager
+ *
+ * @notice Contract that manages custom fee configurations for Jigsaw Protocol strategies
+ *
+ * @dev Allows setting and retrieving custom performance fees for specific holding-strategy pairs
+ * @dev Inherits from `Ownable2Step`.
+ *
  * @author Hovooo (@hovooo)
+ *
+ * @custom:security-contact support@jigsaw.finance
+ *
  */
-contract FeeManager is Ownable2Step, ReentrancyGuard {
-    /**
-     * @notice Emitted when the default fee is updated.
-     * @param strategy The strategy address.
-     * @param holding The holding address.
-     * @param oldFee The previous fee.
-     * @param newFee The new fee.
-     */
-    event HoldingCustomFeeUpdated(address strategy, address holding, uint256 indexed oldFee, uint256 indexed newFee);
+contract FeeManager is IFeeManager, Ownable2Step {
+    // -- State variables --
 
     /**
-     * @notice Contract that contains the address of the manager contract.
+     * @notice The Manager contract.
      */
-    IManager public manager;
+    IManager public override manager;
 
     /**
-     * @notice Returns holdingCustomFee associated with the strategy and holding.
+     * @notice Stores custom performance fee rates for each holding in each strategy.
+     *
+     * @dev Maps a holding address to a nested mapping of strategy address to fee amount.
+     * @dev When a custom fee is not set (value is 0), the getHoldingFee function will return the default performance
+     * fee for the strategy instead. Fee values are expressed in basis points (e.g., 1000 = 10%).
      */
-    mapping(address strategy => mapping(address holding => uint256 customFee)) public holdingCustomFee;
+    mapping(address holding => mapping(address strategy => uint256 fee)) private holdingFee;
+
+    // -- Constructor --
 
     /**
      * @notice Creates a new FeeManager contract.
      * @param _initialOwner The address of the initial owner of the contract.
      * @param _manager The address of the Manager contract.
      */
-    constructor(
-        address _initialOwner,
-        address _manager
-    ) Ownable(_initialOwner) {
+    constructor(address _initialOwner, address _manager) Ownable(_initialOwner) {
         manager = IManager(_manager);
     }
 
-    /**
-     * @notice Sets a custom fee for a list of holding.
-     * @param _strategies The address list of the strategies.
-     * @param _holdings The address list of the holdings.
-     * @param _vals The custom fee list to set.
-     */
-    function setHoldingCustomFees(address[] calldata _strategies, address[] calldata _holdings, uint256[] calldata _vals) external {
-        require(_strategies.length == _holdings.length && _holdings.length == _vals.length, "3047");
+    // -- Administration --
 
+    /**
+     * @notice Sets performance fee for a specific `_holding` in a specific `_strategy`.
+     *
+     * @param _holding The address of the holding.
+     * @param _strategy The address of the strategy.
+     * @param _fee The performance fee to set.
+     */
+    function setHoldingCustomFee(address _holding, address _strategy, uint256 _fee) external override onlyOwner {
+        _setHoldingCustomFee({ _holding: _holding, _strategy: _strategy, _fee: _fee });
+    }
+
+    /**
+     * @notice Sets performance fee for a list of `_holdings` in a specified `_strategies` list.
+     *
+     * @param _holdings The list of the holding addresses to set `_fees` for.
+     * @param _strategies The list of the strategies addresses to set `_holdings`' `_fees` for.
+     * @param _fees The list of performance fees to set for specified `_holdings` and `_strategies`.
+     */
+    function setHoldingCustomFee(
+        address[] calldata _holdings,
+        address[] calldata _strategies,
+        uint256[] calldata _fees
+    ) external override onlyOwner {
+        require(_holdings.length == _strategies.length && _holdings.length == _fees.length, "3047");
         for (uint256 i = 0; i < _strategies.length; i++) {
-            _setHoldingCustomFee(_strategies[i], _holdings[i], _vals[i]);
+            _setHoldingCustomFee({ _holding: _holdings[i], _strategy: _strategies[i], _fee: _fees[i] });
         }
     }
 
-    /**
-     * @notice Sets a custom fee for a specific holding.
-     * @param _strategy The address of the strategy.
-     * @param _holding The address of the holding.
-     * @param _val The custom fee to set.
-     */
-    function setHoldingCustomFee(address _strategy, address _holding, uint256 _val) external {
-        _setHoldingCustomFee(_strategy, _holding, _val);
-    }
+    // -- Getters --
 
     /**
-     * @notice Retrieves the custom holding fee.
+     * @notice Returns `_holding`'s performance fee for specified `_strategy`.
+     * @dev Returns default performance fee stored in StrategyManager contract, if it's set to zero.
+     *
      * @param _strategy The address of the strategy.
      * @param _holding The address of the holding.
-     * @return holding's custom fee or default.
+     *
+     * @return `_holding`'s performance fee for `_strategy`.
      */
-    function getHoldingFee(
-        address _strategy,
-        address _holding
-    ) external view returns (uint256) {
-        (uint256 defaultPerformanceFee,,) = _getStrategyManager().strategyInfo(address(_strategy));
-        return holdingCustomFee[_strategy][_holding] == 0 ? defaultPerformanceFee : holdingCustomFee[_strategy][_holding];
+    function getHoldingFee(address _holding, address _strategy) external view override returns (uint256) {
+        (uint256 defaultPerformanceFee,,) = IStrategyManager(manager.strategyManager()).strategyInfo(address(_strategy));
+        uint256 holdingCustomFee = holdingFee[_holding][_strategy];
+        return holdingCustomFee == 0 ? defaultPerformanceFee : holdingCustomFee;
     }
 
+    // -- Utilities --
+
     /**
-     * @notice Sets a custom fee for a specific holding.
-     * @dev Only the owner of the contract is authorized to perform upgrades, ensuring that only authorized parties
+     * @notice Sets performance fee for a specific holding.
+     *
      * @param _strategy The address of the strategy.
      * @param _holding The address of the holding.
-     * @param _val The custom fee to set.
+     * @param _fee The custom fee to set.
      */
-    function _setHoldingCustomFee(address _strategy, address _holding, uint256 _val) private onlyOwner {
+    function _setHoldingCustomFee(address _holding, address _strategy, uint256 _fee) private {
         require(_strategy != address(0), "3000");
         require(_holding != address(0), "3000");
-        require(holdingCustomFee[_strategy][_holding] != _val, "3017");
+        require(_fee < manager.MAX_PERFORMANCE_FEE(), "3018");
+        require(holdingFee[_holding][_strategy] != _fee, "3017");
 
-        require(_val < manager.MAX_PERFORMANCE_FEE(), "3018");
-
-        emit HoldingCustomFeeUpdated(_strategy, _holding, holdingCustomFee[_strategy][_holding], _val);
-        holdingCustomFee[_strategy][_holding] = _val;
-    }
-
-    /**
-     * @notice Retrieves the Strategy Manager Contract instance from the Manager Contract.
-     * @return IStrategyManager The Strategy Manager contract instance.
-     */
-    function _getStrategyManager() internal view returns (IStrategyManager) {
-        return IStrategyManager(manager.strategyManager());
+        emit HoldingFeeUpdated({
+            holding: _holding,
+            strategy: _strategy,
+            oldFee: holdingFee[_holding][_strategy],
+            newFee: _fee
+        });
+        holdingFee[_holding][_strategy] = _fee;
     }
 }

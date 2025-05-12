@@ -1,37 +1,63 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
+
 interface IFeeManager {
+    // -- Events --
+
     /**
      * @notice Emitted when the default fee is updated.
-     * @param strategy The strategy address.
-     * @param holding The holding address.
-     * @param oldFee The previous fee.
+     *
+     * @param holding The holding address the fee is updated for.
+     * @param strategy The strategy address the fee is updated for.
+     * @param oldFee The old fee.
      * @param newFee The new fee.
      */
-    event HoldingCustomFeeUpdated(address strategy, address holding, uint256 indexed oldFee, uint256 indexed newFee);
+    event HoldingFeeUpdated(address indexed holding, address indexed strategy, uint256 oldFee, uint256 newFee);
+
+    // -- State variables --
 
     /**
-     * @notice Sets a custom fee for a list of holdings.
-     * @param _strategies The address list of the strategies.
-     * @param _holdings The address list of the holdings.
-     * @param _vals The custom fee list to set.
+     * @notice The Manager contract.
      */
-    function setHoldingCustomFees(address[] calldata _strategies, address[] calldata _holdings, uint256[] calldata _vals) external;
+    function manager() external view returns (IManager);
+
+    // -- Administration --
 
     /**
-     * @notice Sets a custom fee for a specific holding.
+     * @notice Sets performance fee for a specific `_holding` in a specific `_strategy`.
+     *
+     * @param _holding The address of the holding.
+     * @param _strategy The address of the strategy.
+     * @param _fee The performance fee to set.
+     */
+    function setHoldingCustomFee(address _holding, address _strategy, uint256 _fee) external;
+
+    /**
+     * @notice Sets performance fee for a list of `_holdings` in a specified `_strategies` list.
+     *
+     * @param _holdings The list of the holding addresses to set `_fees` for.
+     * @param _strategies The list of the strategies addresses to set `_holdings`' `_fees` for.
+     * @param _fees The list of performance fees to set for specified `_holdings` and `_strategies`.
+     */
+    function setHoldingCustomFee(
+        address[] calldata _holdings,
+        address[] calldata _strategies,
+        uint256[] calldata _fees
+    ) external;
+
+    // -- Getters --
+
+    /**
+     * @notice Returns `_holding`'s performance fee for specified `_strategy`.
+     *
+     * @dev Returns default performance fee stored in StrategyManager contract, if it's set to zero.
+     *
      * @param _strategy The address of the strategy.
      * @param _holding The address of the holding.
-     * @param _val The custom fee to set.
+     *
+     * @return `_holding`'s performance fee for `_strategy`.
      */
-    function setHoldingCustomFee(address _strategy, address _holding, uint256 _val) external;
-
-    /**
-     * @notice Retrieves the custom holding fee.
-     * @param _strategy The address of the strategy.
-     * @param _holding The address of the holding.
-     * @return The holding's custom fee or default.
-     */
-    function getHoldingFee(address _strategy, address _holding) external view returns (uint256);
+    function getHoldingFee(address _holding, address _strategy) external view returns (uint256);
 }
