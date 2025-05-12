@@ -184,7 +184,7 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
      * @return fee The amount of fees taken.
      */
     function _takePerformanceFee(address _token, address _recipient, uint256 _yield) internal returns (uint256 fee) {
-        uint256 performanceFee = feeManager.getHoldingFee(address(this), _recipient);
+        uint256 performanceFee = feeManager.getHoldingFee({ _holding: _recipient, _strategy: address(this) });
         if (performanceFee != 0) {
             fee = OperationsLib.getFeeAbsolute(_yield, performanceFee);
             if (fee > 0) {
