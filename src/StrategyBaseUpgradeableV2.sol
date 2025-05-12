@@ -11,7 +11,7 @@ import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
-import { FeeManager } from "./extensions/FeeManager.sol";
+import { IFeeManager } from "./extensions/interfaces/IFeeManager.sol";
 import { OperationsLib } from "./libraries/OperationsLib.sol";
 
 // @todo Fee Manager contract is created for each strategy, that is wrong, feeManager should be deployed once and
@@ -61,7 +61,7 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
     /**
      * @notice Contract that contains the custom fee for the holder.
      */
-    FeeManager public feeManager;
+    IFeeManager public feeManager;
 
     /**
      * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of

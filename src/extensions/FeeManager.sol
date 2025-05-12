@@ -50,8 +50,10 @@ contract FeeManager is Ownable2Step, ReentrancyGuard {
      * @param _holdings The address list of the holdings.
      * @param _vals The custom fee list to set.
      */
-    function setHoldingCustomFees(address[] _strategies, address[] _holdings, uint256[] _vals) external {
-        require(_strategies.length == _holdings.length == _vals.length, "3047");
+    function setHoldingCustomFees(address[] calldata _strategies, address[] calldata _holdings, uint256[] calldata _vals) external {
+        require(_strategies.length == _holdings.length, "3047");
+        require(_strategies.length == _vals.length, "3047");
+
         for (uint256 i = 0; i < _strategies.length; i++) {
             _setHoldingCustomFee(_strategies[i], _holdings[i], _vals[i]);
         }
@@ -93,7 +95,7 @@ contract FeeManager is Ownable2Step, ReentrancyGuard {
         require(_holding != address(0), "3000");
         require(holdingCustomFee[_strategy][_holding] != _val, "3017");
 
-        require(_val < manager.MAX_PERFORMANCE_FEE, "3018");
+        require(_val < manager.MAX_PERFORMANCE_FEE(), "3018");
 
         emit HoldingCustomFeeUpdated(_strategy, _holding, holdingCustomFee[_strategy][_holding], _val);
         holdingCustomFee[_strategy][_holding] = _val;
