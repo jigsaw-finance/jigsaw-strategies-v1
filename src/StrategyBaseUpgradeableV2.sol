@@ -12,7 +12,7 @@ import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
 import { OperationsLib } from "./libraries/OperationsLib.sol";
-import { FeeManager } from "./extensions/CustomFee.sol";
+import { FeeManager } from "./extensions/FeeManager.sol";
 
 /**
  * @title StrategyBase v2 Contract used for common functionality through Jigsaw Strategies .
@@ -51,14 +51,14 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
     IManager public manager;
 
     /**
-    * @notice Contract that contains the custom fee for the holder.
-     */
-    FeeManager public feeManager;
-
-    /**
      * @notice Default decimals used for computations.
      */
     uint256 constant DEFAULT_DECIMALS = 18;
+
+    /**
+     * @notice Contract that contains the custom fee for the holder.
+     */
+    FeeManager public feeManager;
 
     /**
      * @notice Storage gap to reserve storage slots in a base contract, to allow future versions of
