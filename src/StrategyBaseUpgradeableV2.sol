@@ -14,9 +14,6 @@ import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.s
 import { IFeeManager } from "./extensions/interfaces/IFeeManager.sol";
 import { OperationsLib } from "./libraries/OperationsLib.sol";
 
-// @todo Fee Manager contract is created for each strategy, that is wrong, feeManager should be deployed once and
-// forever, just provide the feeManager address when initializing
-
 /**
  * @title StrategyBase v2 Contract used for common functionality through Jigsaw Strategies .
  * @author Hovooo (@hovooo)

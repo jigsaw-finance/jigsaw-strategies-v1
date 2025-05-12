@@ -21,6 +21,7 @@ import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
 
 import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
+import { IFeeManager } from "../extensions/interfaces/IFeeManager.sol";
 
 /**
  * @title DineroStrategyV2
@@ -31,23 +32,6 @@ import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
 contract DineroStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
-
-    // -- Custom types --
-
-    /**
-     * @notice Struct for the initializer params.
-     */
-    struct InitializerParams {
-        address owner; // The address of the initial owner of the Strategy contract
-        address manager; // The address of the Manager contract
-        address stakerFactory; // The address of the StakerLightFactory contract
-        address pirexEth; // The address of the PirexEth
-        address autoPirexEth; // The address of the AutoPirexEth
-        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of the PirexEth receipt token (pxEth)
-    }
 
     // -- Errors --
 
@@ -121,56 +105,28 @@ contract DineroStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     // -- Initialization --
 
     /**
-     * @notice Initializes the Dinero Strategy contract with necessary parameters.
+     * @custom:oz-upgrades-validate-as-initializer
      *
-     * @dev Configures core components such as manager, tokens, pools needed for the strategy to operate.
+     * @notice Initializes the Aave Strategy V2 contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
      *
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_params.manager` must be valid (`"3065"` error code if invalid).
-     * - `_params.pirexEth` must be valid (`"3036"` error code if invalid).
-     * - `_params.autoPirexEth` must be valid (`"3036"` error code if invalid).
-     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     * - `_feeManager` must be valid (`"3000"` error code if invalid).
      *
-     * @param _params Struct containing all initialization parameters.
+     * @param _initialOwner The address of the initial owner of the contract.
+     * @param _feeManager Address of Fee Manager.
      */
     function initialize(
-        InitializerParams memory _params
+        address _initialOwner,
+        address _feeManager
     ) public initializer {
-        require(_params.manager != address(0), "3065");
-        require(_params.pirexEth != address(0), "3036");
-        require(_params.autoPirexEth != address(0), "3036");
-        require(_params.tokenIn != address(0), "3000");
-        require(_params.tokenOut != address(0), "3000");
-
-        __StrategyBase_init({ _initialOwner: _params.owner });
-
-        manager = IManager(_params.manager);
-        pirexEth = IPirexEth(_params.pirexEth);
-        autoPirexEth = IAutoPxEth(_params.autoPirexEth);
-        tokenIn = _params.tokenIn;
-        tokenOut = _params.tokenOut;
-        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
-
-        receiptToken = IReceiptToken(
-            StrategyConfigLib.configStrategy({
-                _initialOwner: _params.owner,
-                _receiptTokenFactory: manager.receiptTokenFactory(),
-                _receiptTokenName: "PirexEth Strategy Receipt Token",
-                _receiptTokenSymbol: "DiRT"
-            })
-        );
-
-        jigsawStaker = IStakerLight(
-            IStakerLightFactory(_params.stakerFactory).createStakerLight({
-                _initialOwner: _params.owner,
-                _holdingManager: manager.holdingManager(),
-                _rewardToken: _params.jigsawRewardToken,
-                _strategy: address(this),
-                _rewardsDuration: _params.jigsawRewardDuration
-            })
-        );
+        require(_feeManager != address(0), "3000");
+        __StrategyBase_init(_initialOwner);
+        feeManager = IFeeManager(_feeManager);
     }
 
     // -- User-specific Methods --

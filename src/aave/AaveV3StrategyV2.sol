@@ -101,12 +101,15 @@ contract AaveV3StrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
      * - `_feeManager` must be valid (`"3000"` error code if invalid).
      *
+     * @param _initialOwner The address of the initial owner of the contract.
      * @param _feeManager Address of Fee Manager.
      */
     function initialize(
+        address _initialOwner,
         address _feeManager
     ) public initializer {
         require(_feeManager != address(0), "3000");
+        __StrategyBase_init(_initialOwner);
         feeManager = IFeeManager(_feeManager);
     }
 

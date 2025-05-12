@@ -32,6 +32,7 @@ import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
 
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
+import { IFeeManager } from "../extensions/interfaces/IFeeManager.sol";
 
 /**
  * @title ElixirStrategyV2
@@ -54,25 +55,6 @@ contract ElixirStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     enum SwapDirection {
         FromTokenIn,
         ToTokenIn
-    }
-
-    // -- Custom types --
-
-    /**
-     * @notice Struct for the initializer params.
-     */
-    struct InitializerParams {
-        address owner; // The address of the initial owner of the Strategy contract
-        address manager; // The address of the manager contract
-        address stakerFactory; // The address of the StakerLightFactory contract
-        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of Elixir's receipt token
-        address deUSD; // The Elixir's deUSD stablecoin.
-        address uniswapRouter; // The address of the UniswapV3 Router
-        address oracle; // The address of the UniswapV3 Oracle
-        address[] initialPools; // The address array of the UniswapV3 pools
     }
 
     // -- Errors --
@@ -205,71 +187,28 @@ contract ElixirStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     // -- Initialization --
 
     /**
-     * @notice Initializes the Elixir Strategy contract with necessary parameters.
+     * @custom:oz-upgrades-validate-as-initializer
      *
-     * @dev Configures core components such as manager, tokens, pools, and reward systems needed for the strategy to
-     * operate.
+     * @notice Initializes the Aave Strategy V2 contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
      *
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_params.manager` must be valid (`"3065"` error code if invalid).
-     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     * - `_feeManager` must be valid (`"3000"` error code if invalid).
      *
-     * @param _params Struct containing all initialization parameters.
+     * @param _initialOwner The address of the initial owner of the contract.
+     * @param _feeManager Address of Fee Manager.
      */
     function initialize(
-        InitializerParams memory _params
+        address _initialOwner,
+        address _feeManager
     ) public initializer {
-        require(_params.manager != address(0), "3065");
-        require(_params.jigsawRewardToken != address(0), "3000");
-        require(_params.tokenIn != address(0), "3000");
-        require(_params.tokenOut != address(0), "3000");
-        require(_params.deUSD != address(0), "3036");
-        require(_params.uniswapRouter != address(0), "3000");
-        require(_params.oracle != address(0), "3000");
-        require(_params.initialPools.length != 0, "3000");
-
-        __StrategyBase_init({ _initialOwner: _params.owner });
-
-        oracle = new GenericUniswapV3Oracle({
-            _initialOwner: _params.owner,
-            _underlying: _params.tokenIn,
-            _quoteToken: _params.deUSD,
-            _quoteTokenOracle: _params.oracle,
-            _uniswapV3Pools: _params.initialPools
-        });
-
-        manager = IManager(_params.manager);
-        tokenIn = _params.tokenIn;
-        tokenOut = _params.tokenOut;
-        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
-        rewardToken = address(0);
-        deUSD = _params.deUSD;
-        sdeUSD = ISdeUsdMin(_params.tokenOut);
-        uniswapRouter = _params.uniswapRouter;
-
-        // Set default allowed slippage percentage to 5%
-        _setSlippagePercentage({ _newVal: 500 });
-
-        receiptToken = IReceiptToken(
-            StrategyConfigLib.configStrategy({
-                _initialOwner: _params.owner,
-                _receiptTokenFactory: manager.receiptTokenFactory(),
-                _receiptTokenName: "Elixir Receipt Token",
-                _receiptTokenSymbol: "ElRT"
-            })
-        );
-
-        jigsawStaker = IStakerLight(
-            IStakerLightFactory(_params.stakerFactory).createStakerLight({
-                _initialOwner: _params.owner,
-                _holdingManager: manager.holdingManager(),
-                _rewardToken: _params.jigsawRewardToken,
-                _strategy: address(this),
-                _rewardsDuration: _params.jigsawRewardDuration
-            })
-        );
+        require(_feeManager != address(0), "3000");
+        __StrategyBase_init(_initialOwner);
+        feeManager = IFeeManager(_feeManager);
     }
 
     // -- User-specific Methods --
