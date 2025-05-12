@@ -73,6 +73,16 @@ validate-upograde: && _timer
     forge build
     npx @openzeppelin/upgrades-core validate out/build-info --exclude "lib/**" --unsafeAllow "constructor, missing-initializer, state-variable-assignment"
 
+validate-AaveV3StrategyV2: && _timer
+	forge clean
+	forge build
+	npx @openzeppelin/upgrades-core validate --contract "AaveV3StrategyV2" --requireReference --unsafeAllow "constructor"
+
+validate-StrategyBaseUpgradeableV2: && _timer
+	forge clean
+	forge build
+	npx @openzeppelin/upgrades-core validate --contract "StrategyBaseUpgradeableV2" --requireReference --unsafeAllow "constructor"
+
 docs: && _timer
 	forge doc --build
 
