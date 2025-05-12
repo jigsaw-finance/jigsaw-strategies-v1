@@ -11,8 +11,11 @@ import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategyManager } from "@jigsaw/src/interfaces/core/IStrategyManager.sol";
 
-import { OperationsLib } from "./libraries/OperationsLib.sol";
 import { FeeManager } from "./extensions/FeeManager.sol";
+import { OperationsLib } from "./libraries/OperationsLib.sol";
+
+// @todo Fee Manager contract is created for each strategy, that is wrong, feeManager should be deployed once and
+// forever, just provide the feeManager address when initializing
 
 /**
  * @title StrategyBase v2 Contract used for common functionality through Jigsaw Strategies .
@@ -79,7 +82,6 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
         __Ownable2Step_init();
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
-        feeManager = new FeeManager(_initialOwner);
     }
 
     // -- Administration --
@@ -185,15 +187,7 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
      * @return fee The amount of fees taken.
      */
     function _takePerformanceFee(address _token, address _recipient, uint256 _yield) internal returns (uint256 fee) {
-        uint256 performanceFee;
-
-        if(feeManager.recipientCustomFee(_recipient) != 0) {
-            performanceFee = feeManager.recipientCustomFee(_recipient);
-        } else {
-            (performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        }
-
-        (performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
+        uint256 performanceFee = feeManager.getHoldingFee(address(this), _recipient);
         if (performanceFee != 0) {
             fee = OperationsLib.getFeeAbsolute(_yield, performanceFee);
             if (fee > 0) {
