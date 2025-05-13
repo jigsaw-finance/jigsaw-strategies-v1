@@ -146,7 +146,7 @@ contract ReservoirSavingStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      */
     function initialize(
         InitializerParams memory _params
-    ) public initializer {
+    ) public reinitializer(2) {
         require(_params.feeManager != address(0), "3000");
         __StrategyBase_init(_params.owner);
         feeManager = IFeeManager(_params.feeManager);

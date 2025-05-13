@@ -3,14 +3,13 @@ pragma solidity 0.8.22;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AaveV3Strategy } from "../../src/aave/AaveV3Strategy.sol";
+import { AaveV3StrategyV2 } from "../../src/aave/AaveV3StrategyV2.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
-
-import { AaveV3Strategy } from "../../src/aave/AaveV3Strategy.sol";
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
@@ -226,40 +225,23 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
     }
 
-    // Tests if claimRewards works correctly when authorized
-    // function test_claimRewards_when_authorized() public {
-    //     address user = vm.addr(uint256(keccak256(bytes("Random user address"))));
-    //     uint256 amount = 10e6;
+    // Function to test upgrading AaveV3Strategy to AaveV3StrategyV2
+    function test_upgradeTo_AaveV3StrategyV2() public {
+        vm.startPrank(OWNER);
 
-    //     // Mock values and setup necessary approvals and balances for the test
-    //     address userHolding = initiateUser(user, tokenIn, amount);
+        // Deploy the new implementation of AaveV3StrategyV2
+        address strategyV2Implementation = address(new AaveV3StrategyV2());
 
-    //     // Invest into the tested strategy vie strategyManager
-    //     vm.prank(user, user);
-    //     strategyManager.invest(tokenIn, address(strategy), amount, "");
+        // Perform the upgrade
+        bytes memory data = abi.encodeCall(
+            AaveV3StrategyV2.initialize,
+            AaveV3StrategyV2.InitializerParams({
+                owner: OWNER,
+                feeManager: address(feeManager)
+            })
+        );
 
-    //     if (strategy.rewardToken() == address(0)) {
-    //         vm.prank(user, user);
-    //         (uint256[] memory rewards, address[] memory rewardTokens) =
-    //             strategyManager.claimRewards(address(strategy), "");
-
-    //         assertEq(rewards.length, 0, "Wrong rewards length when no rewards");
-    //         assertEq(rewardTokens.length, 0, "Wrong rewardTokens length when no rewards");
-    //         return;
-    //     }
-
-    //     uint256 rewardsBefore = IERC20(strategy.rewardToken()).balanceOf(userHolding);
-    //     (uint256[] memory rewards, address[] memory rewardTokens) = strategyManager.claimRewards(address(strategy),
-    // "");
-    //     vm.prank(user, user);
-
-    //     uint256 rewardsAfter = IERC20(strategy.rewardToken()).balanceOf(userHolding);
-
-    //     // Mock rewards and balances
-    //     uint256 expectedRewards = rewardsAfter - rewardsBefore;
-
-    //     // Assert statements with reasons
-    //     assertEq(rewards[0], expectedRewards, "Incorrect rewards claimed");
-    //     assertEq(rewardTokens[0], strategy.rewardToken(), "Incorrect reward token returned");
-    // }
+        strategy.upgradeToAndCall(strategyV2Implementation, data);
+        vm.stopPrank();
+    }
 }
