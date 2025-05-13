@@ -48,6 +48,18 @@ contract DineroStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      */
     event Received(address indexed from, uint256 amount);
 
+    // -- Custom types --
+
+    /**
+     * @notice Struct for the initializer params.
+     * @param owner The address of the initial owner of the Strategy contract
+     * @param feeManager The address of the feeManager contract
+     */
+    struct InitializerParams {
+        address owner;
+        address feeManager;
+    }
+
     // -- State variables --
 
     /**
@@ -115,18 +127,16 @@ contract DineroStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      * @dev This function is only callable once due to the `initializer` modifier.
      *
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
-     * - `_feeManager` must be valid (`"3000"` error code if invalid).
+     * - `_params.feeManager` must be valid (`"3000"` error code if invalid).
      *
-     * @param _initialOwner The address of the initial owner of the contract.
-     * @param _feeManager Address of Fee Manager.
+     * @param _params Struct containing all initialization parameters.
      */
     function initialize(
-        address _initialOwner,
-        address _feeManager
+        InitializerParams memory _params
     ) public initializer {
-        require(_feeManager != address(0), "3000");
-        __StrategyBase_init(_initialOwner);
-        feeManager = IFeeManager(_feeManager);
+        require(_params.feeManager != address(0), "3000");
+        __StrategyBase_init(_params.owner);
+        feeManager = IFeeManager(_params.feeManager);
     }
 
     // -- User-specific Methods --
