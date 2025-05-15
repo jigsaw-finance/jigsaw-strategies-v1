@@ -69,11 +69,11 @@ Specific tests can be run using `forge test` conventions, specified in more deta
 
 | Auditor  | Strategy                | Report Link                                                        |
 | -------- | ----------------------- | ------------------------------------------------------------------ |
-| Hallborn | AaveV3Strategy          | https://www.halborn.com/audits/jigsaw-finance/aave-strategies-v1   |
-| Hallborn | DineroStrategy          | https://www.halborn.com/audits/jigsaw-finance/dinero-strategies-v1 |
-| Hallborn | IonStrategy             | https://www.halborn.com/audits/jigsaw-finance/ion-strategies-v1    |
-| Hallborn | PendleStrategy          | https://www.halborn.com/audits/jigsaw-finance/pendle-strategies-v1 |
-| Hallborn | ReservoirSavingStrategy |                                                                    |
+| Halborn | AaveV3Strategy          | https://www.halborn.com/audits/jigsaw-finance/aave-strategies-v1   |
+| Halborn | DineroStrategy          | https://www.halborn.com/audits/jigsaw-finance/dinero-strategies-v1 |
+| Halborn | IonStrategy             | https://www.halborn.com/audits/jigsaw-finance/ion-strategies-v1    |
+| Halborn | PendleStrategy          | https://www.halborn.com/audits/jigsaw-finance/pendle-strategies-v1 |
+| Halborn | ReservoirSavingStrategy |                                                                    |
 
 ## About Jigsaw
 
