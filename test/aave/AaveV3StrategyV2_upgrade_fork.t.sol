@@ -73,13 +73,7 @@ contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
 
     // Test reinitialization
     function test_reinitialization() public {
-        StrategyStateVariables memory beforeUpgrade = _getStrategyStateVariables();
-
-        _upgradeTo_AaveV3StrategyV2();
-
-        StrategyStateVariables memory afterUpgrade = _getStrategyStateVariables();
-
-        _validateStrategyStateVariables(beforeUpgrade, afterUpgrade);
+        _validate_reinitialization();
     }
 
     // Tests if withdraw works correctly for v2
@@ -100,8 +94,8 @@ contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
         uint256 fee =
             _getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, manager.performanceFee());
 
-        // Upgrade to AaveV3StrategyV2
-        _upgradeTo_AaveV3StrategyV2();
+        // Upgrade to V2
+        _upgradeToV2();
 
         vm.prank(user, user);
         (uint256 assetAmount, uint256 tokenInAmount,,) = strategyManager.claimInvestment({
@@ -148,7 +142,7 @@ contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
     }
 
     // Upgrade AaveV3Strategy to AaveV3StrategyV2
-    function _upgradeTo_AaveV3StrategyV2() internal {
+    function _upgradeToV2() internal override {
         vm.startPrank(OWNER);
 
         // Deploy the new implementation of AaveV3StrategyV2
@@ -167,12 +161,10 @@ contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
         vm.stopPrank();
     }
 
-    function _getStrategyStateVariables() internal view returns (StrategyStateVariables memory) {
+    function _getStrategyStateVariables() internal override view returns (StrategyStateVariables memory) {
         return StrategyStateVariables({
             owner: strategy.owner(),
             manager: address(strategy.manager()),
-            lendingPool: address(strategy.lendingPool()),
-            rewardsController: address(strategy.rewardsController()),
             rewardToken: strategy.rewardToken(),
             tokenIn: strategy.tokenIn(),
             tokenOut: strategy.tokenOut(),
