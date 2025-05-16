@@ -65,7 +65,8 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             deUSD: deUSD,
             uniswapRouter: uniswapRouter,
             oracle: address(new SampleOracle()),
-            initialPools: pools
+            initialPools: pools,
+            feeManager: address(feeManager)
         });
 
         bytes memory data = abi.encodeCall(ElixirStrategy.initialize, initParams);
