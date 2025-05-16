@@ -6,13 +6,14 @@ import "../fixtures/StrategyTestUtils.t.sol";
 
 import { AaveV3Strategy } from "../../src/aave/AaveV3Strategy.sol";
 import { AaveV3StrategyV2 } from "../../src/aave/AaveV3StrategyV2.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+
+import { StakerLight } from "../../src/staker/StakerLight.sol";
+import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
 import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
-import { StakerLight } from "../../src/staker/StakerLight.sol";
-import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTestUtils {
     AaveV3Strategy internal strategy;
@@ -150,18 +151,14 @@ contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
 
         // Perform the upgrade
         bytes memory data = abi.encodeCall(
-            AaveV3StrategyV2.initialize,
-            AaveV3StrategyV2.InitializerParams({
-                owner: OWNER,
-                feeManager: address(feeManager)
-            })
+            AaveV3StrategyV2.initialize, AaveV3StrategyV2.InitializerParams({ feeManager: address(feeManager) })
         );
 
         strategy.upgradeToAndCall(strategyV2Implementation, data);
         vm.stopPrank();
     }
 
-    function _getStrategyStateVariables() internal override view returns (StrategyStateVariables memory) {
+    function _getStrategyStateVariables() internal view override returns (StrategyStateVariables memory) {
         return StrategyStateVariables({
             owner: strategy.owner(),
             manager: address(strategy.manager()),

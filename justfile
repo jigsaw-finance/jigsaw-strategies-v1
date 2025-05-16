@@ -52,6 +52,7 @@ format: && _timer
 	forge fmt
 
 test-all: && _timer
+	# General tests
 	forge test -vvvv --match-contract AaveV3StrategyTest
 	forge test -vvvv --match-contract DineroStrategyTest
 	forge test -vvvv --match-contract IonStrategyTest
@@ -59,7 +60,25 @@ test-all: && _timer
 	forge test -vvvv --match-contract ReservoirSavingStrategyTest
 	forge test -vvvv --match-contract ReservoirMath
 	forge test -vvvv --match-contract ElixirStrategyTest
+
+	# Deployment tests
 	forge test -vvvv --match-contract DeployAllTest
+
+	# Upgrading tests
+	forge test -vvvv --match-contract AaveV3StrategyV2UpgradeTest
+	forge test -vvvv --match-contract DineroStrategyV2UpgradeTest
+	forge test -vvvv --match-contract ElixirStrategyV2UpgradeTest
+	forge test -vvvv --match-contract PendleStrategyV2UpgradeTest
+	forge test -vvvv --match-contract ReservoirSavingStrategyV2UpgradeTest
+
+test-upgrades: && _timer
+	# Upgrading tests
+	forge test -vvvv --match-contract AaveV3StrategyV2UpgradeTest
+	forge test -vvvv --match-contract DineroStrategyV2UpgradeTest
+	forge test -vvvv --match-contract ElixirStrategyV2UpgradeTest
+	forge test -vvvv --match-contract PendleStrategyV2UpgradeTest
+	forge test -vvvv --match-contract ReservoirSavingStrategyV2UpgradeTest
+
 
 test-gas: && _timer
     forge test --gas-report

@@ -88,7 +88,6 @@ contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      * @param feeManager The address of the feeManager contract
      */
     struct InitializerParams {
-        address owner;
         address feeManager;
     }
 
@@ -192,7 +191,6 @@ contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
         InitializerParams memory _params
     ) public reinitializer(2) {
         require(_params.feeManager != address(0), "3000");
-        __StrategyBase_init(_params.owner);
         feeManager = IFeeManager(_params.feeManager);
     }
 

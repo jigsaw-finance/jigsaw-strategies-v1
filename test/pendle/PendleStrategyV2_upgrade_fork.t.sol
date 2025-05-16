@@ -129,9 +129,11 @@ contract PendleStrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
         });
 
         skip(100 days);
+
         // Upgrade to V2
         _upgradeToV2();
 
+        vm.startPrank(user, user);
         (,, int256 yield, uint256 fee) = strategyManager.claimInvestment({
             _holding: userHolding,
             _token: tokenIn,
@@ -233,18 +235,14 @@ contract PendleStrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
 
         // Perform the upgrade
         bytes memory data = abi.encodeCall(
-            PendleStrategyV2.initialize,
-            PendleStrategyV2.InitializerParams({
-                owner: OWNER,
-                feeManager: address(feeManager)
-            })
+            PendleStrategyV2.initialize, PendleStrategyV2.InitializerParams({ feeManager: address(feeManager) })
         );
 
         strategy.upgradeToAndCall(strategyV2Implementation, data);
         vm.stopPrank();
     }
 
-    function _getStrategyStateVariables() internal override view returns (StrategyStateVariables memory) {
+    function _getStrategyStateVariables() internal view override returns (StrategyStateVariables memory) {
         return StrategyStateVariables({
             owner: strategy.owner(),
             manager: address(strategy.manager()),

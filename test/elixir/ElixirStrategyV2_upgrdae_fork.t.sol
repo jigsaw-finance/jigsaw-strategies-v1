@@ -203,18 +203,14 @@ contract ElixirStrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
 
         // Perform the upgrade
         bytes memory data = abi.encodeCall(
-            ElixirStrategyV2.initialize,
-            ElixirStrategyV2.InitializerParams({
-                owner: OWNER,
-                feeManager: address(feeManager)
-            })
+            ElixirStrategyV2.initialize, ElixirStrategyV2.InitializerParams({ feeManager: address(feeManager) })
         );
 
         strategy.upgradeToAndCall(strategyV2Implementation, data);
         vm.stopPrank();
     }
 
-    function _getStrategyStateVariables() internal override view returns (StrategyStateVariables memory) {
+    function _getStrategyStateVariables() internal view override returns (StrategyStateVariables memory) {
         return StrategyStateVariables({
             owner: strategy.owner(),
             manager: address(strategy.manager()),
