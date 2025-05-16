@@ -40,9 +40,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
 
     function test_all_initializations() public {
         aave_initialization();
-        dinero_initialization();
         pendle_initialization();
-        reservoir_initialization();
     }
 
     function aave_initialization() public {
@@ -77,33 +75,6 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         }
     }
 
-    function dinero_initialization() public {
-        DeployImpl implDeployer = new DeployImpl();
-        address implementation = implDeployer.run("DineroStrategy");
-
-        // Save implementation address to deployments
-        Strings.toHexString(uint160(implementation), 20).write("./deployments.json", ".DineroStrategy_IMPL");
-
-        proxyDeployer = new DeployProxy();
-        strategies = proxyDeployer.run({ _strategy: "DineroStrategy" });
-
-        _populateDineroArray();
-
-        for (uint256 i = 0; i < dineroStrategyParams.length; i++) {
-            DineroStrategy strategy = DineroStrategy(payable(strategies[i]));
-            IStakerLight staker = strategy.jigsawStaker();
-
-            assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.manager()), managerFromConfig, "ManagerContainer wrong");
-            assertEq(address(strategy.pirexEth()), dineroStrategyParams[i].pirexEth, "PirexEth wrong");
-            assertEq(address(strategy.autoPirexEth()), dineroStrategyParams[i].autoPirexEth, "autoPirexEth wrong");
-            assertEq(strategy.tokenIn(), dineroStrategyParams[i].tokenIn, "tokenIn initialized wrong");
-            assertEq(strategy.tokenOut(), dineroStrategyParams[i].tokenOut, "tokenOut initialized wrong");
-            assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
-            assertEq(staker.rewardsDuration(), dineroStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong");
-        }
-    }
-
     function pendle_initialization() public {
         DeployImpl implDeployer = new DeployImpl();
         address implementation = implDeployer.run("PendleStrategy");
@@ -132,49 +103,6 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             assertEq(strategy.tokenOut(), pendleStrategyParams[i].pendleMarket, "tokenOut initialized wrong");
             assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
             assertEq(staker.rewardsDuration(), pendleStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong");
-        }
-    }
-
-    function reservoir_initialization() public {
-        init();
-
-        DeployImpl implDeployer = new DeployImpl();
-        address implementation = implDeployer.run("ReservoirSavingStrategy");
-
-        // Save implementation address to deployments
-        Strings.toHexString(uint160(implementation), 20).write("./deployments.json", ".ReservoirSavingStrategy_IMPL");
-
-        proxyDeployer = new DeployProxy();
-        strategies = proxyDeployer.run({ _strategy: "ReservoirSavingStrategy" });
-
-        _populateReservoirSavingStrategy();
-
-        for (uint256 i = 0; i < reservoirSavingStrategyParams.length; i++) {
-            ReservoirSavingStrategy strategy = ReservoirSavingStrategy(strategies[i]);
-            IStakerLight staker = strategy.jigsawStaker();
-
-            assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
-            assertEq(address(strategy.manager()), managerFromConfig, "ManagerContainer wrong");
-            assertEq(
-                address(strategy.pegStabilityModule()),
-                reservoirSavingStrategyParams[i].pegStabilityModule,
-                "PegStabilityModule wrong"
-            );
-            assertEq(
-                address(strategy.creditEnforcer()),
-                reservoirSavingStrategyParams[i].creditEnforcer,
-                "CreditEnforcer wrong"
-            );
-            assertEq(
-                address(strategy.savingModule()), reservoirSavingStrategyParams[i].savingModule, "SavingModule wrong"
-            );
-            assertEq(address(strategy.rUSD()), reservoirSavingStrategyParams[i].rUSD, "rUSD wrong");
-            assertEq(strategy.tokenIn(), reservoirSavingStrategyParams[i].tokenIn, "tokenIn initialized wrong");
-            assertEq(strategy.tokenOut(), reservoirSavingStrategyParams[i].tokenOut, "tokenOut initialized wrong");
-            assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
-            assertEq(
-                staker.rewardsDuration(), reservoirSavingStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong"
-            );
         }
     }
 

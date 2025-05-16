@@ -16,15 +16,15 @@ import { IPSwapAggregator } from "@pendle/router/swap-aggregator/IPSwapAggregato
 import { PendleStrategy } from "../../src/pendle/PendleStrategy.sol";
 
 address constant PENDLE_ROUTER = 0x888888888889758F76e7103c6CbF23ABbF58F946;
-address constant PENDLE_MARKET = 0x58612beB0e8a126735b19BB222cbC7fC2C162D2a; // pufETH pendle market address
+address constant PENDLE_MARKET = 0x3aeF1d372d0a7a7E482F465Bc14A42D78f920392; // stS pendle market address
 
 contract PendleStrategyTest is Test, BasicContractsFixture {
-    // Mainnet pufETH
-    address internal tokenIn = 0xD9A442856C234a39a81a089C06451EBAa4306a72;
+    // Mainnet stS
+    address internal tokenIn = 0xE5DA20F15420aD15DE0fa650600aFc998bbE3955;
     // Pendle LP token
     address internal tokenOut = PENDLE_MARKET;
     // Pendle reward token
-    address internal rewardToken = 0x808507121B80c02388fAd14726482e061B8da827;
+    address internal rewardToken = 0xf1eF7d2D4C0c881cd634481e0586ed5d2871A74B;
 
     PendleStrategy internal strategy;
 
@@ -138,8 +138,10 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
         // 1.
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
         // 2.
-        assertApproxEqRel(
-            IERC20(tokenOut).balanceOf(userHolding), amount / 2, 0.05e18, "Holding token out balance wrong"
+        assertGe(
+            IERC20(tokenOut).balanceOf(userHolding),
+            strategy.getMinAllowedLpOut(amount),
+            "Holding token out balance wrong"
         );
         // 3.
         assertEq(

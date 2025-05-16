@@ -7,9 +7,10 @@ import "forge-std/console.sol";
 
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { HoldingManager } from "@jigsaw/src/HoldingManager.sol";
 import { JigsawUSD } from "@jigsaw/src/JigsawUSD.sol";
@@ -65,7 +66,7 @@ abstract contract BasicContractsFixture is Test {
     mapping(address => address) internal registries;
 
     function init() public {
-        vm.createSelectFork(vm.envString("MAINNET_RPC_URL"));
+        vm.createSelectFork(vm.envString("SONIC_RPC_URL"));
         vm.startPrank(OWNER);
         deal(OWNER, 100_000e18);
 
@@ -183,7 +184,8 @@ abstract contract BasicContractsFixture is Test {
         // Deposit to the holding
         // TODO (Tigran Arakelyan): Use safeIncreaseAllowance instead of approve
         // https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#SafeERC20-safeApprove-contract-IERC20-address-uint256-
-        // Meant to be used with tokens that require the approval to be set to zero before setting it to a non-zero value, such as USDT.
+        // Meant to be used with tokens that require the approval to be set to zero before setting it to a non-zero
+        // value, such as USDT.
         // collateralContract.approve(address(holdingManager), _tokenAmount);
         collateralContract.safeIncreaseAllowance(address(holdingManager), _tokenAmount);
 

@@ -26,14 +26,14 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
 
     AaveV3Strategy internal strategy;
 
-    address internal lendingPool = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
-    address internal rewardsController = 0x8164Cc65827dcFe994AB23944CBC90e0aa80bFcb;
-    address internal emissionManager = 0x223d844fc4B006D67c0cDbd39371A9F73f69d974;
+    address internal lendingPool = 0x5362dBb1e601abF3a4c14c22ffEdA64042E5eAA3;
+    address internal rewardsController = 0x24bD6e9ca54F1737467DEf82dCA9702925B3Aa59;
+    address internal emissionManager = 0xd3A0A19Cdb7d1615f30988763BEA5f8feCc17a87;
 
     // Mainnet usdc
-    address internal tokenIn = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address internal tokenIn = 0x29219dd400f2Bf60E5a23d13Be72B486D4038894;
     // Aave interest bearing aUSDC
-    address internal tokenOut = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
+    address internal tokenOut = 0x578Ee1ca3a8E1b54554Da1Bf7C583506C4CD11c6;
 
     function setUp() public {
         init();
