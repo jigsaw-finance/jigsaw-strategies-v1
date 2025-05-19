@@ -51,7 +51,7 @@ contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
         strategy = AaveV3Strategy(proxy);
 
         // Add tested strategy to the StrategyManager for integration testing purposes
-        vm.startPrank((OWNER));
+        vm.startPrank(OWNER);
         manager.whitelistToken(tokenIn);
         strategyManager.addStrategy(address(strategy));
 
@@ -142,9 +142,80 @@ contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
         assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
     }
 
+    // Tests if withdraw works correctly for v2
+    function test_custom_fee_withdraw_aave_v2(uint256 _amount, address user) public notOwnerNotZero(user) {
+        uint256 amount = bound(_amount, 1e6, 10e6);
+        address userHolding = initiateUser(user, tokenIn, amount);
+
+        // Invest into the tested strategy vie strategyManager
+        vm.prank(user, user);
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, abi.encode("random ref"));
+
+        (, uint256 totalShares) = strategy.recipients(userHolding);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        (uint256 investedAmountBefore,) = strategy.recipients(userHolding);
+
+        // Upgrade to V2
+        _upgradeToV2();
+
+        AaveV3StrategyV2 strategyV2 = AaveV3StrategyV2(address(strategy));
+
+        uint256 customFee = 2000;
+        vm.startPrank(OWNER);
+        strategyV2.feeManager().setHoldingCustomFee(userHolding, address(strategy), customFee);
+        vm.stopPrank();
+
+        skip(100 days);
+
+        uint256 fee = _getFeeAbsolute(IERC20(tokenOut).balanceOf(userHolding) - investedAmountBefore, customFee);
+
+        vm.prank(user, user);
+        (uint256 assetAmount, uint256 tokenInAmount,,) = strategyManager.claimInvestment({
+            _holding: userHolding,
+            _token: tokenIn,
+            _strategy: address(strategy),
+            _shares: totalShares,
+            _data: ""
+        });
+
+        (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
+        uint256 tokenInBalanceAfter = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 expectedWithdrawal = tokenInBalanceAfter - tokenInBalanceBefore;
+
+        /**
+         * Expected changes after withdrawal
+         * 1. Holding's tokenIn balance += (totalInvested + yield) * shareRatio
+         * 2. Holding's tokenOut balance -= shares
+         * 3. Staker receiptTokens balance -= shares
+         * 4. Strategy's invested amount  -= totalInvested * shareRatio
+         * 5. Strategy's total shares  -= shares
+         * 6. Fee address fee amount += yield * performanceFee
+         */
+        // 1.
+        assertEq(tokenInBalanceAfter, assetAmount, "Holding balance after withdraw is wrong");
+        // 2.
+        assertEq(IAToken(tokenOut).scaledBalanceOf(userHolding), 0, "Holding token out balance wrong");
+        // 3.
+        assertEq(
+            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
+            0,
+            "Incorrect receipt tokens after withdraw"
+        );
+        // 4.
+        assertEq(investedAmount, 0, "Recipient invested amount mismatch");
+        // 5.
+        assertEq(totalSharesAfter, 0, "Recipient total shares mismatch after withdrawal");
+        // 6.
+        assertEq(fee, IERC20(tokenIn).balanceOf(manager.feeAddress()), "Fee address fee amount wrong");
+
+        // Additional checks
+        assertEq(assetAmount, expectedWithdrawal, "Incorrect asset amount returned");
+        assertEq(tokenInAmount, investedAmountBefore, "Incorrect tokenInAmount returned");
+    }
+
     // Upgrade AaveV3Strategy to AaveV3StrategyV2
     function _upgradeToV2() internal override {
-        vm.startPrank(OWNER);
+        vm.startPrank(OWNER, OWNER);
 
         // Deploy the new implementation of AaveV3StrategyV2
         address strategyV2Implementation = address(new AaveV3StrategyV2());
