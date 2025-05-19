@@ -155,7 +155,7 @@ contract DineroStrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
 
     // Upgrade DineroStrategy to DineroStrategyV2
     function _upgradeToV2() internal override {
-        vm.startPrank(OWNER);
+        vm.startPrank(OWNER, OWNER);
 
         // Deploy the new implementation of DineroStrategyV2
         address strategyV2Implementation = address(new DineroStrategyV2());

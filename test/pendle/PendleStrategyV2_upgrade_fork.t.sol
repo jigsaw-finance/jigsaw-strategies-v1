@@ -228,7 +228,7 @@ contract PendleStrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
 
     // Upgrade PendleStrategy to PendleStrategyV2
     function _upgradeToV2() internal override {
-        vm.startPrank(OWNER);
+        vm.startPrank(OWNER, OWNER);
 
         // Deploy the new implementation of PendleStrategyV2
         address strategyV2Implementation = address(new PendleStrategyV2());

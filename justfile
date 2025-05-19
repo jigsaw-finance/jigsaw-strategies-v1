@@ -64,6 +64,10 @@ test-all: && _timer
 	# Deployment tests
 	forge test -vvvv --match-contract DeployAllTest
 
+	# Core/Base tests
+	forge test -vvvv --match-contract StrategyBaseTest
+	forge test -vvvv --match-contract StrategyBaseV2Test
+
 	# Upgrading tests
 	forge test -vvvv --match-contract AaveV3StrategyV2UpgradeTest
 	forge test -vvvv --match-contract DineroStrategyV2UpgradeTest

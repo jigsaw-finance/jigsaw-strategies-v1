@@ -46,6 +46,13 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
     event FeeTaken(address indexed token, address indexed feeAddress, uint256 amount);
 
     /**
+     * @dev Emitted when the FeeManager is updated.
+     * @param oldFeeManager The address of the old FeeManager
+     * @param newFeeManager The address of the new FeeManager
+     */
+    event SetFeeManager(address indexed oldFeeManager, address indexed newFeeManager);
+
+    /**
      * @notice Contract that contains the address of the manager contract.
      */
     IManager public manager;
@@ -114,6 +121,18 @@ abstract contract StrategyBaseUpgradeableV2 is Ownable2StepUpgradeable, Reentran
      */
     function renounceOwnership() public pure virtual override {
         revert("1000");
+    }
+
+    /**
+     * @notice Set the fee manager contract address.
+     * @param _feeManager The new fee manager contract address.
+     */
+    function setFeeManager(
+        address _feeManager
+    ) external onlyOwner onlyValidAddress(_feeManager) {
+        require(address(feeManager) != _feeManager, "3017");
+        emit SetFeeManager(address(feeManager), _feeManager);
+        feeManager = IFeeManager(_feeManager);
     }
 
     // -- Getters --

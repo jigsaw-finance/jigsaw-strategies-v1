@@ -286,7 +286,7 @@ contract ReservoirSavingStrategyV2UpgradeTest is Test, BasicContractsFixture, St
 
     // Upgrade ReservoirSavingStrategy to ReservoirSavingStrategyV2
     function _upgradeToV2() internal override {
-        vm.startPrank(OWNER);
+        vm.startPrank(OWNER, OWNER);
 
         // Deploy the new implementation of ReservoirSavingStrategyV2
         address strategyV2Implementation = address(new ReservoirSavingStrategyV2());

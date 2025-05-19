@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import "forge-std/Test.sol";
 import "../fixtures/BasicContractsFixture.t.sol";
+import "forge-std/Test.sol";
 
 import { FeeManager } from "../../src/extensions/FeeManager.sol";
 
@@ -42,7 +42,7 @@ contract FeeManagerTest is BasicContractsFixture {
     }
 
     function test_returnsDefaultFeeWhenCustomFeeNotSet() public {
-        (uint256 defaultPerformanceFee,,)  = IStrategyManager(manager.strategyManager()).strategyInfo(address(strategy));
+        (uint256 defaultPerformanceFee,,) = IStrategyManager(manager.strategyManager()).strategyInfo(address(strategy));
         uint256 fee = feeManager.getHoldingFee(holding, strategy);
         assertEq(fee, defaultPerformanceFee, "Should return default fee when custom fee is not set");
     }
@@ -90,6 +90,8 @@ contract FeeManagerTest is BasicContractsFixture {
         feeManager.setHoldingCustomFee(holdings, strategies, fees);
 
         assertEq(feeManager.getHoldingFee(holdings[0], strategies[0]), customFee, "First fee should be set correctly");
-        assertEq(feeManager.getHoldingFee(holdings[1], strategies[1]), customFee + 100, "Second fee should be set correctly");
+        assertEq(
+            feeManager.getHoldingFee(holdings[1], strategies[1]), customFee + 100, "Second fee should be set correctly"
+        );
     }
 }

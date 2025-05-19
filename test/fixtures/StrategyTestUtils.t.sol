@@ -6,7 +6,7 @@ import "forge-std/Test.sol";
 abstract contract StrategyTestUtils is Test {
     function _upgradeToV2() internal virtual;
 
-    function _getStrategyStateVariables() internal virtual view returns (StrategyStateVariables memory);
+    function _getStrategyStateVariables() internal view virtual returns (StrategyStateVariables memory);
 
     function _validateStrategyStateVariables(
         StrategyStateVariables memory a,
