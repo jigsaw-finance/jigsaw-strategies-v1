@@ -33,6 +33,7 @@ import { StrategyWithoutRewardsMock } from "@jigsaw/test/utils/mocks/StrategyWit
 
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+import { FeeManager } from "../../src/extensions/FeeManager.sol";
 
 import { IWETH9 as IWETH } from "../../src/dinero/interfaces/IWETH9.sol";
 
@@ -59,6 +60,8 @@ abstract contract BasicContractsFixture is Test {
     StrategyManager internal strategyManager;
     StrategyWithoutRewardsMock internal strategyWithoutRewardsMock;
     StakerLightFactory internal stakerFactory;
+    FeeManager internal feeManager;
+
     address internal jRewards;
 
     // collateral to registry mapping
@@ -86,6 +89,7 @@ abstract contract BasicContractsFixture is Test {
         liquidationManager = new LiquidationManager(OWNER, address(manager));
         stablesManager = new StablesManager(OWNER, address(manager), address(jUsd));
         strategyManager = new StrategyManager(OWNER, address(manager));
+        feeManager = new FeeManager(OWNER, address(manager));
 
         sharesRegistry = new SharesRegistry(
             OWNER,

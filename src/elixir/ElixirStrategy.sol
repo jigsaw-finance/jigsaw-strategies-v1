@@ -28,8 +28,9 @@ import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
 import { ISdeUsdMin } from "./interfaces/ISdeUsdMin.sol";
 
-import { StrategyBaseUpgradeable } from "../StrategyBaseUpgradeable.sol";
+import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
 
+import { IFeeManager } from "../extensions/interfaces/IFeeManager.sol";
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
 
@@ -39,7 +40,7 @@ import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
  * @notice Implements deposit, withdrawal, and reward management for Elixir's deUSD strategy.
  * @author Hovooo (@hovooo)
  */
-contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
+contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
     using Math for uint256;
@@ -72,6 +73,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         address uniswapRouter; // The address of the UniswapV3 Router
         address oracle; // The address of the UniswapV3 Oracle
         address[] initialPools; // The address array of the UniswapV3 pools
+        address feeManager; // The address of the feeManager contract
     }
 
     // -- Errors --
@@ -214,6 +216,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
      * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
      * - `_params.manager` must be valid (`"3065"` error code if invalid).
      * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     * - `_params.feeManager` must be valid (`"3000"` error code if invalid).
      *
      * @param _params Struct containing all initialization parameters.
      */
@@ -228,6 +231,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         require(_params.uniswapRouter != address(0), "3000");
         require(_params.oracle != address(0), "3000");
         require(_params.initialPools.length != 0, "3000");
+        require(_params.feeManager != address(0), "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
@@ -247,6 +251,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeable {
         deUSD = _params.deUSD;
         sdeUSD = ISdeUsdMin(_params.tokenOut);
         uniswapRouter = _params.uniswapRouter;
+        feeManager = IFeeManager(_params.feeManager);
 
         // Set default allowed slippage percentage to 5%
         _setSlippagePercentage({ _newVal: 500 });

@@ -52,21 +52,53 @@ format: && _timer
 	forge fmt
 
 test-all: && _timer
+	# General tests
 	forge test -vvvv --match-contract AaveV3StrategyTest
 	forge test -vvvv --match-contract DineroStrategyTest
-	forge test -vvvv --match-contract IonStrategyTest
 	forge test -vvvv --match-contract PendleStrategyTest
 	forge test -vvvv --match-contract ReservoirSavingStrategyTest
 	forge test -vvvv --match-contract ReservoirMath
 	forge test -vvvv --match-contract ElixirStrategyTest
+
+	# Deployment tests
 	forge test -vvvv --match-contract DeployAllTest
+
+	# Core/Base tests
+	forge test -vvvv --match-contract StrategyBaseTest
+	forge test -vvvv --match-contract StrategyBaseV2Test
+
+	# Upgrading tests
+	just test-upgrades
+
+test-upgrades: && _timer
+	# Upgrading tests
+	just validate-upgrades
+	forge test -vvvv --match-contract AaveV3StrategyV2UpgradeTest
+	forge test -vvvv --match-contract DineroStrategyV2UpgradeTest
+	forge test -vvvv --match-contract PendleStrategyV2UpgradeTest
+	forge test -vvvv --match-contract ReservoirSavingStrategyV2UpgradeTest
+
+
+validate-upgrades: && _timer
+	# Validating upgrades
+	forge clean && forge build
+	npx @openzeppelin/upgrades-core validate --contract AaveV3StrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
+	npx @openzeppelin/upgrades-core validate --contract DineroStrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
+	npx @openzeppelin/upgrades-core validate --contract PendleStrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
+	npx @openzeppelin/upgrades-core validate --contract ReservoirSavingStrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
+
 
 test-gas: && _timer
     forge test --gas-report
 
 coverage-all: && _timer
-	forge coverage --report lcov --allow-failure
-	genhtml -o coverage --branch-coverage lcov.info --ignore-errors inconsistent
+	forge coverage --report lcov --allow-failure --no-match-coverage "(script|test)"
+	genhtml -o coverage --branch-coverage lcov.info --ignore-errors category --rc derive_function_end_line=0
+
+validate strategy: && _timer
+	forge clean
+	forge build
+	npx @openzeppelin/upgrades-core validate --contract {{strategy}} --requireReference --unsafeAllow "constructor"
 
 docs: && _timer
 	forge doc --build
