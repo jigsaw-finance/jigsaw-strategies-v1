@@ -68,11 +68,7 @@ test-all: && _timer
 	forge test -vvvv --match-contract StrategyBaseV2Test
 
 	# Upgrading tests
-	forge test -vvvv --match-contract AaveV3StrategyV2UpgradeTest
-	forge test -vvvv --match-contract DineroStrategyV2UpgradeTest
-	forge test -vvvv --match-contract ElixirStrategyV2UpgradeTest
-	forge test -vvvv --match-contract PendleStrategyV2UpgradeTest
-	forge test -vvvv --match-contract ReservoirSavingStrategyV2UpgradeTest
+	just test-upgrades
 
 test-upgrades: && _timer
 	# Upgrading tests
