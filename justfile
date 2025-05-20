@@ -78,8 +78,10 @@ test-upgrades: && _timer
 	forge test -vvvv --match-contract PendleStrategyV2UpgradeTest
 	forge test -vvvv --match-contract ReservoirSavingStrategyV2UpgradeTest
 
+
 validate-upgrades: && _timer
-	# Upgrading tests
+	# Validating upgrades
+	forge clean && forge build
 	npx @openzeppelin/upgrades-core validate --contract AaveV3StrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
 	npx @openzeppelin/upgrades-core validate --contract DineroStrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
 	npx @openzeppelin/upgrades-core validate --contract PendleStrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
