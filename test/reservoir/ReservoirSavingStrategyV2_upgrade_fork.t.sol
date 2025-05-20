@@ -34,54 +34,16 @@ contract ReservoirSavingStrategyV2UpgradeTest is Test, BasicContractsFixture, St
         init();
     }
 
-    function _deploy() internal {
-        address strategyImplementation = address(new ReservoirSavingStrategy());
-        bytes memory data = abi.encodeCall(
-            ReservoirSavingStrategy.initialize,
-            ReservoirSavingStrategy.InitializerParams({
-                owner: OWNER,
-                manager: address(manager),
-                creditEnforcer: RESERVOIR_CI,
-                pegStabilityModule: RESERVOIR_PSM,
-                savingModule: RESERVOIR_SM,
-                rUSD: rUSD,
-                stakerFactory: address(stakerFactory),
-                jigsawRewardToken: jRewards,
-                jigsawRewardDuration: 60 days,
-                tokenIn: tokenIn,
-                tokenOut: tokenOut
-            })
-        );
-
-        address proxy = address(new ERC1967Proxy(strategyImplementation, data));
-        strategy = ReservoirSavingStrategy(proxy);
-
-        // Add tested strategy to the StrategyManager for integration testing purposes
-        vm.startPrank((OWNER));
-        manager.whitelistToken(tokenIn);
-        strategyManager.addStrategy(address(strategy));
-
-        SharesRegistry tokenInSharesRegistry = new SharesRegistry(
-            OWNER,
-            address(manager),
-            address(tokenIn),
-            address(usdcOracle),
-            bytes(""),
-            ISharesRegistry.RegistryConfig({ collateralizationRate: 90_000, liquidationBuffer: 0, liquidatorBonus: 0 })
-        );
-        stablesManager.registerOrUpdateShareRegistry(address(tokenInSharesRegistry), address(tokenIn), true);
-        registries[address(tokenIn)] = address(tokenInSharesRegistry);
-
-        vm.stopPrank();
-    }
-
     // Test reinitialization
     function test_reinitialization_reservoir() public {
+        tokenIn = USDC;
+        tokenOut = srUSD;
+        _deploy();
         _validate_reinitialization();
     }
 
     // Tests if withdrawal works correctly when using USDC for deposit
-    function test_reservoirSaving_claimInvestment_when_USDC() public {
+    function test_reservoirSaving_claimInvestment_when_USDC_upgrade() public {
         tokenIn = USDC;
         tokenOut = srUSD;
 
@@ -101,21 +63,14 @@ contract ReservoirSavingStrategyV2UpgradeTest is Test, BasicContractsFixture, St
         (uint256 investedAmountBefore, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
 
-        skip(100 days);
-
         // Upgrade to V2
         _upgradeToV2();
 
-        uint256 expectedUsdcWithdrawalAmountAfterReservoirFee =
-            totalShares * ISM(RESERVOIR_SM).currentPrice() / 1e8 * 1e6 / (1e6 + ISM(RESERVOIR_SM).redeemFee());
-
-        uint256 fee = _getFeeAbsolute(
-            expectedUsdcWithdrawalAmountAfterReservoirFee / 1e12 - investedAmountBefore, manager.performanceFee()
-        );
+        skip(100 days);
 
         vm.prank(user, user);
 
-        (uint256 assetAmount, uint256 tokenInAmount,,) = strategyManager.claimInvestment({
+        (uint256 assetAmount, uint256 tokenInAmount,, uint256 fee) = strategyManager.claimInvestment({
             _holding: userHolding,
             _token: tokenIn,
             _strategy: address(strategy),
@@ -310,6 +265,51 @@ contract ReservoirSavingStrategyV2UpgradeTest is Test, BasicContractsFixture, St
             tokenOut: strategy.tokenOut(),
             sharesDecimals: strategy.sharesDecimals()
         });
+    }
+
+    // -- Utilities --
+    function _deploy() internal {
+        tokenIn = rUSD;
+        tokenOut = srUSD;
+
+        address strategyImplementation = address(new ReservoirSavingStrategy());
+        bytes memory data = abi.encodeCall(
+            ReservoirSavingStrategy.initialize,
+            ReservoirSavingStrategy.InitializerParams({
+                owner: OWNER,
+                manager: address(manager),
+                creditEnforcer: RESERVOIR_CI,
+                pegStabilityModule: RESERVOIR_PSM,
+                savingModule: RESERVOIR_SM,
+                rUSD: rUSD,
+                stakerFactory: address(stakerFactory),
+                jigsawRewardToken: jRewards,
+                jigsawRewardDuration: 60 days,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut
+            })
+        );
+
+        address proxy = address(new ERC1967Proxy(strategyImplementation, data));
+        strategy = ReservoirSavingStrategy(proxy);
+
+        // Add tested strategy to the StrategyManager for integration testing purposes
+        vm.startPrank((OWNER));
+        manager.whitelistToken(tokenIn);
+        strategyManager.addStrategy(address(strategy));
+
+        SharesRegistry tokenInSharesRegistry = new SharesRegistry(
+            OWNER,
+            address(manager),
+            address(tokenIn),
+            address(usdcOracle),
+            bytes(""),
+            ISharesRegistry.RegistryConfig({ collateralizationRate: 90_000, liquidationBuffer: 0, liquidatorBonus: 0 })
+        );
+        stablesManager.registerOrUpdateShareRegistry(address(tokenInSharesRegistry), address(tokenIn), true);
+        registries[address(tokenIn)] = address(tokenInSharesRegistry);
+
+        vm.stopPrank();
     }
 }
 
