@@ -76,7 +76,7 @@ contract ReservoirSavingStrategyV2UpgradeTest is Test, BasicContractsFixture, St
     }
 
     // Test reinitialization
-    function test_reinitialization() public {
+    function test_reinitialization_reservoir() public {
         _validate_reinitialization();
     }
 
