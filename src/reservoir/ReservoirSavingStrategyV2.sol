@@ -270,7 +270,7 @@ contract ReservoirSavingStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
 
         params.investment = (recipients[_recipient].investedAmount * params.shareRatio) / 10 ** params.shareDecimals;
         // Calculate rUSD to withdraw for specified shares, accounting for srUSD price fluctuation and redeem fee.
-        params.assetsToWithdraw = _getAssetsToWithdraw({
+        params.assetsToWithdraw = getAssetsToWithdraw({
             _shares: params.shares,
             _currentPrice: ISavingModule(savingModule).currentPrice(),
             _redeemFee: ISavingModule(savingModule).redeemFee()
@@ -336,30 +336,6 @@ contract ReservoirSavingStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     }
 
     /**
-     * @notice Calculates the amount of assets to withdraw based exactly on specified shares amount
-     * @param _shares The amount of shares to convert to assets
-     * @param _currentPrice The current price of srUSD
-     * @param _redeemFee The current redemption fee
-     * @return assetsToWithdraw The amount of assets that can be withdrawn
-     */
-    function _getAssetsToWithdraw(
-        uint256 _shares,
-        uint256 _currentPrice,
-        uint256 _redeemFee
-    ) internal pure returns (uint256 assetsToWithdraw) {
-        // Initial estimate: Convert shares to assets considering the current price and redemption fee
-        // This formula gives us a starting point that's likely close to the correct value
-        assetsToWithdraw = (_shares * _currentPrice * RESERVOIR_FEE_PRECISION)
-            / (RESERVOIR_PRICE_PRECISION * (RESERVOIR_FEE_PRECISION + _redeemFee));
-
-        // Decrement the assets amount until we find the maximum valid withdrawal
-        // This ensures we don't try to withdraw more than specified shares
-        while (_previewRedeem(assetsToWithdraw, _currentPrice, _redeemFee) > _shares) {
-            assetsToWithdraw--;
-        }
-    }
-
-    /**
      * @notice Previews the amount of srUSD that would be burned for a given redemption
      * @param _amount The amount of assets to redeem
      * @param _currentPrice The current price of srUSD
@@ -393,6 +369,30 @@ contract ReservoirSavingStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     }
 
     // -- Getters --
+
+    /**
+     * @notice Calculates the amount of assets to withdraw based exactly on specified shares amount
+     * @param _shares The amount of shares to convert to assets
+     * @param _currentPrice The current price of srUSD
+     * @param _redeemFee The current redemption fee
+     * @return assetsToWithdraw The amount of assets that can be withdrawn
+     */
+    function getAssetsToWithdraw(
+        uint256 _shares,
+        uint256 _currentPrice,
+        uint256 _redeemFee
+    ) public pure returns (uint256 assetsToWithdraw) {
+        // Initial estimate: Convert shares to assets considering the current price and redemption fee
+        // This formula gives us a starting point that's likely close to the correct value
+        assetsToWithdraw = (_shares * _currentPrice * RESERVOIR_FEE_PRECISION)
+            / (RESERVOIR_PRICE_PRECISION * (RESERVOIR_FEE_PRECISION + _redeemFee));
+
+        // Decrement the assets amount until we find the maximum valid withdrawal
+        // This ensures we don't try to withdraw more than specified shares
+        while (_previewRedeem(assetsToWithdraw, _currentPrice, _redeemFee) > _shares) {
+            assetsToWithdraw--;
+        }
+    }
 
     /**
      * @notice Returns the address of the receipt token.
