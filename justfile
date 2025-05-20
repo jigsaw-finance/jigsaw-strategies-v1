@@ -90,8 +90,8 @@ test-gas: && _timer
     forge test --gas-report
 
 coverage-all: && _timer
-	forge coverage --report lcov --allow-failure
-	genhtml -o coverage --branch-coverage lcov.info --ignore-errors inconsistent
+	forge coverage --report lcov --allow-failure --no-match-coverage "(script|test)"
+	genhtml -o coverage --branch-coverage lcov.info --ignore-errors category --rc derive_function_end_line=0
 
 validate strategy: && _timer
 	forge clean
