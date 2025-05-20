@@ -17,7 +17,7 @@ contract StrategyBaseV2Test is BasicContractsFixture {
 
     error OwnableUnauthorizedAccount(address account);
 
-    event SetFeeManager(address indexed oldFeeManager, address indexed newFeeManager);
+    event FeeManagerUpdated(address indexed oldFeeManager, address indexed newFeeManager);
 
     StrategyMockImpl internal strategy;
     StrategyV2MockImpl internal strategyV2;
@@ -77,7 +77,7 @@ contract StrategyBaseV2Test is BasicContractsFixture {
         vm.prank(OWNER);
 
         vm.expectEmit(true, true, false, false);
-        emit SetFeeManager(address(feeManager), address(newFeeManager));
+        emit FeeManagerUpdated(address(feeManager), address(newFeeManager));
 
         strategyV2.setFeeManager(address(newFeeManager));
         assertEq(
