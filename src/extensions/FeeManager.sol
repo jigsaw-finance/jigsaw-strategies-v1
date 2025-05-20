@@ -93,9 +93,12 @@ contract FeeManager is IFeeManager, Ownable2Step {
      * @return `_holding`'s performance fee for `_strategy`.
      */
     function getHoldingFee(address _holding, address _strategy) external view override returns (uint256) {
+        // Check if a custom fee is set for this holding-strategy pair and return if set.
+        if (holdingFee[_holding][_strategy] != 0) return holdingFee[_holding][_strategy];
+
+        // If no custom fee is set, return the default performance fee from the strategy manager
         (uint256 defaultPerformanceFee,,) = IStrategyManager(manager.strategyManager()).strategyInfo(address(_strategy));
-        uint256 holdingCustomFee = holdingFee[_holding][_strategy];
-        return holdingCustomFee == 0 ? defaultPerformanceFee : holdingCustomFee;
+        return defaultPerformanceFee;
     }
 
     // -- Utilities --
