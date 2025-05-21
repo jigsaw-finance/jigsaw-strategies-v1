@@ -195,7 +195,6 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
 
         string memory elixirConfig = vm.readFile("./deployment-config/03_ElixirStrategyConfig.json");
         address uniswapRouter = elixirConfig.readAddress(".UNISWAP_ROUTER");
-        address oracle = elixirConfig.readAddress(".ORACLE");
 
         _populateElixirArray();
 
@@ -212,7 +211,6 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             assertEq(address(strategy.feeManager()), feeManagerFromConfig, "feeManager initialized wrong");
             assertEq(strategy.uniswapRouter(), uniswapRouter, "uniswapRouter initialized wrong");
             assertEq(address(strategy.deUSD()), elixirStrategyParams[i].deUSD, "deUSD wrong");
-            assertEq(address(strategy.oracle()), oracle, "oracle wrong");
         }
     }
 

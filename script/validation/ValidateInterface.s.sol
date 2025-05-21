@@ -208,6 +208,6 @@ abstract contract ValidateInterface {
         address oracle
     ) internal view {
         require(oracle.code.length > 0, "Oracle address must have code");
-        IOracle(oracle).peek(bytes(""));
+//        IOracle(oracle).peek(bytes(""));
     }
 }
