@@ -1,38 +1,44 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 // -- Jigsaw --
 
-import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
-import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
+import { IAutoPxEthMin } from "./interfaces/dinero/IAutoPxEthMin.sol";
+import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
 
 // -- Aave --
-import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
-import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
-import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
+
+import { IIonPool } from "../../src/ion/interfaces/IIonPool.sol";
+import { ICreditEnforcerMin } from "./interfaces/reservoir/ICreditEnforcerMin.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // -- Ion --
-import { IIonPool } from "../../src/ion/interfaces/IIonPool.sol";
+import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 
 // -- Pendle --
 import { IPAllActionV3 } from "@pendle/interfaces/IPAllActionV3.sol";
 import { IPMarket } from "@pendle/interfaces/IPMarket.sol";
 
 // -- Reservoir --
-import { ICreditEnforcerMin } from "./interfaces/reservoir/ICreditEnforcerMin.sol";
+
+import { IPirexEthMin } from "./interfaces/dinero/IPirexEthMin.sol";
 import { IPegStabilityModuleMin } from "./interfaces/reservoir/IPegStabilityModuleMin.sol";
-import { ISavingModuleMin } from "./interfaces/reservoir/ISavingModuleMin.sol";
+import { IPool } from "@aave/v3-core/interfaces/IPool.sol";
 
 // -- Dinero --
-import { IAutoPxEthMin } from "./interfaces/dinero/IAutoPxEthMin.sol";
-import { IPirexEthMin } from "./interfaces/dinero/IPirexEthMin.sol";
 
+import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+import { ISavingModuleMin } from "./interfaces/reservoir/ISavingModuleMin.sol";
+import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewardsController.sol";
+
+// -- Elixir --
+import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import { IOracle } from "@jigsaw/src/interfaces/oracle/IOracle.sol";
 /**
  * @notice Validates that an address implements the expected interface by checking there is code at the provided address
  * and calling a few functions.
  */
+
 abstract contract ValidateInterface {
     // -- General validation --
 
@@ -186,5 +192,22 @@ abstract contract ValidateInterface {
         IAutoPxEthMin(autoPirexEth).lastTimeRewardApplicable();
         IAutoPxEthMin(autoPirexEth).rewardPerToken();
         IAutoPxEthMin(autoPirexEth).withdrawalPenalty();
+    }
+
+    // -- Elixir validation --
+
+    function _validateUniswapRouter(
+        address router
+    ) internal view {
+        require(router.code.length > 0, "Router address must have code");
+        // @todo find a better way to validate the router
+        // ISwapRouter(router).exactInput();
+    }
+
+    function _validateOracle(
+        address oracle
+    ) internal view {
+        require(oracle.code.length > 0, "Oracle address must have code");
+        IOracle(oracle).peek(bytes(""));
     }
 }

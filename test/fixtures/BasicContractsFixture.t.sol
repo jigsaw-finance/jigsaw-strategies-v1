@@ -160,6 +160,7 @@ abstract contract BasicContractsFixture is Test {
             "./deployment-config/00_CommonConfig.json", ".STRATEGY_MANAGER"
         );
         Strings.toHexString(uint160(address(stakerFactory)), 20).write("./deployments.json", ".STAKER_FACTORY");
+        Strings.toHexString(uint160(address(feeManager)), 20).write("./deployment-config/00_CommonConfig.json", ".FEE_MANAGER");
 
         vm.stopPrank();
     }
