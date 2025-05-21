@@ -396,9 +396,9 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         elixirStrategyParams.push(
             ElixirStrategyParams({
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7,    //USDT
-                tokenOut: 0x5C5b196aBE0d54485975D1Ec29617D42D9198326,   //sdeUSD
-                deUSD: 0x15700B564Ca08D9439C58cA5053166E8317aa138,      //deUSD
+                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7, //USDT
+                tokenOut: 0x5C5b196aBE0d54485975D1Ec29617D42D9198326, //sdeUSD
+                deUSD: 0x15700B564Ca08D9439C58cA5053166E8317aa138, //deUSD
                 initialPools: initialPools
             })
         );

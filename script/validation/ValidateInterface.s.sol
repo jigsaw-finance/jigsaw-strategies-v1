@@ -200,7 +200,7 @@ abstract contract ValidateInterface {
         address router
     ) internal view {
         require(router.code.length > 0, "Router address must have code");
-        // @todo find a better way to validate the router
+        // @todo find a way to validate the router
         // ISwapRouter(router).exactInput();
     }
 
@@ -208,6 +208,7 @@ abstract contract ValidateInterface {
         address oracle
     ) internal view {
         require(oracle.code.length > 0, "Oracle address must have code");
-//        IOracle(oracle).peek(bytes(""));
+        // @todo find a way to validate the oracle
+        // IOracle(oracle).peek(bytes(""));
     }
 }
