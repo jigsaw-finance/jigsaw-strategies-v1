@@ -243,10 +243,10 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         if (keccak256(bytes(_strategy)) == ELIXIR_STRATEGY) {
             string memory elixirConfig = vm.readFile("./deployment-config/03_ElixirStrategyConfig.json");
             address uniswapRouter = elixirConfig.readAddress(".UNISWAP_ROUTER");
-            address oracle = elixirConfig.readAddress(".ORACLE");
+            address USDC_USD_ORACLE = elixirConfig.readAddress(".USDC_USD_ORACLE");
 
             _validateUniswapRouter(uniswapRouter);
-            _validateOracle(oracle);
+            _validateOracle(USDC_USD_ORACLE);
 
             _populateElixirArray();
 
@@ -263,7 +263,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                         jigsawRewardToken: jigsawRewardToken,
                         feeManager: feeManager,
                         uniswapRouter: uniswapRouter,
-                        oracle: oracle,
+                        oracle: USDC_USD_ORACLE,
                         jigsawRewardDuration: elixirStrategyParams[i].jigsawRewardDuration,
                         tokenIn: elixirStrategyParams[i].tokenIn,
                         tokenOut: elixirStrategyParams[i].tokenOut,
@@ -387,11 +387,8 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
     }
 
     function _populateElixirArray() internal {
-        // @todo check addresses
-
-        address[] memory initialPools = new address[](2);
-        initialPools[0] = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6; // UniswapV3Pool
-        initialPools[1] = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6; // UniswapV3Pool
+        address[] memory initialPools = new address[](1);
+        initialPools[0] = 0xe780dF05ED3D1D29B35Edaf9c8F3131e9F4C799e; // UniswapV3 deUSD / USDC Pool
 
         elixirStrategyParams.push(
             ElixirStrategyParams({
