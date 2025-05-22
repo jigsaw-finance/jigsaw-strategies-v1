@@ -26,6 +26,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
     address ownerFromConfig;
     address managerFromConfig;
     address jigsawRewardTokenFromConfig;
+    address feeManagerFromConfig;
     address[] internal strategies;
 
     function setUp() public {
@@ -36,6 +37,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         ownerFromConfig = commonConfig.readAddress(".INITIAL_OWNER");
         managerFromConfig = commonConfig.readAddress(".MANAGER");
         jigsawRewardTokenFromConfig = commonConfig.readAddress(".JIGSAW_REWARDS");
+        feeManagerFromConfig = commonConfig.readAddress(".FEE_MANAGER");
     }
 
     function test_all_initializations() public {
@@ -43,6 +45,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         dinero_initialization();
         pendle_initialization();
         reservoir_initialization();
+        elixir_initialization();
     }
 
     function aave_initialization() public {
@@ -175,6 +178,40 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             assertEq(
                 staker.rewardsDuration(), reservoirSavingStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong"
             );
+        }
+    }
+
+    function elixir_initialization() public {
+        init();
+
+        DeployImpl implDeployer = new DeployImpl();
+        address implementation = implDeployer.run("ElixirStrategy");
+
+        // Save implementation address to deployments
+        Strings.toHexString(uint160(implementation), 20).write("./deployments.json", ".ElixirStrategy_IMPL");
+
+        proxyDeployer = new DeployProxy();
+        strategies = proxyDeployer.run({ _strategy: "ElixirStrategy" });
+
+        string memory elixirConfig = vm.readFile("./deployment-config/03_ElixirStrategyConfig.json");
+        address uniswapRouter = elixirConfig.readAddress(".UNISWAP_ROUTER");
+
+        _populateElixirArray();
+
+        for (uint256 i = 0; i < elixirStrategyParams.length; i++) {
+            ElixirStrategy strategy = ElixirStrategy(strategies[i]);
+            IStakerLight staker = strategy.jigsawStaker();
+
+            assertEq(strategy.owner(), ownerFromConfig, "Owner initialized wrong");
+            assertEq(address(strategy.manager()), managerFromConfig, "ManagerContainer wrong");
+            assertEq(strategy.tokenIn(), elixirStrategyParams[i].tokenIn, "tokenIn initialized wrong");
+            assertEq(strategy.tokenOut(), elixirStrategyParams[i].tokenOut, "tokenOut initialized wrong");
+            assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
+            assertEq(staker.rewardsDuration(), elixirStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong");
+            assertEq(address(strategy.feeManager()), feeManagerFromConfig, "feeManager initialized wrong");
+            assertEq(strategy.uniswapRouter(), uniswapRouter, "uniswapRouter initialized wrong");
+            assertEq(address(strategy.deUSD()), elixirStrategyParams[i].deUSD, "deUSD wrong");
+            strategy.getAllowedAmountOutMin(1e18, ElixirStrategy.SwapDirection.FromTokenIn);
         }
     }
 

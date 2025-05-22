@@ -20,9 +20,11 @@ import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwap
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
+
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
 import { ISwapManager } from "@jigsaw/src/interfaces/core/ISwapManager.sol";
+import { IOracle } from "@jigsaw/src/interfaces/oracle/IOracle.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
@@ -121,6 +123,13 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      */
     event ExactInputSwap(address indexed holding, bytes path, uint256 amountIn, uint256 amountOut);
 
+    /**
+     * @notice Emitted when the oracle is updated.
+     * @param oldOracle The old oracle address.
+     * @param newOracle The new oracle address.
+     */
+    event OracleUpdated(address oldOracle, address newOracle);
+
     // -- State variables --
 
     /**
@@ -164,9 +173,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     ISdeUsdMin public sdeUSD;
 
     /**
-     * @notice The GenericUniswapV3Oracle contract.
+     * @notice The oracle contract used to calculate and validate minimum output amounts for UniswapV3 swaps.
      */
-    GenericUniswapV3Oracle public oracle;
+    IOracle public oracle;
 
     /**
      * @notice The number of decimals of the strategy's shares.
@@ -235,13 +244,15 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
-        oracle = new GenericUniswapV3Oracle({
-            _initialOwner: _params.owner,
-            _underlying: _params.tokenIn,
-            _quoteToken: _params.deUSD,
-            _quoteTokenOracle: _params.oracle,
-            _uniswapV3Pools: _params.initialPools
-        });
+        oracle = IOracle(
+            new GenericUniswapV3Oracle({
+                _initialOwner: _params.owner,
+                _underlying: _params.deUSD,
+                _quoteToken: _params.tokenIn,
+                _quoteTokenOracle: _params.oracle,
+                _uniswapV3Pools: _params.initialPools
+            })
+        );
 
         manager = IManager(_params.manager);
         tokenIn = _params.tokenIn;
@@ -484,6 +495,24 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         _setSlippagePercentage({ _newVal: _newVal });
     }
 
+    /**
+     * @notice Updates the oracle contract.
+     *
+     * @dev The oracle is used to calculate and validate minimum output amounts for UniswapV3 swaps.
+     * @dev Ensure the new oracle is compatible with the `getAllowedAmountOutMin()`'s requirements.
+     *
+     * @param _newOracle The new oracle address.
+     */
+    function updateOracle(
+        address _newOracle
+    ) external onlyOwner {
+        require(_newOracle != address(0), "3000");
+        require(_newOracle != address(oracle), "3017");
+
+        emit OracleUpdated({ oldOracle: address(oracle), newOracle: _newOracle });
+        oracle = IOracle(_newOracle);
+    }
+
     // -- Getters --
 
     /**
@@ -502,8 +531,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         // Get tokenIn rate to get  minimum acceptable amount out
         (, uint256 rate) = oracle.peek(bytes(""));
         uint256 expectedTokenOut = _swapDirection == SwapDirection.FromTokenIn
-            ? _amount.mulDiv(1e18, rate, Math.Rounding.Ceil)
-            : _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil);
+            ? _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil)
+            : _amount.mulDiv(1e18, rate, Math.Rounding.Ceil);
 
         // Calculate min tokenOut amount with max allowed slippage
         return _applySlippage(expectedTokenOut);

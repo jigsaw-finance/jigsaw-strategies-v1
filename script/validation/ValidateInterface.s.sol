@@ -4,9 +4,10 @@ pragma solidity 0.8.22;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // -- Jigsaw --
-
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
+import { IOracle } from "@jigsaw/src/interfaces/oracle/IOracle.sol";
+import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 // -- Aave --
 import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
@@ -33,6 +34,7 @@ import { IPirexEthMin } from "./interfaces/dinero/IPirexEthMin.sol";
  * @notice Validates that an address implements the expected interface by checking there is code at the provided address
  * and calling a few functions.
  */
+
 abstract contract ValidateInterface {
     // -- General validation --
 
@@ -186,5 +188,22 @@ abstract contract ValidateInterface {
         IAutoPxEthMin(autoPirexEth).lastTimeRewardApplicable();
         IAutoPxEthMin(autoPirexEth).rewardPerToken();
         IAutoPxEthMin(autoPirexEth).withdrawalPenalty();
+    }
+
+    // -- Elixir validation --
+
+    function _validateUniswapRouter(
+        address router
+    ) internal view {
+        require(router.code.length > 0, "Router address must have code");
+    }
+
+    function _validateOracle(
+        address oracle
+    ) internal view {
+        require(oracle.code.length > 0, "Oracle address must have code");
+        IOracle(oracle).name();
+        IOracle(oracle).symbol();
+        IOracle(oracle).underlying();
     }
 }
