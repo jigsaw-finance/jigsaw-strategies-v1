@@ -25,5 +25,10 @@ sort_imports = true
 SEPOLIA = "${SEPOLIA_RPC_URL}"
 ANVIL = "${ANVIL_RPC_URL}"
 MAINNET = "${MAINNET_RPC_URL}"
+SONIC = "${SONIC_RPC_URL}"
+146 = "${SONIC_RPC_URL}"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[etherscan]
+146 = { key = "${SONIC_ETHERSCAN_API_KEY}", url = "${SONIC_RPC_URL}/verify/etherscan" }

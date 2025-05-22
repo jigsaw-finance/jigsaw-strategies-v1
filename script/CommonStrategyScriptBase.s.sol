@@ -183,7 +183,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
             AaveStrategyParams({
                 rewardToken: address(0),
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x50c42dEAcD8Fc9773493ED674b675bE577f2634b, //wETH
+                tokenIn: 0x50c42dEAcD8Fc9773493ED674b675bE577f2634b, //WETH
                 tokenOut: 0xe18Ab82c81E7Eecff32B8A82B1b7d2d23F1EcE96
             })
         );
@@ -203,9 +203,37 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
             PendleStrategyParams({
                 pendleMarket: 0x3aeF1d372d0a7a7E482F465Bc14A42D78f920392,
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xE5DA20F15420aD15DE0fa650600aFc998bbE3955, // stS
+                tokenIn: 0xE5DA20F15420aD15DE0fa650600aFc998bbE3955, // stS - until 29 May 2025
+                rewardToken: 0xf1eF7d2D4C0c881cd634481e0586ed5d2871A74B
+            })
+        );
+
+                pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0x004f76045b42ef3e89814b12b37E69da19C8a212,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x9fb76f7ce5FCeAA2C42887ff441D46095E494206, // wstkscUSD - until 18 Dec 2025
+                rewardToken: 0xf1eF7d2D4C0c881cd634481e0586ed5d2871A74B
+            })
+        );
+
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0x7e2bcdB749D90Aa1E9E7262872AC8B1e062B2C4D,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0xE8a41c62BB4d5863C6eadC96792cFE90A1f37C47, // wstksceth - until 18 Dec 2025
+                rewardToken: 0xf1eF7d2D4C0c881cd634481e0586ed5d2871A74B
+            })
+        );
+
+        pendleStrategyParams.push(
+            PendleStrategyParams({
+                pendleMarket: 0xC1fd739f2Bf1Aad96F04d6AE35ED04DA4D68366b,
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: 0x9F0dF7799f6FDAd409300080cfF680f5A23df4b1, // wOS - until 18 Dec 2025
                 rewardToken: 0xf1eF7d2D4C0c881cd634481e0586ed5d2871A74B
             })
         );
     }
-}
+    }
+
