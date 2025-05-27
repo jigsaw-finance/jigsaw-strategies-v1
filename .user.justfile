@@ -22,7 +22,7 @@ tenderly-deploy-stakerFactory: && _timer
 	echo "Deploying Staker Factory on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the StakerFactory
-	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvvv --broadcast --verify --etherscan-api-key ${TENDERLY_ETHERSCAN_API_KEY} --verifier-url ${TENDERLY_VERIFIER_URL}
+	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY} --verifier-url ${VERIFIER_URL}
 	# Update deployments.json
 	FACTORY_ADDRESS=$(jq -r '.returns.stakerFactory.value' "broadcast/0_DeployStakerFactory.s.sol/$CHAIN_ID/run-latest.json")
 	jq --arg chainId "$CHAIN_ID" --arg address "$FACTORY_ADDRESS" \
@@ -35,7 +35,7 @@ tenderly-deploy-impl STRATEGY: && _timer
 	echo "Deploying implementation for " {{STRATEGY}} " on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the implementation
-	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${TENDERLY_ETHERSCAN_API_KEY} --verifier-url ${TENDERLY_VERIFIER_URL}
+	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY} --verifier-url ${VERIFIER_URL}
 
 	# Update deployments.json
 	IMPL_ADDRESS=$(jq -r '.returns.implementation.value' "broadcast/1_DeployImpl.s.sol/"$CHAIN_ID"/run-latest.json")
@@ -51,7 +51,7 @@ tenderly-deploy-proxy STRATEGY: && _timer
 	echo "Deploying proxy for " {{STRATEGY}} " on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the proxy
-	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvvv --broadcast --verify --etherscan-api-key ${TENDERLY_ETHERSCAN_API_KEY} --verifier-url ${TENDERLY_VERIFIER_URL}
+	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY} --verifier-url ${VERIFIER_URL}
 	
 	# Save proxy addresses
 	PROXIES=$(jq -c '.returns.proxies.value' "broadcast/2_DeployProxy.s.sol/${CHAIN_ID}/run-latest.json")
@@ -81,7 +81,7 @@ tenderly-deploy-feeManager: && _timer
     echo "Deploying FeeManager on chain $CHAIN ..."
 
     # Run the Forge script to deploy the FeeManager
-    forge script DeployFeeManager --rpc-url $CHAIN --slow -vvvvv --broadcast --verify --etherscan-api-key ${TENDERLY_ETHERSCAN_API_KEY} --verifier-url ${TENDERLY_VERIFIER_URL}
+    forge script DeployFeeManager --rpc-url $CHAIN --slow -vvvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY} --verifier-url ${VERIFIER_URL}
     # Update deployments.json
     FEE_MANAGER_ADDRESS=$(jq -r '.returns.feeManager.value' "broadcast/3_DeployFeeManager.s.sol/$CHAIN_ID/run-latest.json")
     jq --arg chainId "$CHAIN_ID" --arg address "$FEE_MANAGER_ADDRESS" \
