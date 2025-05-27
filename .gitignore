@@ -15,6 +15,7 @@ docs/
 
 # Dotenv file
 .env
+.env.tenderly
 
 .vs/*
 .VSCodeCounter/*

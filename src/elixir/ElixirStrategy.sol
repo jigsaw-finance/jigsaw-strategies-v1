@@ -35,6 +35,7 @@ import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
 import { IFeeManager } from "../extensions/interfaces/IFeeManager.sol";
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
+import { StrategyOracleLib } from "../libraries/StrategyOracleLib.sol";
 
 /**
  * @title ElixirStrategy
@@ -244,15 +245,13 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
-        oracle = IOracle(
-            new GenericUniswapV3Oracle({
-                _initialOwner: _params.owner,
-                _underlying: _params.deUSD,
-                _quoteToken: _params.tokenIn,
-                _quoteTokenOracle: _params.oracle,
-                _uniswapV3Pools: _params.initialPools
-            })
-        );
+        oracle = StrategyOracleLib.getStrategyOracle({
+            _initialOwner: _params.owner,
+            _underlying: _params.deUSD,
+            _quoteToken: _params.tokenIn,
+            _quoteTokenOracle: _params.oracle,
+            _uniswapV3Pools: _params.initialPools
+        });
 
         manager = IManager(_params.manager);
         tokenIn = _params.tokenIn;

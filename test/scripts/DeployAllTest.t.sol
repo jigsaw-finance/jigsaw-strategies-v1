@@ -18,6 +18,7 @@ import { DeployImpl } from "script/1_DeployImpl.s.sol";
 import { DeployProxy } from "script/2_DeployProxy.s.sol";
 
 import { IStakerLight } from "../../src/staker/interfaces/IStakerLight.sol";
+import {DeployFeeManager} from "../../script/3_DeployFeeManager.s.sol";
 
 contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture {
     using StdJson for string;
@@ -26,7 +27,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
     address ownerFromConfig;
     address managerFromConfig;
     address jigsawRewardTokenFromConfig;
-    address feeManagerFromConfig;
+    address feeManagerAddress;
     address[] internal strategies;
 
     function setUp() public {
@@ -37,7 +38,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         ownerFromConfig = commonConfig.readAddress(".INITIAL_OWNER");
         managerFromConfig = commonConfig.readAddress(".MANAGER");
         jigsawRewardTokenFromConfig = commonConfig.readAddress(".JIGSAW_REWARDS");
-        feeManagerFromConfig = commonConfig.readAddress(".FEE_MANAGER");
+        feeManagerAddress = address(feeManager);
     }
 
     function test_all_initializations() public {
@@ -208,7 +209,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
             assertEq(strategy.tokenOut(), elixirStrategyParams[i].tokenOut, "tokenOut initialized wrong");
             assertEq(staker.rewardToken(), jigsawRewardTokenFromConfig, "JigsawRewardToken initialized wrong");
             assertEq(staker.rewardsDuration(), elixirStrategyParams[i].jigsawRewardDuration, "RewardsDuration wrong");
-            assertEq(address(strategy.feeManager()), feeManagerFromConfig, "feeManager initialized wrong");
+            assertEq(address(strategy.feeManager()), feeManagerAddress, "feeManager initialized wrong");
             assertEq(strategy.uniswapRouter(), uniswapRouter, "uniswapRouter initialized wrong");
             assertEq(address(strategy.deUSD()), elixirStrategyParams[i].deUSD, "deUSD wrong");
             strategy.getAllowedAmountOutMin(1e18, ElixirStrategy.SwapDirection.FromTokenIn);
@@ -227,5 +228,13 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
         vm.assertEq(
             StakerLightFactory(factory).referenceImplementation(), staker, "ReferenceImplementation in factory wrong"
         );
+    }
+
+    function test_deployFeeManager() public {
+        DeployFeeManager feeManagerDeployer = new DeployFeeManager();
+        address feeManager = feeManagerDeployer.run();
+
+        vm.assertEq(FeeManager(feeManager).owner(), OWNER, "Owner is wrong");
+        vm.assertEq(address(FeeManager(feeManager).manager()), managerFromConfig, "Manager is wrong");
     }
 }

@@ -103,7 +103,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address manager = commonConfig.readAddress(".MANAGER");
         address jigsawRewardToken = commonConfig.readAddress(".JIGSAW_REWARDS");
         address stakerFactory = deployments.readAddress(".STAKER_FACTORY");
-        address feeManager = commonConfig.readAddress(".FEE_MANAGER");
+        address feeManager = deployments.readAddress(".FEE_MANAGER");
 
         _validateManager(manager);
         _validateErc20(jigsawRewardToken);

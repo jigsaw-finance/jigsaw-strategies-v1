@@ -1,5 +1,6 @@
 {
   "STAKER_FACTORY": "",
+  "FEE_MANAGER": "0xBb976201B607f16dc76586dB8Ca5EF6C50C41c22",
   "AaveV3Strategy_IMPL": "",
   "AaveV3Strategy_PROXIES": "",
   "DineroStrategy_IMPL": "",
@@ -11,5 +12,7 @@
   "ReservoirSavingStrategy_IMPL": "",
   "ReservoirSavingStrategy_PROXIES": "",
   "ElixirStrategy_IMPL": "",
-  "ElixirStrategy_PROXIES": ""
+  "ElixirStrategy_PROXIES": "",
+  "AaveStrategy_IMPL": "",
+  "AaveStrategy_PROXIES": ""
 }
