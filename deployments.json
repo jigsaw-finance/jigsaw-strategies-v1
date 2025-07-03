@@ -42,7 +42,7 @@
     }
   ],
   "PendleStrategy_IMPL": "0x954f081ddA5af104dE425D3E61b2f541Ce3d6878",
-  "PendleStrategy_PROXIES": "[0xD744C84C1C09B580F4b1796DAaeBca913a88D31d]",
+  "PendleStrategy_PROXIES": "[0x27C70b007567b96c874A17Ed9AEa5450C96df043]",
   "ReservoirSavingStrategy_IMPL": "0x612b311499Bd992DF1d197e3d262E2b55a40ca04",
   "ReservoirSavingStrategy_PROXIES": [
     {
