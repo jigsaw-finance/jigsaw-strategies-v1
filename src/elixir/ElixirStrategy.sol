@@ -28,7 +28,7 @@ import { IOracle } from "@jigsaw/src/interfaces/oracle/IOracle.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
-import { ISdeUsdMin } from "./interfaces/ISdeUsdMin.sol";
+import { IERC4626, ISdeUsdMin } from "./interfaces/ISdeUsdMin.sol";
 
 import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
 
@@ -406,7 +406,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         _genericCall({
             _holding: _recipient,
             _contract: tokenOut,
-            _call: abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+            _call: sdeUSD.cooldownDuration() == 0
+                ? abi.encodeCall(IERC4626.redeem, (params.shares, address(this), _recipient))
+                : abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
         });
 
         uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
