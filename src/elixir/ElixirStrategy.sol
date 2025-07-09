@@ -203,6 +203,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      */
     mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
 
+    /**
+     * @notice Mapping of recipient addresses to the number of shares pending withdrawal after initiating cooldown.
+     * @dev Used to track shares that are in the cooldown period before they can be withdrawn.
+     */
+    mapping(address recipient => uint256 sharesInCooldown) public sharesPendingCooldown;
+
     // -- Constructor --
 
     /**
@@ -354,6 +360,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      * @dev Some strategies will only allow the tokenIn to be withdrawn.
      * @dev 'assetAmount' will be equal to 'tokenInAmount' if '_asset' is the same as the strategy's 'tokenIn()'.
      *
+     * @dev Frontend: Before allowing a withdrawal, ensure that if the cooldown mechanism is active in the sdeUSD
+     * contract, the user has already initiated the cooldown process. This can be checked by calling the
+     * `isCooldownActive` function of the strategy. If cooldown is active, also verify that the user has shares
+     * registered for withdrawal in the `sharesPendingCooldown` mapping.
+     * If these conditions are not met, prevent the withdrawal and prompt the user to initiate cooldown first.
+     *
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
      * @param _asset The token to be withdrawn.
@@ -372,8 +384,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
 
+        bool cooldownActive = isCooldownActive();
         WithdrawParams memory params = WithdrawParams({
-            shares: _shares,
+            shares: cooldownActive ? sharesPendingCooldown[_recipient] : _shares,
             totalShares: recipients[_recipient].totalShares,
             shareRatio: 0,
             shareDecimals: sharesDecimals,
@@ -384,6 +397,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             yield: 0,
             fee: 0
         });
+
+        if (cooldownActive) require(params.shares > 0, "No shares to redeem. Cooldown first");
 
         params.shareRatio = OperationsLib.getRatio({
             numerator: params.shares,
@@ -406,7 +421,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         _genericCall({
             _holding: _recipient,
             _contract: tokenOut,
-            _call: sdeUSD.cooldownDuration() == 0
+            _call: cooldownActive
                 ? abi.encodeCall(IERC4626.redeem, (params.shares, address(this), _recipient))
                 : abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
         });
@@ -435,6 +450,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             }
         }
 
+        sharesPendingCooldown[_recipient] = 0;
         recipients[_recipient].totalShares -= _shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
@@ -468,16 +484,24 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     }
 
     /**
-     * @notice Starts a cooldown to claim the converted underlying asset.
+     * @notice Initiates the cooldown period required before a user can withdraw the converted underlying asset.
+     * @dev Only the contract owner or the user associated with the holding can call this function.
      * @param _recipient The address on behalf of which the funds are withdrawn.
-     * @param _shares The amount of shares to withdraw.
+     * @param _shares The amount of shares to withdraw (must not exceed available shares).
      */
     function cooldown(address _recipient, uint256 _shares) external nonReentrant {
+        require(isCooldownActive(), "Cooldown is inactive. Withdraw directly");
         require(
             msg.sender == owner() || msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
             "1001"
         );
 
+        // Prevent overflow and excessive withdrawal
+        uint256 newPending = sharesPendingCooldown[_recipient] + _shares;
+        require(newPending <= recipients[_recipient].totalShares, "Excessive shares amount");
+        sharesPendingCooldown[_recipient] = newPending;
+
+        // Call cooldownShares on the sdeUSD contract for the specified amount
         _genericCall({
             _holding: _recipient,
             _contract: tokenOut,
@@ -538,6 +562,15 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
 
         // Calculate min tokenOut amount with max allowed slippage
         return _applySlippage(expectedTokenOut);
+    }
+
+    /**
+     * @notice Checks if the cooldown period is currently active for sdeUSD withdrawals.
+     * @dev Returns true if the cooldown duration set in the sdeUSD contract is greater than zero.
+     * @return True if cooldown is active, false otherwise.
+     */
+    function isCooldownActive() public view returns (bool) {
+        return sdeUSD.cooldownDuration() > 0;
     }
 
     // -- Utilities --
