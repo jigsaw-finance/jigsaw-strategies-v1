@@ -76,6 +76,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         address oracle; // The address of the UniswapV3 Oracle
         address[] initialPools; // The address array of the UniswapV3 pools
         address feeManager; // The address of the feeManager contract
+        SwapDirection[] swapDirections; // Array specifying the swap directions swap paths are set during initialization
+        bytes[] swapPaths; // Array of encoded UniswapV3 swap paths corresponding to each swap direction
     }
 
     // -- Errors --
@@ -129,6 +131,13 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      * @param newOracle The new oracle address.
      */
     event OracleUpdated(address oldOracle, address newOracle);
+
+    /**
+     * @notice Emitted when the swap path is updated for a given swap direction.
+     * @param swapDirection The direction of the swap (FromTokenIn or ToTokenIn).
+     * @param swapPath The encoded swap path as bytes.
+     */
+    event SwapPathUpdated(SwapDirection indexed swapDirection, bytes indexed swapPath);
 
     // -- State variables --
 
@@ -209,6 +218,13 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      */
     mapping(address recipient => uint256 sharesInCooldown) public sharesPendingCooldown;
 
+    /**
+     * @notice Stores the UniswapV3 swap path for each swap direction.
+     * @dev The mapping associates a SwapDirection with its corresponding encoded swap path.
+     * The swap path is used to perform token swaps via UniswapV3 for the specified direction.
+     */
+    mapping(SwapDirection direction => bytes SwapPath) public swapPath;
+
     // -- Constructor --
 
     /**
@@ -247,6 +263,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         require(_params.oracle != address(0), "3000");
         require(_params.initialPools.length != 0, "3000");
         require(_params.feeManager != address(0), "3000");
+        require(_params.swapDirections.length != 0, "3000");
+        require(_params.swapPaths.length != 0, "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
 
@@ -291,6 +309,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
                 _rewardsDuration: _params.jigsawRewardDuration
             })
         );
+
+        _setSwapPath({ _swapDirections: _params.swapDirections, _swapPaths: _params.swapPaths });
     }
 
     // -- User-specific Methods --
@@ -429,7 +449,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
 
         // Swap deUSD to USDT on Uniswap
-        _swapExactInputMultihop({
+        params.withdrawnAmount = _swapExactInputMultihop({
             _tokenIn: deUSD,
             _amountIn: deUsdAmount,
             _recipient: _recipient,
@@ -438,7 +458,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         });
 
         // Take protocol's fee from generated yield if any.
-        params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
         params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
 
         // Take protocol's fee from generated yield if any.
@@ -539,6 +558,10 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         oracle = IOracle(_newOracle);
     }
 
+    function setSwapPath(SwapDirection[] memory _swapDirections, bytes[] memory _swapPaths) external onlyOwner {
+        _setSwapPath(_swapDirections, _swapPaths);
+    }
+
     // -- Getters --
 
     /**
@@ -600,28 +623,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         SwapDirection _swapDirection
     ) private returns (uint256 amountOut) {
         // Decode the data to get the swap path
-        (uint256 amountOutMinimum, uint256 deadline, bytes memory swapPath) =
-            abi.decode(_swapData, (uint256, uint256, bytes));
-
-        // Validate swap path length
-        // Minimum path length is 43 bytes (length of smallest encoded pool key = address[20] + fee[3] + address[20])
-        if (swapPath.length < 43) revert InvalidSwapPathLength();
-
-        // Validate token path integrity for FromTokenIn direction:
-        // - First token must be tokenIn
-        // - Last token must be `deUSD` that's later used for staking
-        if (_swapDirection == SwapDirection.FromTokenIn) {
-            if (swapPath.toAddress(0) != tokenIn) revert InvalidFirstTokenInPath();
-            if (swapPath.toAddress(swapPath.length - ADDR_SIZE) != deUSD) revert InvalidLastTokenInPath();
-        }
-
-        // Validate token path integrity for ToTokenIn direction:
-        // - First token must be tokenOut
-        // - Last token must be `deUSD` that's later used for unstaking
-        if (_swapDirection == SwapDirection.ToTokenIn) {
-            if (swapPath.toAddress(0) != deUSD) revert InvalidFirstTokenInPath();
-            if (swapPath.toAddress(swapPath.length - ADDR_SIZE) != tokenIn) revert InvalidLastTokenInPath();
-        }
+        (uint256 amountOutMinimum, uint256 deadline) = abi.decode(_swapData, (uint256, uint256));
 
         // Validate amountOutMin is within allowed slippage
         if (amountOutMinimum < getAllowedAmountOutMin(_amountIn, _swapDirection)) revert InvalidAmountOutMin();
@@ -631,7 +633,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
 
         // A path is a  encoded as (tokenIn, fee, tokenOut/tokenIn, fee, tokenOut).
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
-            path: swapPath,
+            path: swapPath[_swapDirection],
             recipient: _recipient,
             deadline: deadline,
             amountIn: _amountIn,
@@ -646,7 +648,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         }
 
         // Emit event indicating successful exact output swap.
-        emit ExactInputSwap({ holding: _recipient, path: swapPath, amountIn: _amountIn, amountOut: amountOut });
+        emit ExactInputSwap({
+            holding: _recipient,
+            path: swapPath[_swapDirection],
+            amountIn: _amountIn,
+            amountOut: amountOut
+        });
     }
 
     /**
@@ -672,5 +679,43 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         require(_newVal <= SLIPPAGE_PRECISION, "3002");
         emit SlippagePercentageSet({ oldValue: allowedSlippagePercentage, newValue: _newVal });
         allowedSlippagePercentage = _newVal;
+    }
+
+    /**
+     * @notice Sets the swap paths for the specified swap directions.
+     *
+     * @dev This function allows setting multiple swap paths for different swap directions in a single call.
+     *      It validates the swap path length and ensures the correct token order for each direction:
+     *      - For SwapDirection.FromTokenIn: path must start with `tokenIn` and end with `deUSD`.
+     *      - For SwapDirection.ToTokenIn: path must start with `deUSD` and end with `tokenIn`.
+     *      Emits a {SwapPathUpdated} event for each successfully set path.
+     *
+     * @param _swapDirections The array of swap directions (FromTokenIn or ToTokenIn).
+     * @param _swapPaths The array of encoded swap paths as bytes, corresponding to each direction.
+     */
+    function _setSwapPath(SwapDirection[] memory _swapDirections, bytes[] memory _swapPaths) private {
+        require(_swapDirections.length == _swapPaths.length, "3047");
+
+        for (uint256 i = 0; i < _swapDirections.length; i++) {
+            bytes memory path = _swapPaths[i];
+
+            // Minimum path length is 43 bytes (address[20] + fee[3] + address[20])
+            if (path.length < 43) revert InvalidSwapPathLength();
+
+            if (_swapDirections[i] == SwapDirection.FromTokenIn) {
+                // Path must start with tokenIn and end with deUSD
+                if (path.toAddress(0) != tokenIn) revert InvalidFirstTokenInPath();
+                if (path.toAddress(path.length - ADDR_SIZE) != deUSD) revert InvalidLastTokenInPath();
+            } else if (_swapDirections[i] == SwapDirection.ToTokenIn) {
+                // Path must start with deUSD and end with tokenIn
+                if (path.toAddress(0) != deUSD) revert InvalidFirstTokenInPath();
+                if (path.toAddress(path.length - ADDR_SIZE) != tokenIn) revert InvalidLastTokenInPath();
+            } else {
+                revert("Invalid SwapDirection");
+            }
+
+            swapPath[_swapDirections[i]] = path;
+            emit SwapPathUpdated({ swapDirection: _swapDirections[i], swapPath: path });
+        }
     }
 }

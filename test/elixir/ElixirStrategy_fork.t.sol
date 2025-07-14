@@ -53,6 +53,14 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         pools[0] = USDC_POOL;
         pools[1] = DEUSD_USDC_POOL;
 
+        ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](2);
+        swapDirections[0] = ElixirStrategy.SwapDirection.FromTokenIn;
+        swapDirections[0] = ElixirStrategy.SwapDirection.ToTokenIn;
+
+        bytes[] memory swapPaths = new bytes[](2);
+        swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+        swapPaths[1] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+
         address strategyImplementation = address(new ElixirStrategy());
         ElixirStrategy.InitializerParams memory initParams = ElixirStrategy.InitializerParams({
             owner: OWNER,
@@ -66,7 +74,9 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             uniswapRouter: uniswapRouter,
             oracle: address(new SampleOracle()),
             initialPools: pools,
-            feeManager: address(feeManager)
+            feeManager: address(feeManager),
+            swapDirections: swapDirections,
+            swapPaths: swapPaths
         });
 
         bytes memory data = abi.encodeCall(ElixirStrategy.initialize, initParams);

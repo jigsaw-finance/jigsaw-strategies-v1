@@ -58,6 +58,8 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address tokenOut; // The address of Elixir's receipt token
         address deUSD; // The Elixir's deUSD stablecoin.
         address[] initialPools; // The address array of the UniswapV3 pools
+        ElixirStrategy.SwapDirection[] swapDirections;
+        bytes[] swapPaths;
     }
 
     uint256 constant DEFAULT_REWARDS_DURATION = 75 days;
@@ -268,7 +270,9 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                         tokenIn: elixirStrategyParams[i].tokenIn,
                         tokenOut: elixirStrategyParams[i].tokenOut,
                         deUSD: elixirStrategyParams[i].deUSD,
-                        initialPools: elixirStrategyParams[i].initialPools
+                        initialPools: elixirStrategyParams[i].initialPools,
+                        swapDirections: elixirStrategyParams[i].swapDirections,
+                        swapPaths: elixirStrategyParams[i].swapPaths
                     })
                 );
             }
@@ -390,13 +394,24 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address[] memory initialPools = new address[](1);
         initialPools[0] = 0xe780dF05ED3D1D29B35Edaf9c8F3131e9F4C799e; // UniswapV3 deUSD / USDC Pool
 
+        ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](2);
+        swapDirections[0] = ElixirStrategy.SwapDirection.FromTokenIn;
+        swapDirections[0] = ElixirStrategy.SwapDirection.ToTokenIn;
+
+        bytes[] memory swapPaths = new bytes[](2);
+        // @todo decide the swap paths
+        // swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+        // swapPaths[1] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+
         elixirStrategyParams.push(
             ElixirStrategyParams({
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
                 tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7, //USDT
                 tokenOut: 0x5C5b196aBE0d54485975D1Ec29617D42D9198326, //sdeUSD
                 deUSD: 0x15700B564Ca08D9439C58cA5053166E8317aa138, //deUSD
-                initialPools: initialPools
+                initialPools: initialPools,
+                swapDirections: swapDirections,
+                swapPaths: swapPaths
             })
         );
     }
