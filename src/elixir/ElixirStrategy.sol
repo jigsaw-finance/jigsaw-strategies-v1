@@ -392,7 +392,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             shareDecimals: sharesDecimals,
             investment: 0,
             assetsToWithdraw: 0,
-            balanceBefore: 0,
+            balanceBefore: IERC20(tokenIn).balanceOf(_recipient),
             withdrawnAmount: 0,
             yield: 0,
             fee: 0
