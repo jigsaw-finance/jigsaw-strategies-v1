@@ -309,17 +309,11 @@ contract AaveV3StrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
         // Return if no rewards were claimed.
         if (rewardsList.length == 0) return (claimedAmounts, rewardsList);
 
-        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        address feeAddr = manager.feeAddress();
-
         // Take performance fee for all the rewards.
         for (uint256 i = 0; i < rewardsList.length; i++) {
-            uint256 fee = OperationsLib.getFeeAbsolute(claimedAmounts[i], performanceFee);
-            if (fee > 0) {
-                claimedAmounts[i] -= fee;
-                emit FeeTaken(rewardsList[i], feeAddr, fee);
-                IHolding(_recipient).transfer({ _token: rewardsList[i], _to: feeAddr, _amount: fee });
-            }
+            uint256 fee =
+                _takePerformanceFee({ _token: rewardsList[i], _recipient: _recipient, _yield: claimedAmounts[i] });
+            if (fee > 0) claimedAmounts[i] -= fee;
         }
 
         emit Rewards({ recipient: _recipient, rewards: claimedAmounts, rewardTokens: rewardsList });

@@ -408,19 +408,12 @@ contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
         rewardsList = IPMarket(pendleMarket).getRewardTokens();
         claimedAmounts = abi.decode(returnData, (uint256[]));
 
-        // Get fee data.
-        (uint256 performanceFee,,) = _getStrategyManager().strategyInfo(address(this));
-        address feeAddr = manager.feeAddress();
-
         for (uint256 i = 0; i < claimedAmounts.length; i++) {
             // Take protocol fee for all non zero rewards.
             if (claimedAmounts[i] != 0) {
-                uint256 fee = OperationsLib.getFeeAbsolute(claimedAmounts[i], performanceFee);
-                if (fee > 0) {
-                    claimedAmounts[i] -= fee;
-                    emit FeeTaken(rewardsList[i], feeAddr, fee);
-                    IHolding(_recipient).transfer({ _token: rewardsList[i], _to: feeAddr, _amount: fee });
-                }
+                uint256 fee =
+                    _takePerformanceFee({ _token: rewardsList[i], _recipient: _recipient, _yield: claimedAmounts[i] });
+                if (fee > 0) claimedAmounts[i] -= fee;
             }
         }
 
