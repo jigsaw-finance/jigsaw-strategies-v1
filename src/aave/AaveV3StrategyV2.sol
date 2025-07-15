@@ -38,9 +38,35 @@ contract AaveV3StrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     /**
      * @notice Struct for the initializer params.
      * @param owner The address of the initial owner of the Strategy contract
-     * @param feeManager The address of the feeManager contract
+     * @param manager The address of the Manager contract
+     * @param stakerFactory The address of the StakerLightFactory contract
+     * @param rewardToken The address of the Aave reward token associated with the strategy
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
+     * @param jigsawRewardDuration Initial Jigsaw reward distribution duration for the strategy
+     * @param tokenIn The address of the LP token
+     * @param tokenOut The address of the Aave receipt token (aToken)
+     * @param lendingPool The address of the Aave Lending Pool
+     * @param rewardsController The address of the Aave Rewards Controller
      */
     struct InitializerParams {
+        address owner;
+        address manager;
+        address stakerFactory;
+        address rewardToken;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
+        address lendingPool;
+        address rewardsController;
+    }
+
+    /**
+     * @notice Struct for the reinitializer params.
+     * @param owner The address of the initial owner of the Strategy contract
+     * @param feeManager The address of the feeManager contract
+     */
+    struct ReinitializerParams {
         address feeManager;
     }
 
@@ -100,6 +126,61 @@ contract AaveV3StrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     // -- Initialization --
 
     /**
+     * @notice Initializes the Aave Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
+     * - `_params.lendingPool` must be valid (`"3036"` error code if invalid).
+     * - `_params.rewardsController` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters.
+     */
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
+        require(_params.manager != address(0), "3065");
+        require(_params.tokenIn != address(0), "3000");
+        require(_params.tokenOut != address(0), "3000");
+        require(_params.lendingPool != address(0), "3036");
+        require(_params.rewardsController != address(0), "3039");
+
+        __StrategyBase_init({ _initialOwner: _params.owner });
+
+        manager = IManager(_params.manager);
+        rewardToken = _params.rewardToken;
+        tokenIn = _params.tokenIn;
+        tokenOut = _params.tokenOut;
+        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        lendingPool = IPool(_params.lendingPool);
+        rewardsController = IRewardsController(_params.rewardsController);
+
+        receiptToken = IReceiptToken(
+            StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
+                _receiptTokenFactory: manager.receiptTokenFactory(),
+                _receiptTokenName: "Aave Strategy Receipt Token",
+                _receiptTokenSymbol: "AaRT"
+            })
+        );
+
+        jigsawStaker = IStakerLight(
+            IStakerLightFactory(_params.stakerFactory).createStakerLight({
+                _initialOwner: _params.owner,
+                _holdingManager: manager.holdingManager(),
+                _rewardToken: _params.jigsawRewardToken,
+                _strategy: address(this),
+                _rewardsDuration: _params.jigsawRewardDuration
+            })
+        );
+    }
+
+    /**
      * @custom:oz-upgrades-validate-as-initializer
      *
      * @notice Initializes the Aave Strategy V2 contract with necessary parameters.
@@ -114,8 +195,8 @@ contract AaveV3StrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      *
      * @param _params Struct containing all initialization parameters.
      */
-    function initialize(
-        InitializerParams memory _params
+    function reinitialize(
+        ReinitializerParams memory _params
     ) public reinitializer(2) {
         require(_params.feeManager != address(0), "3000");
         feeManager = IFeeManager(_params.feeManager);

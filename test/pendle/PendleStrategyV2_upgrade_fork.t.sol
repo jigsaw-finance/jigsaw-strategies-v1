@@ -235,7 +235,7 @@ contract PendleStrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
 
         // Perform the upgrade
         bytes memory data = abi.encodeCall(
-            PendleStrategyV2.initialize, PendleStrategyV2.InitializerParams({ feeManager: address(feeManager) })
+            PendleStrategyV2.reinitialize, PendleStrategyV2.ReinitializerParams({ feeManager: address(feeManager) })
         );
 
         strategy.upgradeToAndCall(strategyV2Implementation, data);

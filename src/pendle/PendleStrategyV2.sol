@@ -85,9 +85,34 @@ contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     /**
      * @notice Struct for the initializer params.
      * @param owner The address of the initial owner of the Strategy contract
-     * @param feeManager The address of the feeManager contract
+     * @param manager The address of the Manager contract
+     * @param pendleRouter The address of the Pendle's Router contract
+     * @param pendleMarket The address of the Pendle's Market contract used for strategy
+     * @param stakerFactory The address of the StakerLightFactory contract
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
+     * @param jigsawRewardDuration The address of the initial Jigsaw reward distribution duration for the strategy
+     * @param tokenIn The address of the LP token
+     * @param tokenOut The address of the Pendle receipt token
+     * @param rewardToken The address of the Pendle primary reward token
      */
     struct InitializerParams {
+        address owner;
+        address manager;
+        address pendleRouter;
+        address pendleMarket;
+        address stakerFactory;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
+        address rewardToken;
+    }
+
+    /**
+     * @notice Struct for the reinitializer params.
+     * @param feeManager The address of the feeManager contract
+     */
+    struct ReinitializerParams {
         address feeManager;
     }
 
@@ -173,6 +198,67 @@ contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     // -- Initialization --
 
     /**
+     * @notice Initializes the Pendle Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
+     * - `_params.pendleRouter` must be valid (`"3036"` error code if invalid).
+     * - `_params.pendleMarket` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     * - `_params.rewardToken` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters.
+     */
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
+        require(_params.manager != address(0), "3065");
+        require(_params.pendleRouter != address(0), "3036");
+        require(_params.pendleMarket != address(0), "3036");
+        require(_params.tokenIn != address(0), "3000");
+        require(_params.tokenOut != address(0), "3000");
+        require(_params.rewardToken != address(0), "3000");
+
+        __StrategyBase_init({ _initialOwner: _params.owner });
+
+        manager = IManager(_params.manager);
+        pendleRouter = IPAllActionV3(_params.pendleRouter);
+        pendleMarket = _params.pendleMarket;
+        tokenIn = _params.tokenIn;
+        tokenOut = _params.tokenOut;
+        rewardToken = _params.rewardToken;
+        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+        EMPTY_SWAP_DATA_HASH = 0x95e00231cb51f973e9db40dd7466e602a0dcf1466ba8363089a90b5cb5416a27;
+
+        // Set default allowed slippage percentage to 5%
+        _setSlippagePercentage({ _newVal: 500 });
+
+        receiptToken = IReceiptToken(
+            StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
+                _receiptTokenFactory: manager.receiptTokenFactory(),
+                _receiptTokenName: "Pendle Receipt Token",
+                _receiptTokenSymbol: "PeRT"
+            })
+        );
+
+        jigsawStaker = IStakerLight(
+            IStakerLightFactory(_params.stakerFactory).createStakerLight({
+                _initialOwner: _params.owner,
+                _holdingManager: manager.holdingManager(),
+                _rewardToken: _params.jigsawRewardToken,
+                _strategy: address(this),
+                _rewardsDuration: _params.jigsawRewardDuration
+            })
+        );
+    }
+
+    /**
      * @custom:oz-upgrades-validate-as-initializer
      *
      * @notice Initializes the Aave Strategy V2 contract with necessary parameters.
@@ -187,8 +273,8 @@ contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      *
      * @param _params Struct containing all initialization parameters.
      */
-    function initialize(
-        InitializerParams memory _params
+    function reinitialize(
+        ReinitializerParams memory _params
     ) public reinitializer(2) {
         require(_params.feeManager != address(0), "3000");
         feeManager = IFeeManager(_params.feeManager);

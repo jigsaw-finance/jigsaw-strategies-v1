@@ -52,10 +52,25 @@ contract DineroStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
 
     /**
      * @notice Struct for the initializer params.
+     */
+    struct InitializerParams {
+        address owner; // The address of the initial owner of the Strategy contract
+        address manager; // The address of the Manager contract
+        address stakerFactory; // The address of the StakerLightFactory contract
+        address pirexEth; // The address of the PirexEth
+        address autoPirexEth; // The address of the AutoPirexEth
+        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
+        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
+        address tokenIn; // The address of the LP token
+        address tokenOut; // The address of the PirexEth receipt token (pxEth)
+    }
+
+    /**
+     * @notice Struct for the initializer params.
      * @param owner The address of the initial owner of the Strategy contract
      * @param feeManager The address of the feeManager contract
      */
-    struct InitializerParams {
+    struct ReinitializerParams {
         address feeManager;
     }
 
@@ -116,6 +131,59 @@ contract DineroStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     // -- Initialization --
 
     /**
+     * @notice Initializes the Dinero Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
+     * - `_params.pirexEth` must be valid (`"3036"` error code if invalid).
+     * - `_params.autoPirexEth` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters.
+     */
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
+        require(_params.manager != address(0), "3065");
+        require(_params.pirexEth != address(0), "3036");
+        require(_params.autoPirexEth != address(0), "3036");
+        require(_params.tokenIn != address(0), "3000");
+        require(_params.tokenOut != address(0), "3000");
+
+        __StrategyBase_init({ _initialOwner: _params.owner });
+
+        manager = IManager(_params.manager);
+        pirexEth = IPirexEth(_params.pirexEth);
+        autoPirexEth = IAutoPxEth(_params.autoPirexEth);
+        tokenIn = _params.tokenIn;
+        tokenOut = _params.tokenOut;
+        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+
+        receiptToken = IReceiptToken(
+            StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
+                _receiptTokenFactory: manager.receiptTokenFactory(),
+                _receiptTokenName: "PirexEth Strategy Receipt Token",
+                _receiptTokenSymbol: "DiRT"
+            })
+        );
+
+        jigsawStaker = IStakerLight(
+            IStakerLightFactory(_params.stakerFactory).createStakerLight({
+                _initialOwner: _params.owner,
+                _holdingManager: manager.holdingManager(),
+                _rewardToken: _params.jigsawRewardToken,
+                _strategy: address(this),
+                _rewardsDuration: _params.jigsawRewardDuration
+            })
+        );
+    }
+
+    /**
      * @custom:oz-upgrades-validate-as-initializer
      *
      * @notice Initializes the Aave Strategy V2 contract with necessary parameters.
@@ -130,8 +198,8 @@ contract DineroStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      *
      * @param _params Struct containing all initialization parameters.
      */
-    function initialize(
-        InitializerParams memory _params
+    function reinitialize(
+        ReinitializerParams memory _params
     ) public reinitializer(2) {
         require(_params.feeManager != address(0), "3000");
         feeManager = IFeeManager(_params.feeManager);

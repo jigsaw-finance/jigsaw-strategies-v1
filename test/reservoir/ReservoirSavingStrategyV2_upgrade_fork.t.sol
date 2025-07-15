@@ -248,8 +248,8 @@ contract ReservoirSavingStrategyV2UpgradeTest is Test, BasicContractsFixture, St
 
         // Perform the upgrade
         bytes memory data = abi.encodeCall(
-            ReservoirSavingStrategyV2.initialize,
-            ReservoirSavingStrategyV2.InitializerParams({ feeManager: address(feeManager) })
+            ReservoirSavingStrategyV2.reinitialize,
+            ReservoirSavingStrategyV2.ReinitializerParams({ feeManager: address(feeManager) })
         );
 
         strategy.upgradeToAndCall(strategyV2Implementation, data);
