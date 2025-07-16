@@ -225,6 +225,11 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      */
     mapping(SwapDirection direction => bytes SwapPath) public swapPath;
 
+    /**
+     * @notice The factor used to adjust values from 18 decimal precision (shares) to 6 decimal precision (USDC).
+     */
+    uint256 public constant DECIMAL_DIFF = 1e12;
+
     // -- Constructor --
 
     /**
@@ -579,9 +584,13 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     function getAllowedAmountOutMin(uint256 _amount, SwapDirection _swapDirection) public view returns (uint256) {
         // Get tokenIn rate to get  minimum acceptable amount out
         (, uint256 rate) = oracle.peek(bytes(""));
-        uint256 expectedTokenOut = _swapDirection == SwapDirection.FromTokenIn
-            ? _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil)
-            : _amount.mulDiv(1e18, rate, Math.Rounding.Ceil);
+
+        // Account for decimal difference
+        uint256 expectedTokenOut = (_swapDirection == SwapDirection.FromTokenIn)
+            // USDT → deUSD: Scale up by 12 decimals (18 - 6)
+            ? _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil) * DECIMAL_DIFF
+            // deUSD → USDT: Scale down by 12 decimals (18 - 6)
+            : _amount.mulDiv(1e18, rate, Math.Rounding.Ceil) / DECIMAL_DIFF;
 
         // Calculate min tokenOut amount with max allowed slippage
         return _applySlippage(expectedTokenOut);
