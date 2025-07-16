@@ -55,11 +55,11 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
         ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](2);
         swapDirections[0] = ElixirStrategy.SwapDirection.FromTokenIn;
-        swapDirections[0] = ElixirStrategy.SwapDirection.ToTokenIn;
+        swapDirections[1] = ElixirStrategy.SwapDirection.ToTokenIn;
 
         bytes[] memory swapPaths = new bytes[](2);
         swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
-        swapPaths[1] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+        swapPaths[1] = abi.encodePacked(deUSD, poolFee, USDC, poolFee, tokenIn);
 
         address strategyImplementation = address(new ElixirStrategy());
         ElixirStrategy.InitializerParams memory initParams = ElixirStrategy.InitializerParams({
@@ -285,6 +285,44 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
         sdeUSD.transferInRewards(_amount);
         vm.stopPrank();
+    }
+
+    function test_elixir_decimal_mismatch_issue() public view {
+        // Test amounts in their respective decimal formats
+        uint256 usdtAmount = 1000e6; // 1,000 USDT (6 decimals)
+        uint256 deUsdAmount = 980e18; // 980 deUSD (18 decimals)
+
+        // Mock oracle rate: 1 USDT = 0.98 deUSD (rate is in 18 decimals)
+        (, uint256 mockRate) = strategy.oracle().peek(bytes(""));
+
+        // Get current slippage percentage (default is 5% = 500 basis points)
+        uint256 slippagePercentage = strategy.allowedSlippagePercentage();
+
+        // Test FromTokenIn direction (USDT -> deUSD)
+        uint256 minAmountOutFromTokenIn =
+            strategy.getAllowedAmountOutMin(usdtAmount, ElixirStrategy.SwapDirection.FromTokenIn);
+
+        // Calculate what the correct minimum should be:
+        // 1. Convert USDT to deUSD: usdtAmount * rate * DECIMAL_DIFF / 1e18
+        // 2. Apply slippage: result * (10000 - slippagePercentage) / 10000
+        uint256 expectedDeUsdOutput = usdtAmount * mockRate * DECIMAL_DIFF / 1e18;
+        uint256 correctMinAmountFromTokenIn = expectedDeUsdOutput * (10_000 - slippagePercentage) / 10_000;
+
+        // Verify the returned amount is correct
+        assertEq(minAmountOutFromTokenIn, correctMinAmountFromTokenIn, "FromTokenIn failed");
+
+        // Test ToTokenIn direction (deUSD -> USDT)
+        uint256 minAmountOutToTokenIn =
+            strategy.getAllowedAmountOutMin(deUsdAmount, ElixirStrategy.SwapDirection.ToTokenIn);
+
+        // Calculate what the correct minimum should be:
+        // 1. Convert deUSD to USDT: deUsdAmount * 1e18 / (rate * DECIMAL_DIFF)
+        // 2. Apply slippage: result * (10000 - slippagePercentage) / 10000
+        uint256 expectedUsdtOutput = deUsdAmount * 1e18 / (mockRate * DECIMAL_DIFF);
+        uint256 correctMinAmountToTokenIn = expectedUsdtOutput * (10_000 - slippagePercentage) / 10_000;
+
+        // Verify the returned amount is correct
+        assertEq(minAmountOutToTokenIn, correctMinAmountToTokenIn, "ToTokenIn failed");
     }
 }
 
