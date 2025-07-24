@@ -533,8 +533,18 @@ contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     function getMinAllowedLpOut(
         uint256 _amount
     ) public view returns (uint256) {
-        // Calculate expected LP tokens based on Pendle's LpToAssetRate
-        uint256 expectedLpOut = _amount.mulDiv(PENDLE_LP_PRICE_PRECISION, _getMedianLpToAssetRate(), Math.Rounding.Ceil);
+        uint256 tokenInDecimals = IERC20Metadata(tokenIn).decimals();
+        uint256 normalizedAmount = _amount;
+        if (tokenInDecimals < 18) {
+            normalizedAmount = _amount * (10 ** (18 - tokenInDecimals));
+        } else if (tokenInDecimals > 18) {
+            normalizedAmount = _amount / (10 ** (tokenInDecimals - 18));
+        }
+
+        // Calculate expected LP tokens based on Pendle's LpToAssetRate using the normalized amount
+        uint256 expectedLpOut =
+            normalizedAmount.mulDiv(PENDLE_LP_PRICE_PRECISION, _getMedianLpToAssetRate(), Math.Rounding.Ceil);
+
         // Calculate minLp amount with max allowed slippage
         return _applySlippage(expectedLpOut);
     }
@@ -548,11 +558,20 @@ contract PendleStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     function getMinAllowedTokenOut(
         uint256 _amount
     ) public view returns (uint256) {
-        // Calculate expected LP tokens based on Pendle's LpToAssetRate
-        uint256 expectedTokenOut =
+        // Calculate expected token out at 18 decimal precision
+        uint256 expectedTokenOut18 =
             _amount.mulDiv(_getMedianLpToAssetRate(), PENDLE_LP_PRICE_PRECISION, Math.Rounding.Ceil);
+
+        uint256 tokenInDecimals = IERC20Metadata(tokenIn).decimals();
+        uint256 expectedTokenOutNative = expectedTokenOut18;
+        if (tokenInDecimals < 18) {
+            expectedTokenOutNative = expectedTokenOut18 / (10 ** (18 - tokenInDecimals));
+        } else if (tokenInDecimals > 18) {
+            expectedTokenOutNative = expectedTokenOut18 * (10 ** (tokenInDecimals - 18));
+        }
+
         // Calculate min tokenOut amount with max allowed slippage
-        return _applySlippage(expectedTokenOut);
+        return _applySlippage(expectedTokenOutNative);
     }
 
     // -- Utility Functions --
