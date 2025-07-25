@@ -447,8 +447,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             _holding: _recipient,
             _contract: tokenOut,
             _call: cooldownActive
-                ? abi.encodeCall(IERC4626.redeem, (params.shares, address(this), _recipient))
-                : abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+                ? abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+                : abi.encodeCall(IERC4626.redeem, (params.shares, address(this), _recipient))
         });
 
         uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
@@ -475,7 +475,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         }
 
         sharesPendingCooldown[_recipient] = 0;
-        recipients[_recipient].totalShares -= _shares;
+        recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
@@ -490,7 +490,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         });
 
         // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+        jigsawStaker.withdraw({ _user: _recipient, _amount: params.shares });
 
         return (params.withdrawnAmount, params.investment, params.yield, params.fee);
     }
