@@ -508,6 +508,93 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     }
 
     /**
+     * @notice Forces the unstaking of shares for a given recipient
+     *
+     * @dev Call this function to force-unstake shares that have completed their cooldown period but were not withdrawn
+     * while `isCooldownActive` was true. This allows recovery of shares that are pending withdrawal after cooldown
+     * expiration.
+     * @dev Can only be called by the contract owner or the holding user associated with the recipient.
+     *
+     * @param _recipient The address of the recipient whose shares are to be force-unstaked.
+     * @param _data Additional data required for the swap operation.
+     */
+    function forceUnstake(address _recipient, bytes calldata _data) external nonReentrant {
+        require(
+            msg.sender == owner() || msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
+            "1001"
+        );
+
+        uint256 totalShares = recipients[_recipient].totalShares;
+        uint256 sharesToUnstake = sharesPendingCooldown[_recipient];
+
+        require(sharesToUnstake != 0, "Nothing to force unstake");
+
+        uint256 shareRatio = OperationsLib.getRatio({
+            numerator: sharesToUnstake,
+            denominator: totalShares,
+            precision: sharesDecimals,
+            rounding: OperationsLib.Rounding.Floor
+        });
+
+        _burn({
+            _receiptToken: receiptToken,
+            _recipient: _recipient,
+            _shares: sharesToUnstake,
+            _totalShares: totalShares,
+            _tokenDecimals: sharesDecimals
+        });
+
+        uint256 investment = (recipients[_recipient].investedAmount * shareRatio) / 10 ** sharesDecimals;
+        uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
+
+        _genericCall({
+            _holding: _recipient,
+            _contract: tokenOut,
+            _call: abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+        });
+
+        uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
+
+        // Swap deUSD to USDT on Uniswap
+        uint256 withdrawnAmount = _swapExactInputMultihop({
+            _tokenIn: deUSD,
+            _amountIn: deUsdAmount,
+            _recipient: _recipient,
+            _swapData: _data,
+            _swapDirection: SwapDirection.ToTokenIn
+        });
+
+        // Take protocol's fee from generated yield if any.
+        int256 yield = withdrawnAmount.toInt256() - investment.toInt256();
+
+        // Take protocol's fee from generated yield if any.
+        if (yield > 0) {
+            uint256 fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(yield) });
+            if (fee > 0) {
+                withdrawnAmount -= fee;
+                yield -= fee.toInt256();
+            }
+        }
+
+        sharesPendingCooldown[_recipient] = 0;
+        recipients[_recipient].totalShares -= sharesToUnstake;
+        recipients[_recipient].investedAmount =
+            investment > recipients[_recipient].investedAmount ? 0 : recipients[_recipient].investedAmount - investment;
+
+        emit Withdraw({
+            asset: tokenIn,
+            recipient: _recipient,
+            shares: sharesToUnstake,
+            withdrawnAmount: withdrawnAmount,
+            initialInvestment: investment,
+            yield: yield
+        });
+
+        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
+        jigsawStaker.withdraw({ _user: _recipient, _amount: sharesToUnstake });
+    }
+
+    /**
      * @notice Initiates the cooldown period required before a user can withdraw the converted underlying asset.
      * @dev Only the contract owner or the user associated with the holding can call this function.
      * @param _recipient The address on behalf of which the funds are withdrawn.
