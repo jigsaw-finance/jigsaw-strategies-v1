@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { TickMath } from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import { BytesLib } from "@uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -11,15 +10,13 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { IUniswapV3Pool } from "@jigsaw/lib/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import { FixedPoint96 } from "@jigsaw/lib/v3-core/contracts/libraries/FixedPoint96.sol";
-import { FullMath } from "@jigsaw/lib/v3-core/contracts/libraries/FullMath.sol";
 import { GenericUniswapV3Oracle } from "@jigsaw/src/oracles/uniswap/GenericUniswapV3Oracle.sol";
 
 import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
+import { IStablesManager } from "@jigsaw/src/interfaces/core/IStablesManager.sol";
 
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
@@ -605,6 +602,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         require(
             msg.sender == owner() || msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
             "1001"
+        );
+        require(
+            !IStablesManager(manager.stablesManager()).isLiquidatable({ _token: tokenIn, _holding: _recipient }), "3105"
         );
 
         // Prevent overflow and excessive withdrawal
