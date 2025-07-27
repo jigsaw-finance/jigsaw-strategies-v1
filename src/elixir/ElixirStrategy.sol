@@ -100,9 +100,11 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     error InvalidLastTokenInPath();
 
     /**
-     * @notice Thrown when the minimum output amount is invalid.
+     *  @notice Thrown when the minimum output amount is invalid.
+     *  @param provided The minimum output amount provided by the user.
+     *  @param allowed The minimum output amount allowed by the strategy (after slippage).
      */
-    error InvalidAmountOutMin();
+    error InvalidAmountOutMin(uint256 provided, uint256 allowed);
 
     // -- Events --
 
@@ -261,24 +263,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
         require(_params.deUSD != address(0), "3036");
-        require(_params.uniswapRouter != address(0), "3000");
-        require(_params.oracle != address(0), "3000");
-        require(_params.initialPools.length != 0, "3000");
         require(_params.feeManager != address(0), "3000");
-        require(_params.swapDirections.length != 0, "3000");
-        require(_params.swapPaths.length != 0, "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
-
-        oracle = IOracle(
-            new GenericUniswapV3Oracle({
-                _initialOwner: _params.owner,
-                _underlying: _params.deUSD,
-                _quoteToken: _params.tokenIn,
-                _quoteTokenOracle: _params.oracle,
-                _uniswapV3Pools: _params.initialPools
-            })
-        );
 
         manager = IManager(_params.manager);
         tokenIn = _params.tokenIn;
@@ -287,11 +274,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         rewardToken = address(0);
         deUSD = _params.deUSD;
         sdeUSD = ISdeUsdMin(_params.tokenOut);
-        uniswapRouter = _params.uniswapRouter;
         feeManager = IFeeManager(_params.feeManager);
-
-        // Set default allowed slippage percentage to 5%
-        _setSlippagePercentage({ _newVal: 500 });
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -312,7 +295,29 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             })
         );
 
-        _setSwapPath({ _swapDirections: _params.swapDirections, _swapPaths: _params.swapPaths });
+        if (tokenIn != deUSD) {
+            require(_params.oracle != address(0), "3000");
+            require(_params.uniswapRouter != address(0), "3000");
+            require(_params.initialPools.length != 0, "3000");
+            require(_params.swapDirections.length != 0, "3000");
+            require(_params.swapPaths.length != 0, "3000");
+
+            oracle = IOracle(
+                new GenericUniswapV3Oracle({
+                    _initialOwner: _params.owner,
+                    _underlying: _params.deUSD,
+                    _quoteToken: _params.tokenIn,
+                    _quoteTokenOracle: _params.oracle,
+                    _uniswapV3Pools: _params.initialPools
+                })
+            );
+
+            uniswapRouter = _params.uniswapRouter;
+
+            // Set default allowed slippage percentage to 5%
+            _setSlippagePercentage({ _newVal: 500 });
+            _setSwapPath({ _swapDirections: _params.swapDirections, _swapPaths: _params.swapPaths });
+        }
     }
 
     // -- User-specific Methods --
@@ -336,17 +341,19 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
         uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
+        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        // Swap USDT to deUSD on Uniswap
-        _swapExactInputMultihop({
-            _tokenIn: _asset,
-            _amountIn: _amount,
-            _recipient: address(this),
-            _swapData: _data,
-            _swapDirection: SwapDirection.FromTokenIn
-        });
+        if (tokenIn != deUSD) {
+            // Swap USDT to deUSD on Uniswap
+            _swapExactInputMultihop({
+                _tokenIn: _asset,
+                _amountIn: _amount,
+                _recipient: address(this),
+                _swapData: _data,
+                _swapDirection: SwapDirection.FromTokenIn
+            });
+        }
 
         uint256 deUSDAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
         uint256 balanceBefore = sdeUSD.balanceOf(_recipient);
@@ -450,14 +457,20 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
 
         uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
 
-        // Swap deUSD to USDT on Uniswap
-        params.withdrawnAmount = _swapExactInputMultihop({
-            _tokenIn: deUSD,
-            _amountIn: deUsdAmount,
-            _recipient: _recipient,
-            _swapData: _data,
-            _swapDirection: SwapDirection.ToTokenIn
-        });
+        if (tokenIn == deUSD) {
+            IERC20(deUSD).safeTransfer({ to: _recipient, value: deUsdAmount });
+        }
+
+        // Swap deUSD to USDT on Uniswap if the tokenIn of the strategy is not deUSD
+        params.withdrawnAmount = tokenIn == deUSD
+            ? deUsdAmount
+            : _swapExactInputMultihop({
+                _tokenIn: deUSD,
+                _amountIn: deUsdAmount,
+                _recipient: _recipient,
+                _swapData: _data,
+                _swapDirection: SwapDirection.ToTokenIn
+            });
 
         // Take protocol's fee from generated yield if any.
         params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
@@ -552,14 +565,20 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
 
         uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
 
-        // Swap deUSD to USDT on Uniswap
-        uint256 withdrawnAmount = _swapExactInputMultihop({
-            _tokenIn: deUSD,
-            _amountIn: deUsdAmount,
-            _recipient: _recipient,
-            _swapData: _data,
-            _swapDirection: SwapDirection.ToTokenIn
-        });
+        if (tokenIn == deUSD) {
+            IERC20(deUSD).safeTransfer({ to: _recipient, value: deUsdAmount });
+        }
+
+        // Swap deUSD to USDT on Uniswap if the tokenIn of the strategy is not deUSD
+        uint256 withdrawnAmount = tokenIn == deUSD
+            ? deUsdAmount
+            : _swapExactInputMultihop({
+                _tokenIn: deUSD,
+                _amountIn: deUsdAmount,
+                _recipient: _recipient,
+                _swapData: _data,
+                _swapDirection: SwapDirection.ToTokenIn
+            });
 
         // Take protocol's fee from generated yield if any.
         int256 yield = withdrawnAmount.toInt256() - investment.toInt256();
@@ -720,9 +739,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     ) private returns (uint256 amountOut) {
         // Decode the data to get the swap path
         (uint256 amountOutMinimum, uint256 deadline) = abi.decode(_swapData, (uint256, uint256));
+        uint256 allowedAmountOutMin = getAllowedAmountOutMin(_amountIn, _swapDirection);
 
         // Validate amountOutMin is within allowed slippage
-        if (amountOutMinimum < getAllowedAmountOutMin(_amountIn, _swapDirection)) revert InvalidAmountOutMin();
+        if (amountOutMinimum < allowedAmountOutMin) {
+            revert InvalidAmountOutMin({ provided: amountOutMinimum, allowed: allowedAmountOutMin });
+        }
 
         // Approve the router to spend `_tokenIn`.
         IERC20(_tokenIn).forceApprove({ spender: uniswapRouter, value: _amountIn });
