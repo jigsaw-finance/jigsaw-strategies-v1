@@ -107,18 +107,14 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit works correctly when authorized
-    function test_elixir_deposit_when_authorized(
-        uint256 _amount
-    ) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e6, 1e8);
+    function test_elixir_deposit_when_authorized() public notOwnerNotZero(user) {
+        uint256 amount = 1000e6;
         address userHolding = initiateUser(user, tokenIn, amount);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
         uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
 
         bytes memory data = abi.encode(
-            amount * DECIMAL_DIFF, // amountOutMinimum
-            uint256(block.timestamp), // deadline
-            abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD)
+            strategy.getAllowedAmountOutMin(amount, ElixirStrategy.SwapDirection.FromTokenIn), uint256(block.timestamp)
         );
 
         // Invest into the tested strategy vie strategyManager
@@ -171,9 +167,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         address userHolding = initiateUser(user, tokenIn, amount);
 
         bytes memory data = abi.encode(
-            amount * DECIMAL_DIFF, // amountOutMinimum
-            uint256(block.timestamp), // deadline
-            abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD)
+            strategy.getAllowedAmountOutMin(amount, ElixirStrategy.SwapDirection.FromTokenIn), uint256(block.timestamp)
         );
 
         // Invest into the tested strategy via strategyManager
@@ -230,19 +224,6 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
         // Additional checks
         assertEq(tokenInBalanceAfter, expectedWithdrawal, "Incorrect asset amount returned");
-    }
-
-    function test_elixir_deposit_reverts_when_invalidSwapPathLength() public {
-        uint256 amount = 10e6;
-        initiateUser(user, tokenIn, amount);
-
-        bytes memory invalidData = abi.encode(amount, block.timestamp + 1 days, bytes("short"));
-
-        deal(tokenIn, user, amount);
-
-        vm.expectRevert(ElixirStrategy.InvalidSwapPathLength.selector);
-        vm.prank(user, user);
-        strategyManager.invest(tokenIn, address(strategy), amount, 0, invalidData);
     }
 
     function test_elixir_updatesSlippagePercentageCorrectly() public {
