@@ -622,9 +622,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             msg.sender == owner() || msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
             "1001"
         );
-        require(
-            !IStablesManager(manager.stablesManager()).isLiquidatable({ _token: tokenIn, _holding: _recipient }), "3105"
-        );
+        if (msg.sender != owner()) {
+            require(
+                !IStablesManager(manager.stablesManager()).isLiquidatable({ _token: tokenIn, _holding: _recipient }),
+                "3105"
+            );
+        }
 
         // Prevent overflow and excessive withdrawal
         uint256 newPending = sharesPendingCooldown[_recipient] + _shares;
