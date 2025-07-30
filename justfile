@@ -167,3 +167,16 @@ deploy-strategy STRATEGY: && _timer
 
 	# Step 2: Deploy proxy
 	just deploy-proxy {{STRATEGY}} ${CHAIN}
+
+# Deploy FeeManager
+# This script deploys the FeeManager contract and handles logging.
+deploy-feeManager: && _timer
+    #!/usr/bin/env bash
+    echo "Deploying FeeManager on chain $CHAIN ..."
+
+    # Run the Forge script to deploy the FeeManager
+    forge script DeployFeeManager --rpc-url $CHAIN --slow -vvvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+    # Update deployments.json
+    FEE_MANAGER_ADDRESS=$(jq -r '.returns.feeManager.value' "broadcast/3_DeployFeeManager.s.sol/$CHAIN_ID/run-latest.json")
+    jq --arg chainId "$CHAIN_ID" --arg address "$FEE_MANAGER_ADDRESS" \
+        '. + {FEE_MANAGER: $address}' ./deployments.json > temp.json && mv temp.json ./deployments.json
