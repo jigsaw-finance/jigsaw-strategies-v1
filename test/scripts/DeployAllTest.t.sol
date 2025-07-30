@@ -16,7 +16,7 @@ import { IRewardsController } from "@aave/v3-periphery/rewards/interfaces/IRewar
 import { DeployStakerFactory } from "script/0_DeployStakerFactory.s.sol";
 import { DeployImpl } from "script/1_DeployImpl.s.sol";
 import { DeployProxy } from "script/2_DeployProxy.s.sol";
-import { DeployFeeManager } from "../../script/3_DeployFeeManager.s.sol";
+import { DeployFeeManager } from "script/3_DeployFeeManager.s.sol";
 
 import { IStakerLight } from "../../src/staker/interfaces/IStakerLight.sol";
 
