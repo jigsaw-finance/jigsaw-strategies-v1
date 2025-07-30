@@ -320,9 +320,9 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
     function _populatePendleArray() internal {
         pendleStrategyParams.push(
             PendleStrategyParams({
-                pendleMarket: 0xF8094570485B124b4f2aBE98909A87511489C162,
-                jigsawRewardDuration: 146 days,
-                tokenIn: 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0, // USD0++
+                pendleMarket: 0x71d4a6bAc0FE7210309b6A3807cf2BaD13d7C1E1,
+                jigsawRewardDuration: 56 days,
+                tokenIn: 0x9FD7466f987Fd4C45a5BBDe22ED8aba5BC8D72d1, // hwHLP
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
             })
         );
