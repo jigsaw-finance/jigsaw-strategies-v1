@@ -391,24 +391,31 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
     }
 
     function _populateElixirArray() internal {
+        uint24 poolFee = 100;
+
+        address tokenIn = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // USDT
+        address tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326; // sdeUSD
+        address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        address deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
+
         address[] memory initialPools = new address[](1);
         initialPools[0] = 0xe780dF05ED3D1D29B35Edaf9c8F3131e9F4C799e; // UniswapV3 deUSD / USDC Pool
 
         ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](2);
         swapDirections[0] = ElixirStrategy.SwapDirection.FromTokenIn;
-        swapDirections[0] = ElixirStrategy.SwapDirection.ToTokenIn;
+        swapDirections[1] = ElixirStrategy.SwapDirection.ToTokenIn;
 
         bytes[] memory swapPaths = new bytes[](2);
         // @todo decide the swap paths
-        // swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
-        // swapPaths[1] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+         swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+         swapPaths[1] = abi.encodePacked(deUSD, poolFee, USDC, poolFee, tokenIn);
 
         elixirStrategyParams.push(
             ElixirStrategyParams({
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7, //USDT
-                tokenOut: 0x5C5b196aBE0d54485975D1Ec29617D42D9198326, //sdeUSD
-                deUSD: 0x15700B564Ca08D9439C58cA5053166E8317aa138, //deUSD
+                tokenIn: tokenIn, //USDT
+                tokenOut: tokenOut, //sdeUSD
+                deUSD: deUSD, //deUSD
                 initialPools: initialPools,
                 swapDirections: swapDirections,
                 swapPaths: swapPaths
