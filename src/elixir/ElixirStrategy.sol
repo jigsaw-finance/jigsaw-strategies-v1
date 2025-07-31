@@ -483,7 +483,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             }
         }
 
-        sharesPendingCooldown[_recipient] = 0;
+        if (cooldownActive) sharesPendingCooldown[_recipient] = 0;
         recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
