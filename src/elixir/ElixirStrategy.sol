@@ -60,22 +60,46 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
 
     /**
      * @notice Struct for the initializer params.
+     * @param owner The address of the initial owner of the Strategy contract.
+     * @param manager The address of the manager contract.
+     * @param stakerFactory The address of the StakerLightFactory contract.
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy.
+     * @param jigsawRewardDuration The initial Jigsaw reward distribution duration for the strategy.
+     * @param tokenIn The address of the LP token.
+     * @param tokenOut The address of Elixir's receipt token.
+     * @param deUSD The Elixir's deUSD stablecoin.
+     * @param uniswapRouter The address of the UniswapV3 Router.
+     * @param oracle The address of the UniswapV3 Oracle.
+     * @param initialPools The address array of the UniswapV3 pools.
+     * @param feeManager The address of the feeManager contract.
+     * @param swapDirections Array specifying the swap directions swap paths are set during initialization.
+     * @param swapPaths Array of encoded UniswapV3 swap paths corresponding to each swap direction.
      */
     struct InitializerParams {
-        address owner; // The address of the initial owner of the Strategy contract
-        address manager; // The address of the manager contract
-        address stakerFactory; // The address of the StakerLightFactory contract
-        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of Elixir's receipt token
-        address deUSD; // The Elixir's deUSD stablecoin.
-        address uniswapRouter; // The address of the UniswapV3 Router
-        address oracle; // The address of the UniswapV3 Oracle
-        address[] initialPools; // The address array of the UniswapV3 pools
-        address feeManager; // The address of the feeManager contract
-        SwapDirection[] swapDirections; // Array specifying the swap directions swap paths are set during initialization
-        bytes[] swapPaths; // Array of encoded UniswapV3 swap paths corresponding to each swap direction
+        address owner;
+        address manager;
+        address stakerFactory;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
+        address deUSD;
+        address uniswapRouter;
+        address oracle;
+        address[] initialPools;
+        address feeManager;
+        SwapDirection[] swapDirections;
+        bytes[] swapPaths;
+    }
+
+    /**
+     * @notice Struct containing parameters related to the cooldown status for withdrawals.
+     * @param active Indicates whether the cooldown mechanism is currently active.
+     * @param cooledShares The number of shares that have completed the cooldown period and are eligible for withdrawal.
+     */
+    struct CooldownParams {
+        bool active;
+        uint256 cooledShares;
     }
 
     // -- Errors --
@@ -412,9 +436,10 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        bool cooldownActive = isCooldownActive();
+        CooldownParams memory cooldownParams =
+            CooldownParams({ active: isCooldownActive(), cooledShares: sharesPendingCooldown[_recipient] });
         WithdrawParams memory params = WithdrawParams({
-            shares: cooldownActive ? sharesPendingCooldown[_recipient] : _shares,
+            shares: cooldownParams.active ? cooldownParams.cooledShares : _shares,
             totalShares: recipients[_recipient].totalShares,
             shareRatio: 0,
             shareDecimals: sharesDecimals,
@@ -426,7 +451,10 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             fee: 0
         });
 
-        if (cooldownActive) require(params.shares > 0, "No shares to redeem. Cooldown first");
+        if (cooldownParams.active) require(params.shares > 0, "No shares to redeem. Cooldown first");
+        if (!cooldownParams.active && cooldownParams.cooledShares != 0) {
+            params.shares += cooldownParams.cooledShares;
+        }
 
         params.shareRatio = OperationsLib.getRatio({
             numerator: params.shares,
@@ -449,10 +477,22 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         _genericCall({
             _holding: _recipient,
             _contract: tokenOut,
-            _call: cooldownActive
+            _call: cooldownParams.active
+                // Unstake if cooldown is active
                 ? abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
-                : abi.encodeCall(IERC4626.redeem, (params.shares, address(this), _recipient))
+                // Redeem if not
+                : abi.encodeCall(IERC4626.redeem, (params.shares - cooldownParams.cooledShares, address(this), _recipient))
         });
+
+        // Unstake pending cooled down shares
+        if (!cooldownParams.active && sharesPendingCooldown[_recipient] != 0) {
+            _genericCall({
+                _holding: _recipient,
+                _contract: tokenOut,
+                _call: abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+            });
+            sharesPendingCooldown[_recipient] = 0;
+        }
 
         uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
 
@@ -483,7 +523,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             }
         }
 
-        if (cooldownActive) sharesPendingCooldown[_recipient] = 0;
+        if (cooldownParams.active) sharesPendingCooldown[_recipient] = 0;
         recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
@@ -514,99 +554,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         bytes calldata
     ) external pure override returns (uint256[] memory, address[] memory) {
         revert OperationNotSupported();
-    }
-
-    /**
-     * @notice Forces the unstaking of shares for a given recipient
-     *
-     * @dev Call this function to force-unstake shares that have completed their cooldown period but were not withdrawn
-     * while `isCooldownActive` was true. This allows recovery of shares that are pending withdrawal after cooldown
-     * expiration.
-     * @dev Can only be called by the contract owner or the holding user associated with the recipient.
-     *
-     * @param _recipient The address of the recipient whose shares are to be force-unstaked.
-     * @param _data Additional data required for the swap operation.
-     */
-    function forceUnstake(address _recipient, bytes calldata _data) external nonReentrant {
-        require(
-            msg.sender == owner() || msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
-            "1001"
-        );
-
-        uint256 totalShares = recipients[_recipient].totalShares;
-        uint256 sharesToUnstake = sharesPendingCooldown[_recipient];
-
-        require(sharesToUnstake != 0, "Nothing to force unstake");
-
-        uint256 shareRatio = OperationsLib.getRatio({
-            numerator: sharesToUnstake,
-            denominator: totalShares,
-            precision: sharesDecimals,
-            rounding: OperationsLib.Rounding.Floor
-        });
-
-        _burn({
-            _receiptToken: receiptToken,
-            _recipient: _recipient,
-            _shares: sharesToUnstake,
-            _totalShares: totalShares,
-            _tokenDecimals: sharesDecimals
-        });
-
-        uint256 investment = (recipients[_recipient].investedAmount * shareRatio) / 10 ** sharesDecimals;
-        uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
-
-        _genericCall({
-            _holding: _recipient,
-            _contract: tokenOut,
-            _call: abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
-        });
-
-        uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
-
-        if (tokenIn == deUSD) {
-            IERC20(deUSD).safeTransfer({ to: _recipient, value: deUsdAmount });
-        }
-
-        // Swap deUSD to USDT on Uniswap if the tokenIn of the strategy is not deUSD
-        uint256 withdrawnAmount = tokenIn == deUSD
-            ? deUsdAmount
-            : _swapExactInputMultihop({
-                _tokenIn: deUSD,
-                _amountIn: deUsdAmount,
-                _recipient: _recipient,
-                _swapData: _data,
-                _swapDirection: SwapDirection.ToTokenIn
-            });
-
-        // Take protocol's fee from generated yield if any.
-        int256 yield = withdrawnAmount.toInt256() - investment.toInt256();
-
-        // Take protocol's fee from generated yield if any.
-        if (yield > 0) {
-            uint256 fee = _takePerformanceFee({ _token: tokenIn, _recipient: _recipient, _yield: uint256(yield) });
-            if (fee > 0) {
-                withdrawnAmount -= fee;
-                yield -= fee.toInt256();
-            }
-        }
-
-        sharesPendingCooldown[_recipient] = 0;
-        recipients[_recipient].totalShares -= sharesToUnstake;
-        recipients[_recipient].investedAmount =
-            investment > recipients[_recipient].investedAmount ? 0 : recipients[_recipient].investedAmount - investment;
-
-        emit Withdraw({
-            asset: tokenIn,
-            recipient: _recipient,
-            shares: sharesToUnstake,
-            withdrawnAmount: withdrawnAmount,
-            initialInvestment: investment,
-            yield: yield
-        });
-
-        // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: sharesToUnstake });
     }
 
     /**
