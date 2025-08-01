@@ -18,11 +18,11 @@ import { PendleStrategy } from "../../src/pendle/PendleStrategy.sol";
 import { PendleStrategyV2 } from "../../src/pendle/PendleStrategyV2.sol";
 
 address constant PENDLE_ROUTER = 0x888888888889758F76e7103c6CbF23ABbF58F946;
-address constant PENDLE_MARKET = 0x58612beB0e8a126735b19BB222cbC7fC2C162D2a; // pufETH pendle market address
+address constant PENDLE_MARKET = 0xF8094570485B124b4f2aBE98909A87511489C162;
 
 contract PendleStrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTestUtils {
     // Mainnet pufETH
-    address internal tokenIn = 0xD9A442856C234a39a81a089C06451EBAa4306a72;
+    address internal tokenIn = 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0;
     // Pendle LP token
     address internal tokenOut = PENDLE_MARKET;
     // Pendle reward token
