@@ -95,6 +95,10 @@ coverage-all: && _timer
 	forge coverage --report lcov --allow-failure --no-match-coverage "(script|test)"
 	genhtml -o coverage --branch-coverage lcov.info --ignore-errors category --rc derive_function_end_line=0
 
+coverage-all-quick: && _timer
+	forge coverage --report lcov --allow-failure --no-match-coverage "(script|test)" --threads 1 --fuzz-runs 1 --optimizer-runs 1
+	genhtml -o coverage --branch-coverage lcov.info --ignore-errors inconsistent --rc derive_function_end_line=0
+
 validate strategy: && _timer
 	forge clean
 	forge build
