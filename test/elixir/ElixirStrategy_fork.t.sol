@@ -19,6 +19,10 @@ import { SampleOracleUniswap } from "@jigsaw/test/utils/mocks/SampleOracleUniswa
 contract ElixirStrategyTest is Test, BasicContractsFixture {
     using SafeERC20 for IERC20;
 
+    event OracleUpdated(address oldOracle, address newOracle);
+
+    error OwnableUnauthorizedAccount(address account);
+
     // Mainnet USDT
     address internal tokenIn = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
 
