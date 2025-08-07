@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-pragma abicoder v2;
 
 import "../fixtures/BasicContractsFixture.t.sol";
 
@@ -11,10 +10,10 @@ import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+import { GenericUniswapV3Oracle } from "../../lib/jigsaw-protocol-v1/src/oracles/uniswap/GenericUniswapV3Oracle.sol";
 import { ElixirStrategy } from "../../src/elixir/ElixirStrategy.sol";
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
-import { SampleOracleUniswap } from "@jigsaw/test/utils/mocks/SampleOracleUniswap.sol";
 
 contract ElixirStrategyTest is Test, BasicContractsFixture {
     using SafeERC20 for IERC20;
@@ -106,9 +105,20 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         vm.stopPrank();
     }
 
+    function test_elixir_allowedOut() public {
+        uint256 amount = 1e6;
+        address userHolding = initiateUser(user, tokenIn, amount);
+        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
+        uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
+
+        bytes memory data = abi.encode(
+            strategy.getAllowedAmountOutMin(amount, ElixirStrategy.SwapDirection.FromTokenIn), uint256(block.timestamp)
+        );
+    }
+
     // Tests if deposit works correctly when authorized
     function test_elixir_deposit_when_authorized() public notOwnerNotZero(user) {
-        uint256 amount = 1000e6;
+        uint256 amount = 1e6;
         address userHolding = initiateUser(user, tokenIn, amount);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
         uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
@@ -268,42 +278,24 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         vm.stopPrank();
     }
 
-    function test_elixir_decimal_mismatch_issue() public view {
-        // Test amounts in their respective decimal formats
-        uint256 usdtAmount = 1000e6; // 1,000 USDT (6 decimals)
-        uint256 deUsdAmount = 980e18; // 980 deUSD (18 decimals)
+    function test_get_Wrong_Allowed_Amount_Out_Min() public {
+        vm.prank(OWNER);
+        strategy.setSlippagePercentage(0); //we set slippage to 0 for simplicity
 
-        // Mock oracle rate: 1 USDT = 0.98 deUSD (rate is in 18 decimals)
-        (, uint256 mockRate) = strategy.oracle().peek(bytes(""));
+        // Test USDT → deUSD (FromTokenIn)
+        uint256 usdtAmount = 1000e6;
+        uint256 minDeUsd = strategy.getAllowedAmountOutMin(usdtAmount, ElixirStrategy.SwapDirection.FromTokenIn);
 
-        // Get current slippage percentage (default is 5% = 500 basis points)
-        uint256 slippagePercentage = strategy.allowedSlippagePercentage();
+        uint256 expectedMinDeUsd = 1000e18;
+        // allow 1% approximation
+        assertApproxEqRel(minDeUsd, expectedMinDeUsd, 0.01e18, "minDeUsd differs from expectedMinDeUsd");
 
-        // Test FromTokenIn direction (USDT -> deUSD)
-        uint256 minAmountOutFromTokenIn =
-            strategy.getAllowedAmountOutMin(usdtAmount, ElixirStrategy.SwapDirection.FromTokenIn);
+        // Test deUSD → USDT (ToTokenIn)
+        uint256 deUsdAmount = 1000e18;
+        uint256 minUsdt = strategy.getAllowedAmountOutMin(deUsdAmount, ElixirStrategy.SwapDirection.ToTokenIn);
 
-        // Calculate what the correct minimum should be:
-        // 1. Convert USDT to deUSD: usdtAmount * rate * DECIMAL_DIFF / 1e18
-        // 2. Apply slippage: result * (10000 - slippagePercentage) / 10000
-        uint256 expectedDeUsdOutput = usdtAmount * mockRate * DECIMAL_DIFF / 1e18;
-        uint256 correctMinAmountFromTokenIn = expectedDeUsdOutput * (10_000 - slippagePercentage) / 10_000;
-
-        // Verify the returned amount is correct
-        assertEq(minAmountOutFromTokenIn, correctMinAmountFromTokenIn, "FromTokenIn failed");
-
-        // Test ToTokenIn direction (deUSD -> USDT)
-        uint256 minAmountOutToTokenIn =
-            strategy.getAllowedAmountOutMin(deUsdAmount, ElixirStrategy.SwapDirection.ToTokenIn);
-
-        // Calculate what the correct minimum should be:
-        // 1. Convert deUSD to USDT: deUsdAmount * 1e18 / (rate * DECIMAL_DIFF)
-        // 2. Apply slippage: result * (10000 - slippagePercentage) / 10000
-        uint256 expectedUsdtOutput = deUsdAmount * 1e18 / (mockRate * DECIMAL_DIFF);
-        uint256 correctMinAmountToTokenIn = expectedUsdtOutput * (10_000 - slippagePercentage) / 10_000;
-
-        // Verify the returned amount is correct
-        assertEq(minAmountOutToTokenIn, correctMinAmountToTokenIn, "ToTokenIn failed");
+        uint256 expectedMinUsdt = 1000e6;
+        assertApproxEqRel(minUsdt, expectedMinUsdt, 0.01e18, "minUsdt differs from expectedMinUsdt");
     }
 }
 
