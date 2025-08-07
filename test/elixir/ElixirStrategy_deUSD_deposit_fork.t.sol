@@ -16,11 +16,16 @@ import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 import { SampleOracleUniswap } from "@jigsaw/test/utils/mocks/SampleOracleUniswap.sol";
 
-contract ElixirStrategyTest is Test, BasicContractsFixture {
+import { SampleOracle } from "@jigsaw/test/utils/mocks/SampleOracle.sol";
+
+contract ElixirStrategyDeUsdDepositTest is Test, BasicContractsFixture {
     using SafeERC20 for IERC20;
 
+    // deUSD token
+    address internal deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
+
     // Mainnet USDT
-    address internal tokenIn = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address internal tokenIn = deUSD;
 
     // sdeUSD token
     address internal tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326;
@@ -28,14 +33,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     // Mainnet USDC
     address internal USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
-    // deUSD token
-    address internal deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
-
     address internal uniswapRouter = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
-
-    address internal DEUSD_USDC_POOL = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6; // deUSD/USDT pool
-
-    address internal USDC_POOL = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6; // USDT/USDC pool
 
     address internal user = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
@@ -48,18 +46,9 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     function setUp() public {
         init();
 
-        address[] memory pools = new address[](2);
-
-        pools[0] = USDC_POOL;
-        pools[1] = DEUSD_USDC_POOL;
-
-        ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](2);
-        swapDirections[0] = ElixirStrategy.SwapDirection.FromTokenIn;
-        swapDirections[1] = ElixirStrategy.SwapDirection.ToTokenIn;
-
-        bytes[] memory swapPaths = new bytes[](2);
-        swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
-        swapPaths[1] = abi.encodePacked(deUSD, poolFee, USDC, poolFee, tokenIn);
+        address[] memory pools = new address[](0);
+        ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](0);
+        bytes[] memory swapPaths = new bytes[](0);
 
         address strategyImplementation = address(new ElixirStrategy());
         ElixirStrategy.InitializerParams memory initParams = ElixirStrategy.InitializerParams({
@@ -72,7 +61,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             tokenOut: tokenOut,
             deUSD: deUSD,
             uniswapRouter: uniswapRouter,
-            oracle: address(new SampleOracle()),
+            oracle: address(0),
             initialPools: pools,
             feeManager: address(feeManager),
             swapDirections: swapDirections,
@@ -107,20 +96,16 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
     }
 
     // Tests if deposit works correctly when authorized
-    function test_elixir_deposit_when_authorized() public notOwnerNotZero(user) {
+    function test_elixir_deposit_deUSD_when_authorized() public notOwnerNotZero(user) {
         uint256 amount = 1000e6;
         address userHolding = initiateUser(user, tokenIn, amount);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
         uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
 
-        bytes memory data = abi.encode(
-            strategy.getAllowedAmountOutMin(amount, ElixirStrategy.SwapDirection.FromTokenIn), uint256(block.timestamp)
-        );
-
         // Invest into the tested strategy vie strategyManager
         vm.prank(user, user);
         (uint256 receiptTokens, uint256 tokenInAmount) =
-            strategyManager.invest(tokenIn, address(strategy), amount, 0, data);
+            strategyManager.invest(tokenIn, address(strategy), amount, 0, "0x");
 
         uint256 tokenOutBalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
         uint256 expectedShares = tokenOutBalanceAfter - tokenOutBalanceBefore;
@@ -135,11 +120,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
          * 5. Strategy's total shares  += shares
          */
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
-        assertGe(
-            IERC20(tokenOut).balanceOf(userHolding),
-            strategy.getAllowedAmountOutMin(amount, ElixirStrategy.SwapDirection.FromTokenIn),
-            "Holding token out balance wrong"
-        );
+        assertGe(IERC20(tokenOut).balanceOf(userHolding), receiptTokens, "Holding token out balance wrong");
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
             expectedShares,
@@ -149,30 +130,19 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
 
         // Additional checks
-        assertApproxEqRel(
-            tokenOutBalanceAfter,
-            strategy.sdeUSD().convertToShares(amount * DECIMAL_DIFF),
-            0.01e18,
-            "Wrong balance in Elixir after stake"
-        );
+        assertEq(tokenOutBalanceAfter, receiptTokens, "Wrong balance in Elixir after stake");
         assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
         assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
     }
 
     // Tests if withdraw works correctly when authorized
-    function test_elixir_withdraw_when_authorized(
-        uint256 _amount
-    ) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e6, 1e8);
+    function test_elixir_withdraw_deUSD_when_authorized() public notOwnerNotZero(user) {
+        uint256 amount = 1000e6;
         address userHolding = initiateUser(user, tokenIn, amount);
-
-        bytes memory data = abi.encode(
-            strategy.getAllowedAmountOutMin(amount, ElixirStrategy.SwapDirection.FromTokenIn), uint256(block.timestamp)
-        );
 
         // Invest into the tested strategy via strategyManager
         vm.prank(user, user);
-        strategyManager.invest(tokenIn, address(strategy), amount, 0, data);
+        strategyManager.invest(tokenIn, address(strategy), amount, 0, "0x");
 
         (, uint256 totalShares) = strategy.recipients(userHolding);
         uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
@@ -184,19 +154,13 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         strategy.cooldown(userHolding, totalShares);
         skip(7 days);
 
-        bytes memory dataClaimInvest = abi.encode(
-            amount, // amountOutMinimum
-            uint256(block.timestamp), // deadline
-            abi.encodePacked(deUSD, poolFee, USDC, poolFee, tokenIn)
-        );
-
         vm.prank(user, user);
         (uint256 assetAmount,,,) = strategyManager.claimInvestment({
             _holding: userHolding,
             _token: tokenIn,
             _strategy: address(strategy),
             _shares: totalShares,
-            _data: dataClaimInvest
+            _data: "0x"
         });
 
         (uint256 investedAmount, uint256 totalSharesAfter) = strategy.recipients(userHolding);
@@ -226,28 +190,6 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         assertEq(tokenInBalanceAfter, expectedWithdrawal, "Incorrect asset amount returned");
     }
 
-    function test_elixir_updatesSlippagePercentageCorrectly() public {
-        uint256 newSlippage = 300;
-        vm.prank(OWNER);
-        strategy.setSlippagePercentage(newSlippage);
-
-        assertEq(strategy.allowedSlippagePercentage(), newSlippage);
-    }
-
-    function test_elixir_revertsOnExceedingSlippageLimit() public {
-        uint256 invalidSlippage = 20_000; // Exceeds SLIPPAGE_PRECISION
-
-        vm.prank(OWNER, OWNER);
-        vm.expectRevert(bytes("3002"));
-        strategy.setSlippagePercentage(invalidSlippage);
-    }
-
-    function test_elixir_revertsOnClaimRewards() public {
-        vm.prank(user, user);
-        vm.expectRevert(ElixirStrategy.OperationNotSupported.selector);
-        strategy.claimRewards(address(0), "");
-    }
-
     function _transferInRewards(
         uint256 _amount
     ) internal {
@@ -266,44 +208,6 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
         sdeUSD.transferInRewards(_amount);
         vm.stopPrank();
-    }
-
-    function test_elixir_decimal_mismatch_issue() public view {
-        // Test amounts in their respective decimal formats
-        uint256 usdtAmount = 1000e6; // 1,000 USDT (6 decimals)
-        uint256 deUsdAmount = 980e18; // 980 deUSD (18 decimals)
-
-        // Mock oracle rate: 1 USDT = 0.98 deUSD (rate is in 18 decimals)
-        (, uint256 mockRate) = strategy.oracle().peek(bytes(""));
-
-        // Get current slippage percentage (default is 5% = 500 basis points)
-        uint256 slippagePercentage = strategy.allowedSlippagePercentage();
-
-        // Test FromTokenIn direction (USDT -> deUSD)
-        uint256 minAmountOutFromTokenIn =
-            strategy.getAllowedAmountOutMin(usdtAmount, ElixirStrategy.SwapDirection.FromTokenIn);
-
-        // Calculate what the correct minimum should be:
-        // 1. Convert USDT to deUSD: usdtAmount * rate * DECIMAL_DIFF / 1e18
-        // 2. Apply slippage: result * (10000 - slippagePercentage) / 10000
-        uint256 expectedDeUsdOutput = usdtAmount * mockRate * DECIMAL_DIFF / 1e18;
-        uint256 correctMinAmountFromTokenIn = expectedDeUsdOutput * (10_000 - slippagePercentage) / 10_000;
-
-        // Verify the returned amount is correct
-        assertEq(minAmountOutFromTokenIn, correctMinAmountFromTokenIn, "FromTokenIn failed");
-
-        // Test ToTokenIn direction (deUSD -> USDT)
-        uint256 minAmountOutToTokenIn =
-            strategy.getAllowedAmountOutMin(deUsdAmount, ElixirStrategy.SwapDirection.ToTokenIn);
-
-        // Calculate what the correct minimum should be:
-        // 1. Convert deUSD to USDT: deUsdAmount * 1e18 / (rate * DECIMAL_DIFF)
-        // 2. Apply slippage: result * (10000 - slippagePercentage) / 10000
-        uint256 expectedUsdtOutput = deUsdAmount * 1e18 / (mockRate * DECIMAL_DIFF);
-        uint256 correctMinAmountToTokenIn = expectedUsdtOutput * (10_000 - slippagePercentage) / 10_000;
-
-        // Verify the returned amount is correct
-        assertEq(minAmountOutToTokenIn, correctMinAmountToTokenIn, "ToTokenIn failed");
     }
 }
 

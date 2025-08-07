@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.22;
 
-import { TickMath } from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import { BytesLib } from "@uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -11,15 +10,13 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { IUniswapV3Pool } from "@jigsaw/lib/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import { FixedPoint96 } from "@jigsaw/lib/v3-core/contracts/libraries/FixedPoint96.sol";
-import { FullMath } from "@jigsaw/lib/v3-core/contracts/libraries/FullMath.sol";
 import { GenericUniswapV3Oracle } from "@jigsaw/src/oracles/uniswap/GenericUniswapV3Oracle.sol";
 
 import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import { IHolding } from "@jigsaw/src/interfaces/core/IHolding.sol";
 import { IHoldingManager } from "@jigsaw/src/interfaces/core/IHoldingManager.sol";
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
+import { IStablesManager } from "@jigsaw/src/interfaces/core/IStablesManager.sol";
 
 import { IReceiptToken } from "@jigsaw/src/interfaces/core/IReceiptToken.sol";
 import { IStrategy } from "@jigsaw/src/interfaces/core/IStrategy.sol";
@@ -28,13 +25,14 @@ import { IOracle } from "@jigsaw/src/interfaces/oracle/IOracle.sol";
 
 import { IStakerLight } from "../staker/interfaces/IStakerLight.sol";
 import { IStakerLightFactory } from "../staker/interfaces/IStakerLightFactory.sol";
-import { ISdeUsdMin } from "./interfaces/ISdeUsdMin.sol";
+import { IERC4626, ISdeUsdMin } from "./interfaces/ISdeUsdMin.sol";
 
 import { StrategyBaseUpgradeableV2 } from "../StrategyBaseUpgradeableV2.sol";
 
 import { IFeeManager } from "../extensions/interfaces/IFeeManager.sol";
 import { OperationsLib } from "../libraries/OperationsLib.sol";
 import { StrategyConfigLib } from "../libraries/StrategyConfigLib.sol";
+import { OracleLib } from "./libraries/OracleLib.sol";
 
 /**
  * @title ElixirStrategy
@@ -62,20 +60,46 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
 
     /**
      * @notice Struct for the initializer params.
+     * @param owner The address of the initial owner of the Strategy contract.
+     * @param manager The address of the manager contract.
+     * @param stakerFactory The address of the StakerLightFactory contract.
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy.
+     * @param jigsawRewardDuration The initial Jigsaw reward distribution duration for the strategy.
+     * @param tokenIn The address of the LP token.
+     * @param tokenOut The address of Elixir's receipt token.
+     * @param deUSD The Elixir's deUSD stablecoin.
+     * @param uniswapRouter The address of the UniswapV3 Router.
+     * @param oracle The address of the UniswapV3 Oracle.
+     * @param initialPools The address array of the UniswapV3 pools.
+     * @param feeManager The address of the feeManager contract.
+     * @param swapDirections Array specifying the swap directions swap paths are set during initialization.
+     * @param swapPaths Array of encoded UniswapV3 swap paths corresponding to each swap direction.
      */
     struct InitializerParams {
-        address owner; // The address of the initial owner of the Strategy contract
-        address manager; // The address of the manager contract
-        address stakerFactory; // The address of the StakerLightFactory contract
-        address jigsawRewardToken; // The address of the Jigsaw reward token associated with the strategy
-        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
-        address tokenIn; // The address of the LP token
-        address tokenOut; // The address of Elixir's receipt token
-        address deUSD; // The Elixir's deUSD stablecoin.
-        address uniswapRouter; // The address of the UniswapV3 Router
-        address oracle; // The address of the UniswapV3 Oracle
-        address[] initialPools; // The address array of the UniswapV3 pools
-        address feeManager; // The address of the feeManager contract
+        address owner;
+        address manager;
+        address stakerFactory;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
+        address deUSD;
+        address uniswapRouter;
+        address oracle;
+        address[] initialPools;
+        address feeManager;
+        SwapDirection[] swapDirections;
+        bytes[] swapPaths;
+    }
+
+    /**
+     * @notice Struct containing parameters related to the cooldown status for withdrawals.
+     * @param active Indicates whether the cooldown mechanism is currently active.
+     * @param cooledShares The number of shares that have completed the cooldown period and are eligible for withdrawal.
+     */
+    struct CooldownParams {
+        bool active;
+        uint256 cooledShares;
     }
 
     // -- Errors --
@@ -101,9 +125,11 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     error InvalidLastTokenInPath();
 
     /**
-     * @notice Thrown when the minimum output amount is invalid.
+     *  @notice Thrown when the minimum output amount is invalid.
+     *  @param provided The minimum output amount provided by the user.
+     *  @param allowed The minimum output amount allowed by the strategy (after slippage).
      */
-    error InvalidAmountOutMin();
+    error InvalidAmountOutMin(uint256 provided, uint256 allowed);
 
     // -- Events --
 
@@ -129,6 +155,13 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      * @param newOracle The new oracle address.
      */
     event OracleUpdated(address oldOracle, address newOracle);
+
+    /**
+     * @notice Emitted when the swap path is updated for a given swap direction.
+     * @param swapDirection The direction of the swap (FromTokenIn or ToTokenIn).
+     * @param swapPath The encoded swap path as bytes.
+     */
+    event SwapPathUpdated(SwapDirection indexed swapDirection, bytes indexed swapPath);
 
     // -- State variables --
 
@@ -203,6 +236,24 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      */
     mapping(address recipient => IStrategy.RecipientInfo info) public override recipients;
 
+    /**
+     * @notice Mapping of recipient addresses to the number of shares pending withdrawal after initiating cooldown.
+     * @dev Used to track shares that are in the cooldown period before they can be withdrawn.
+     */
+    mapping(address recipient => uint256 sharesInCooldown) public sharesPendingCooldown;
+
+    /**
+     * @notice Stores the UniswapV3 swap path for each swap direction.
+     * @dev The mapping associates a SwapDirection with its corresponding encoded swap path.
+     * The swap path is used to perform token swaps via UniswapV3 for the specified direction.
+     */
+    mapping(SwapDirection direction => bytes SwapPath) public swapPath;
+
+    /**
+     * @notice The factor used to adjust values from 18 decimal precision (shares) to 6 decimal precision (USDC).
+     */
+    uint256 public constant DECIMAL_DIFF = 1e12;
+
     // -- Constructor --
 
     /**
@@ -237,22 +288,9 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         require(_params.tokenIn != address(0), "3000");
         require(_params.tokenOut != address(0), "3000");
         require(_params.deUSD != address(0), "3036");
-        require(_params.uniswapRouter != address(0), "3000");
-        require(_params.oracle != address(0), "3000");
-        require(_params.initialPools.length != 0, "3000");
         require(_params.feeManager != address(0), "3000");
 
         __StrategyBase_init({ _initialOwner: _params.owner });
-
-        oracle = IOracle(
-            new GenericUniswapV3Oracle({
-                _initialOwner: _params.owner,
-                _underlying: _params.deUSD,
-                _quoteToken: _params.tokenIn,
-                _quoteTokenOracle: _params.oracle,
-                _uniswapV3Pools: _params.initialPools
-            })
-        );
 
         manager = IManager(_params.manager);
         tokenIn = _params.tokenIn;
@@ -261,11 +299,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         rewardToken = address(0);
         deUSD = _params.deUSD;
         sdeUSD = ISdeUsdMin(_params.tokenOut);
-        uniswapRouter = _params.uniswapRouter;
         feeManager = IFeeManager(_params.feeManager);
-
-        // Set default allowed slippage percentage to 5%
-        _setSlippagePercentage({ _newVal: 500 });
 
         receiptToken = IReceiptToken(
             StrategyConfigLib.configStrategy({
@@ -285,6 +319,28 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
                 _rewardsDuration: _params.jigsawRewardDuration
             })
         );
+
+        if (tokenIn != deUSD) {
+            require(_params.oracle != address(0), "3000");
+            require(_params.uniswapRouter != address(0), "3000");
+            require(_params.initialPools.length != 0, "3000");
+            require(_params.swapDirections.length != 0, "3000");
+            require(_params.swapPaths.length != 0, "3000");
+
+            oracle = OracleLib.deployUniswapOracle({
+                _initialOwner: _params.owner,
+                _underlying: _params.deUSD,
+                _quoteToken: _params.tokenIn,
+                _quoteTokenOracle: _params.oracle,
+                _uniswapV3Pools: _params.initialPools
+            });
+
+            uniswapRouter = _params.uniswapRouter;
+
+            // Set default allowed slippage percentage to 5%
+            _setSlippagePercentage({ _newVal: 500 });
+            _setSwapPath({ _swapDirections: _params.swapDirections, _swapPaths: _params.swapPaths });
+        }
     }
 
     // -- User-specific Methods --
@@ -308,17 +364,19 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     ) external override nonReentrant onlyValidAmount(_amount) onlyStrategyManager returns (uint256, uint256) {
         require(_asset == tokenIn, "3001");
 
-        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
         uint256 deUsdBalanceBefore = IERC20(deUSD).balanceOf(address(this));
+        IHolding(_recipient).transfer({ _token: _asset, _to: address(this), _amount: _amount });
 
-        // Swap USDT to deUSD on Uniswap
-        _swapExactInputMultihop({
-            _tokenIn: _asset,
-            _amountIn: _amount,
-            _recipient: address(this),
-            _swapData: _data,
-            _swapDirection: SwapDirection.FromTokenIn
-        });
+        if (tokenIn != deUSD) {
+            // Swap USDT to deUSD on Uniswap
+            _swapExactInputMultihop({
+                _tokenIn: _asset,
+                _amountIn: _amount,
+                _recipient: address(this),
+                _swapData: _data,
+                _swapDirection: SwapDirection.FromTokenIn
+            });
+        }
 
         uint256 deUSDAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
         uint256 balanceBefore = sdeUSD.balanceOf(_recipient);
@@ -354,6 +412,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      * @dev Some strategies will only allow the tokenIn to be withdrawn.
      * @dev 'assetAmount' will be equal to 'tokenInAmount' if '_asset' is the same as the strategy's 'tokenIn()'.
      *
+     * @dev Frontend: Before allowing a withdrawal, ensure that if the cooldown mechanism is active in the sdeUSD
+     * contract, the user has already initiated the cooldown process. This can be checked by calling the
+     * `isCooldownActive` function of the strategy. If cooldown is active, also verify that the user has shares
+     * registered for withdrawal in the `sharesPendingCooldown` mapping.
+     * If these conditions are not met, prevent the withdrawal and prompt the user to initiate cooldown first.
+     *
      * @param _shares The amount of shares to withdraw.
      * @param _recipient The address on behalf of which the funds are withdrawn.
      * @param _asset The token to be withdrawn.
@@ -372,18 +436,25 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     ) external override nonReentrant onlyStrategyManager returns (uint256, uint256, int256, uint256) {
         require(_asset == tokenIn, "3001");
 
+        CooldownParams memory cooldownParams =
+            CooldownParams({ active: isCooldownActive(), cooledShares: sharesPendingCooldown[_recipient] });
         WithdrawParams memory params = WithdrawParams({
-            shares: _shares,
+            shares: cooldownParams.active ? cooldownParams.cooledShares : _shares,
             totalShares: recipients[_recipient].totalShares,
             shareRatio: 0,
             shareDecimals: sharesDecimals,
             investment: 0,
             assetsToWithdraw: 0,
-            balanceBefore: 0,
+            balanceBefore: IERC20(tokenIn).balanceOf(_recipient),
             withdrawnAmount: 0,
             yield: 0,
             fee: 0
         });
+
+        if (cooldownParams.active) require(params.shares > 0, "No shares to redeem. Cooldown first");
+        if (!cooldownParams.active && cooldownParams.cooledShares != 0) {
+            params.shares += cooldownParams.cooledShares;
+        }
 
         params.shareRatio = OperationsLib.getRatio({
             numerator: params.shares,
@@ -406,22 +477,41 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         _genericCall({
             _holding: _recipient,
             _contract: tokenOut,
-            _call: abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+            _call: cooldownParams.active
+                // Unstake if cooldown is active
+                ? abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+                // Redeem if not
+                : abi.encodeCall(IERC4626.redeem, (params.shares - cooldownParams.cooledShares, address(this), _recipient))
         });
+
+        // Unstake pending cooled down shares
+        if (!cooldownParams.active && sharesPendingCooldown[_recipient] != 0) {
+            _genericCall({
+                _holding: _recipient,
+                _contract: tokenOut,
+                _call: abi.encodeCall(ISdeUsdMin.unstake, (address(this)))
+            });
+            sharesPendingCooldown[_recipient] = 0;
+        }
 
         uint256 deUsdAmount = IERC20(deUSD).balanceOf(address(this)) - deUsdBalanceBefore;
 
-        // Swap deUSD to USDT on Uniswap
-        _swapExactInputMultihop({
-            _tokenIn: deUSD,
-            _amountIn: deUsdAmount,
-            _recipient: _recipient,
-            _swapData: _data,
-            _swapDirection: SwapDirection.ToTokenIn
-        });
+        if (tokenIn == deUSD) {
+            IERC20(deUSD).safeTransfer({ to: _recipient, value: deUsdAmount });
+        }
+
+        // Swap deUSD to USDT on Uniswap if the tokenIn of the strategy is not deUSD
+        params.withdrawnAmount = tokenIn == deUSD
+            ? deUsdAmount
+            : _swapExactInputMultihop({
+                _tokenIn: deUSD,
+                _amountIn: deUsdAmount,
+                _recipient: _recipient,
+                _swapData: _data,
+                _swapDirection: SwapDirection.ToTokenIn
+            });
 
         // Take protocol's fee from generated yield if any.
-        params.withdrawnAmount = IERC20(tokenIn).balanceOf(_recipient) - params.balanceBefore;
         params.yield = params.withdrawnAmount.toInt256() - params.investment.toInt256();
 
         // Take protocol's fee from generated yield if any.
@@ -433,7 +523,8 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
             }
         }
 
-        recipients[_recipient].totalShares -= _shares;
+        if (cooldownParams.active) sharesPendingCooldown[_recipient] = 0;
+        recipients[_recipient].totalShares -= params.shares;
         recipients[_recipient].investedAmount = params.investment > recipients[_recipient].investedAmount
             ? 0
             : recipients[_recipient].investedAmount - params.investment;
@@ -448,7 +539,7 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         });
 
         // Register `_recipient`'s withdrawal operation to stop generating jigsaw rewards.
-        jigsawStaker.withdraw({ _user: _recipient, _amount: _shares });
+        jigsawStaker.withdraw({ _user: _recipient, _amount: params.shares });
 
         return (params.withdrawnAmount, params.investment, params.yield, params.fee);
     }
@@ -466,16 +557,30 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     }
 
     /**
-     * @notice Starts a cooldown to claim the converted underlying asset.
+     * @notice Initiates the cooldown period required before a user can withdraw the converted underlying asset.
+     * @dev Only the contract owner or the user associated with the holding can call this function.
      * @param _recipient The address on behalf of which the funds are withdrawn.
-     * @param _shares The amount of shares to withdraw.
+     * @param _shares The amount of shares to withdraw (must not exceed available shares).
      */
     function cooldown(address _recipient, uint256 _shares) external nonReentrant {
+        require(isCooldownActive(), "Cooldown is inactive. Withdraw directly");
         require(
             msg.sender == owner() || msg.sender == IHoldingManager(manager.holdingManager()).holdingUser(_recipient),
             "1001"
         );
+        if (msg.sender != owner()) {
+            require(
+                !IStablesManager(manager.stablesManager()).isLiquidatable({ _token: tokenIn, _holding: _recipient }),
+                "3105"
+            );
+        }
 
+        // Prevent overflow and excessive withdrawal
+        uint256 newPending = sharesPendingCooldown[_recipient] + _shares;
+        require(newPending <= recipients[_recipient].totalShares, "Excessive shares amount");
+        sharesPendingCooldown[_recipient] = newPending;
+
+        // Call cooldownShares on the sdeUSD contract for the specified amount
         _genericCall({
             _holding: _recipient,
             _contract: tokenOut,
@@ -513,6 +618,10 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         oracle = IOracle(_newOracle);
     }
 
+    function setSwapPath(SwapDirection[] memory _swapDirections, bytes[] memory _swapPaths) external onlyOwner {
+        _setSwapPath(_swapDirections, _swapPaths);
+    }
+
     // -- Getters --
 
     /**
@@ -530,12 +639,25 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
     function getAllowedAmountOutMin(uint256 _amount, SwapDirection _swapDirection) public view returns (uint256) {
         // Get tokenIn rate to get  minimum acceptable amount out
         (, uint256 rate) = oracle.peek(bytes(""));
-        uint256 expectedTokenOut = _swapDirection == SwapDirection.FromTokenIn
-            ? _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil)
-            : _amount.mulDiv(1e18, rate, Math.Rounding.Ceil);
+
+        // Account for decimal difference
+        uint256 expectedTokenOut = (_swapDirection == SwapDirection.FromTokenIn)
+            // USDT → deUSD: Scale up by 12 decimals (18 - 6)
+            ? _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil) * DECIMAL_DIFF
+            // deUSD → USDT: Scale down by 12 decimals (18 - 6)
+            : _amount.mulDiv(1e18, rate, Math.Rounding.Ceil) / DECIMAL_DIFF;
 
         // Calculate min tokenOut amount with max allowed slippage
         return _applySlippage(expectedTokenOut);
+    }
+
+    /**
+     * @notice Checks if the cooldown period is currently active for sdeUSD withdrawals.
+     * @dev Returns true if the cooldown duration set in the sdeUSD contract is greater than zero.
+     * @return True if cooldown is active, false otherwise.
+     */
+    function isCooldownActive() public view returns (bool) {
+        return sdeUSD.cooldownDuration() > 0;
     }
 
     // -- Utilities --
@@ -565,38 +687,20 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         SwapDirection _swapDirection
     ) private returns (uint256 amountOut) {
         // Decode the data to get the swap path
-        (uint256 amountOutMinimum, uint256 deadline, bytes memory swapPath) =
-            abi.decode(_swapData, (uint256, uint256, bytes));
-
-        // Validate swap path length
-        // Minimum path length is 43 bytes (length of smallest encoded pool key = address[20] + fee[3] + address[20])
-        if (swapPath.length < 43) revert InvalidSwapPathLength();
-
-        // Validate token path integrity for FromTokenIn direction:
-        // - First token must be tokenIn
-        // - Last token must be `deUSD` that's later used for staking
-        if (_swapDirection == SwapDirection.FromTokenIn) {
-            if (swapPath.toAddress(0) != tokenIn) revert InvalidFirstTokenInPath();
-            if (swapPath.toAddress(swapPath.length - ADDR_SIZE) != deUSD) revert InvalidLastTokenInPath();
-        }
-
-        // Validate token path integrity for ToTokenIn direction:
-        // - First token must be tokenOut
-        // - Last token must be `deUSD` that's later used for unstaking
-        if (_swapDirection == SwapDirection.ToTokenIn) {
-            if (swapPath.toAddress(0) != deUSD) revert InvalidFirstTokenInPath();
-            if (swapPath.toAddress(swapPath.length - ADDR_SIZE) != tokenIn) revert InvalidLastTokenInPath();
-        }
+        (uint256 amountOutMinimum, uint256 deadline) = abi.decode(_swapData, (uint256, uint256));
+        uint256 allowedAmountOutMin = getAllowedAmountOutMin(_amountIn, _swapDirection);
 
         // Validate amountOutMin is within allowed slippage
-        if (amountOutMinimum < getAllowedAmountOutMin(_amountIn, _swapDirection)) revert InvalidAmountOutMin();
+        if (amountOutMinimum < allowedAmountOutMin) {
+            revert InvalidAmountOutMin({ provided: amountOutMinimum, allowed: allowedAmountOutMin });
+        }
 
         // Approve the router to spend `_tokenIn`.
         IERC20(_tokenIn).forceApprove({ spender: uniswapRouter, value: _amountIn });
 
         // A path is a  encoded as (tokenIn, fee, tokenOut/tokenIn, fee, tokenOut).
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
-            path: swapPath,
+            path: swapPath[_swapDirection],
             recipient: _recipient,
             deadline: deadline,
             amountIn: _amountIn,
@@ -611,7 +715,12 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         }
 
         // Emit event indicating successful exact output swap.
-        emit ExactInputSwap({ holding: _recipient, path: swapPath, amountIn: _amountIn, amountOut: amountOut });
+        emit ExactInputSwap({
+            holding: _recipient,
+            path: swapPath[_swapDirection],
+            amountIn: _amountIn,
+            amountOut: amountOut
+        });
     }
 
     /**
@@ -637,5 +746,43 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         require(_newVal <= SLIPPAGE_PRECISION, "3002");
         emit SlippagePercentageSet({ oldValue: allowedSlippagePercentage, newValue: _newVal });
         allowedSlippagePercentage = _newVal;
+    }
+
+    /**
+     * @notice Sets the swap paths for the specified swap directions.
+     *
+     * @dev This function allows setting multiple swap paths for different swap directions in a single call.
+     *      It validates the swap path length and ensures the correct token order for each direction:
+     *      - For SwapDirection.FromTokenIn: path must start with `tokenIn` and end with `deUSD`.
+     *      - For SwapDirection.ToTokenIn: path must start with `deUSD` and end with `tokenIn`.
+     *      Emits a {SwapPathUpdated} event for each successfully set path.
+     *
+     * @param _swapDirections The array of swap directions (FromTokenIn or ToTokenIn).
+     * @param _swapPaths The array of encoded swap paths as bytes, corresponding to each direction.
+     */
+    function _setSwapPath(SwapDirection[] memory _swapDirections, bytes[] memory _swapPaths) private {
+        require(_swapDirections.length == _swapPaths.length, "3047");
+
+        for (uint256 i = 0; i < _swapDirections.length; i++) {
+            bytes memory path = _swapPaths[i];
+
+            // Minimum path length is 43 bytes (address[20] + fee[3] + address[20])
+            if (path.length < 43) revert InvalidSwapPathLength();
+
+            if (_swapDirections[i] == SwapDirection.FromTokenIn) {
+                // Path must start with tokenIn and end with deUSD
+                if (path.toAddress(0) != tokenIn) revert InvalidFirstTokenInPath();
+                if (path.toAddress(path.length - ADDR_SIZE) != deUSD) revert InvalidLastTokenInPath();
+            } else if (_swapDirections[i] == SwapDirection.ToTokenIn) {
+                // Path must start with deUSD and end with tokenIn
+                if (path.toAddress(0) != deUSD) revert InvalidFirstTokenInPath();
+                if (path.toAddress(path.length - ADDR_SIZE) != tokenIn) revert InvalidLastTokenInPath();
+            } else {
+                revert("Invalid SwapDirection");
+            }
+
+            swapPath[_swapDirections[i]] = path;
+            emit SwapPathUpdated({ swapDirection: _swapDirections[i], swapPath: path });
+        }
     }
 }

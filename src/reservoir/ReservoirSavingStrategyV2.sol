@@ -42,9 +42,37 @@ contract ReservoirSavingStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     /**
      * @notice Struct for the initializer params.
      * @param owner The address of the initial owner of the Strategy contract
-     * @param feeManager The address of the feeManager contract
+     * @param manager The address of the Manager contract
+     * @param creditEnforcer The address of the Reservoir's CreditEnforcer contract
+     * @param pegStabilityModule The Reservoir's PegStabilityModule contract.
+     * @param savingModule The Reservoir's SavingModule contract.
+     * @param rUSD The Reservoir's rUSD stablecoin.
+     * @param stakerFactory The address of the StakerLightFactory contract
+     * @param jigsawRewardToken The address of the Jigsaw reward token associated with the strategy
+     * @param jigsawRewardDuration The initial Jigsaw reward distribution duration for the strategy
+     * @param tokenIn The address of the LP token
+     * @param tokenOut The address of Reservoir's receipt token
      */
     struct InitializerParams {
+        address owner;
+        address manager;
+        address creditEnforcer;
+        address pegStabilityModule;
+        address savingModule;
+        address rUSD;
+        address stakerFactory;
+        address jigsawRewardToken;
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
+    }
+
+    /**
+     * @notice Struct for the reinitializer params.
+     * @param owner The address of the initial owner of the Strategy contract
+     * @param feeManager The address of the feeManager contract
+     */
+    struct ReinitializerParams {
         address feeManager;
     }
 
@@ -129,6 +157,65 @@ contract ReservoirSavingStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
     // -- Initialization --
 
     /**
+     * @notice Initializes the Reservoir Stablecoin Strategy contract with necessary parameters.
+     *
+     * @dev Configures core components such as manager, tokens, pools, and reward systems
+     * needed for the strategy to operate.
+     *
+     * @dev This function is only callable once due to the `initializer` modifier.
+     *
+     * @notice Ensures that critical addresses are non-zero to prevent misconfiguration:
+     * - `_params.manager` must be valid (`"3065"` error code if invalid).
+     * - `_params.creditEnforcer` must be valid (`"3036"` error code if invalid).
+     * - `_params.pegStabilityModule` must be valid (`"3036"` error code if invalid).
+     * - `_params.tokenIn` and `_params.tokenOut` must be valid (`"3000"` error code if invalid).
+     *
+     * @param _params Struct containing all initialization parameters.
+     */
+    function initialize(
+        InitializerParams memory _params
+    ) public initializer {
+        require(_params.manager != address(0), "3065");
+        require(_params.creditEnforcer != address(0), "3036");
+        require(_params.pegStabilityModule != address(0), "3036");
+        require(_params.savingModule != address(0), "3036");
+        require(_params.rUSD != address(0), "3036");
+        require(_params.jigsawRewardToken != address(0), "3000");
+        require(_params.tokenIn != address(0), "3000");
+        require(_params.tokenOut != address(0), "3000");
+
+        __StrategyBase_init({ _initialOwner: _params.owner });
+
+        manager = IManager(_params.manager);
+        creditEnforcer = ICreditEnforcer(_params.creditEnforcer);
+        pegStabilityModule = _params.pegStabilityModule;
+        savingModule = _params.savingModule;
+        rUSD = _params.rUSD;
+        tokenIn = _params.tokenIn;
+        tokenOut = _params.tokenOut;
+        sharesDecimals = IERC20Metadata(_params.tokenOut).decimals();
+
+        receiptToken = IReceiptToken(
+            StrategyConfigLib.configStrategy({
+                _initialOwner: _params.owner,
+                _receiptTokenFactory: manager.receiptTokenFactory(),
+                _receiptTokenName: "Reservoir Receipt Token",
+                _receiptTokenSymbol: "ReRT"
+            })
+        );
+
+        jigsawStaker = IStakerLight(
+            IStakerLightFactory(_params.stakerFactory).createStakerLight({
+                _initialOwner: _params.owner,
+                _holdingManager: manager.holdingManager(),
+                _rewardToken: _params.jigsawRewardToken,
+                _strategy: address(this),
+                _rewardsDuration: _params.jigsawRewardDuration
+            })
+        );
+    }
+
+    /**
      * @custom:oz-upgrades-validate-as-initializer
      *
      * @notice Initializes the Aave Strategy V2 contract with necessary parameters.
@@ -143,8 +230,8 @@ contract ReservoirSavingStrategyV2 is IStrategy, StrategyBaseUpgradeableV2 {
      *
      * @param _params Struct containing all initialization parameters.
      */
-    function initialize(
-        InitializerParams memory _params
+    function reinitialize(
+        ReinitializerParams memory _params
     ) public reinitializer(2) {
         require(_params.feeManager != address(0), "3000");
         feeManager = IFeeManager(_params.feeManager);

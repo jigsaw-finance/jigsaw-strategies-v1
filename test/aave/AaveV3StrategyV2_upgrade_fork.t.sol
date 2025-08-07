@@ -222,7 +222,7 @@ contract AaveV3StrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTes
 
         // Perform the upgrade
         bytes memory data = abi.encodeCall(
-            AaveV3StrategyV2.initialize, AaveV3StrategyV2.InitializerParams({ feeManager: address(feeManager) })
+            AaveV3StrategyV2.reinitialize, AaveV3StrategyV2.ReinitializerParams({ feeManager: address(feeManager) })
         );
 
         strategy.upgradeToAndCall(strategyV2Implementation, data);
