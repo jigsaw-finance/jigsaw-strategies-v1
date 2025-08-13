@@ -16,7 +16,6 @@ library OracleLib {
      * @param _initialOwner The address to be set as the initial owner of the oracle.
      * @param _underlying The address of the underlying asset for which the oracle provides price data.
      * @param _quoteToken The address of the quote token used in the Uniswap V3 pools.
-     * @param _quoteTokenOracle The address of the oracle for the quote token.
      * @param _uniswapV3Pools An array of Uniswap V3 pool addresses used for price aggregation.
      * @return Returns the address of the newly deployed oracle as an IOracle interface.
      */
@@ -24,7 +23,6 @@ library OracleLib {
         address _initialOwner,
         address _underlying,
         address _quoteToken,
-        address _quoteTokenOracle,
         address[] memory _uniswapV3Pools
     ) public returns (IOracle) {
         return IOracle(
@@ -32,7 +30,6 @@ library OracleLib {
                 _initialOwner: _initialOwner,
                 _underlying: _underlying,
                 _quoteToken: _quoteToken,
-                _quoteTokenOracle: _quoteTokenOracle,
                 _uniswapV3Pools: _uniswapV3Pools
             })
         );
