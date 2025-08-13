@@ -69,7 +69,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
      * @param tokenOut The address of Elixir's receipt token.
      * @param deUSD The Elixir's deUSD stablecoin.
      * @param uniswapRouter The address of the UniswapV3 Router.
-     * @param oracle The address of the UniswapV3 Oracle.
      * @param initialPools The address array of the UniswapV3 pools.
      * @param feeManager The address of the feeManager contract.
      * @param swapDirections Array specifying the swap directions swap paths are set during initialization.
@@ -85,7 +84,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         address tokenOut;
         address deUSD;
         address uniswapRouter;
-        address oracle;
         address[] initialPools;
         address feeManager;
         SwapDirection[] swapDirections;
@@ -321,7 +319,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         );
 
         if (tokenIn != deUSD) {
-            require(_params.oracle != address(0), "3000");
             require(_params.uniswapRouter != address(0), "3000");
             require(_params.initialPools.length != 0, "3000");
             require(_params.swapDirections.length != 0, "3000");
@@ -331,7 +328,6 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
                 _initialOwner: _params.owner,
                 _underlying: _params.deUSD,
                 _quoteToken: _params.tokenIn,
-                _quoteTokenOracle: _params.oracle,
                 _uniswapV3Pools: _params.initialPools
             });
 
@@ -640,12 +636,11 @@ contract ElixirStrategy is IStrategy, StrategyBaseUpgradeableV2 {
         // Get tokenIn rate to get  minimum acceptable amount out
         (, uint256 rate) = oracle.peek(bytes(""));
 
-        // Account for decimal difference
+        // Account for the token swap ratio
+        // Accounts for oracle's price decimals (18)
         uint256 expectedTokenOut = (_swapDirection == SwapDirection.FromTokenIn)
-            // USDT → deUSD: Scale up by 12 decimals (18 - 6)
-            ? _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil) * DECIMAL_DIFF
-            // deUSD → USDT: Scale down by 12 decimals (18 - 6)
-            : _amount.mulDiv(1e18, rate, Math.Rounding.Ceil) / DECIMAL_DIFF;
+            ? _amount.mulDiv(rate, 1e18, Math.Rounding.Ceil)
+            : _amount.mulDiv(1e18, rate, Math.Rounding.Ceil);
 
         // Calculate min tokenOut amount with max allowed slippage
         return _applySlippage(expectedTokenOut);
