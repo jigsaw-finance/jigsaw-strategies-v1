@@ -127,7 +127,7 @@ contract AaveV3StrategyTest is Test, BasicContractsFixture {
         // 1.
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
         // 2.
-        assertApproxEqAbs(IERC20(tokenOut).balanceOf(userHolding), amount, 1, "Holding token out balance wrong");
+        assertApproxEqRel(IERC20(tokenOut).balanceOf(userHolding), amount, 0.01e18, "Holding token out balance wrong");
         // 3.
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),

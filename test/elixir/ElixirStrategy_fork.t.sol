@@ -18,6 +18,10 @@ import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 contract ElixirStrategyTest is Test, BasicContractsFixture {
     using SafeERC20 for IERC20;
 
+    event OracleUpdated(address oldOracle, address newOracle);
+
+    error OwnableUnauthorizedAccount(address account);
+
     // Mainnet USDT
     address internal tokenIn = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
 
@@ -147,7 +151,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
         assertGe(
             IERC20(tokenOut).balanceOf(userHolding),
-            strategy.getAllowedAmountOutMin(amount, ElixirStrategy.SwapDirection.FromTokenIn),
+            receiptTokens,
             "Holding token out balance wrong"
         );
         assertEq(
@@ -296,6 +300,66 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
 
         uint256 expectedMinUsdt = 1000e6;
         assertApproxEqRel(minUsdt, expectedMinUsdt, 0.01e18, "minUsdt differs from expectedMinUsdt");
+    }
+
+    function test_elixir_updateOracle_success() public {
+        address[] memory pools = new address[](2);
+
+        pools[0] = USDC_POOL;
+        pools[1] = DEUSD_USDC_POOL;
+
+        GenericUniswapV3Oracle newOracle = new GenericUniswapV3Oracle(
+            OWNER,
+            address(strategy.sdeUSD()),
+            address(usdc),
+            address(new SampleOracle()),
+            pools
+        );
+
+        address oldOracle = address(strategy.oracle());
+        vm.prank(OWNER);
+        vm.expectEmit(true, true, false, false);
+        emit OracleUpdated(address(newOracle), oldOracle);
+        strategy.updateOracle(address(newOracle));
+
+        assertEq(address(strategy.oracle()), address(newOracle), "Oracle should be updated successfully");
+    }
+
+    function test_elixir_updateOracle_zero_address_revert() public {
+        vm.prank(OWNER);
+        vm.expectRevert(bytes("3000"));
+        strategy.updateOracle(address(0));
+    }
+
+    function test_elixir_updateOracle_same_address_revert() public {
+        address oldOracle = address(strategy.oracle());
+        vm.prank(OWNER);
+        vm.expectRevert(bytes("3017"));
+        strategy.updateOracle(oldOracle);
+    }
+
+    function test_elixir_updateOracle_not_authorized() public {
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, user));
+        strategy.updateOracle(address(0));
+    }
+
+    function test_elixir_setSwapPath_not_authorized() public {
+        ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](2);
+        bytes[] memory swapPaths = new bytes[](2);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, user));
+        strategy.setSwapPath(swapDirections, swapPaths);
+    }
+
+    function test_elixir_setSwapPath_expect_revert() public {
+        ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](3);
+        bytes[] memory swapPaths = new bytes[](2);
+
+        vm.prank(OWNER);
+        vm.expectRevert(bytes("3047"));
+        strategy.setSwapPath(swapDirections, swapPaths);
     }
 }
 

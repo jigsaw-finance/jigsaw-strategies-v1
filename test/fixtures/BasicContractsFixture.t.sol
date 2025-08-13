@@ -68,8 +68,13 @@ abstract contract BasicContractsFixture is Test {
     // collateral to registry mapping
     mapping(address => address) internal registries;
 
-    function init() public {
-        vm.createSelectFork(vm.envString("MAINNET_RPC_URL"));
+    function init(uint256 blockNumber) public {
+        if (blockNumber == 0) {
+            vm.createSelectFork(vm.envString("MAINNET_RPC_URL"));
+        } else {
+            vm.createSelectFork(vm.envString("MAINNET_RPC_URL"), blockNumber);
+        }
+
         vm.startPrank(OWNER);
         deal(OWNER, 100_000e18);
 
@@ -175,6 +180,10 @@ abstract contract BasicContractsFixture is Test {
         );
 
         vm.stopPrank();
+    }
+
+    function init() public {
+        init(0);
     }
 
     // Utility functions

@@ -30,7 +30,7 @@ contract DeployAllTest is Test, CommonStrategyScriptBase, BasicContractsFixture 
     address[] internal strategies;
 
     function setUp() public {
-        init();
+        init(23_071_970);
 
         string memory commonConfig = vm.readFile("./deployment-config/00_CommonConfig.json");
 
