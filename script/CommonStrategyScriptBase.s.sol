@@ -245,10 +245,8 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         if (keccak256(bytes(_strategy)) == ELIXIR_STRATEGY) {
             string memory elixirConfig = vm.readFile("./deployment-config/03_ElixirStrategyConfig.json");
             address uniswapRouter = elixirConfig.readAddress(".UNISWAP_ROUTER");
-            address USDC_USD_ORACLE = elixirConfig.readAddress(".USDC_USD_ORACLE");
 
             _validateUniswapRouter(uniswapRouter);
-            _validateOracle(USDC_USD_ORACLE);
 
             _populateElixirArray();
 
@@ -265,7 +263,6 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                         jigsawRewardToken: jigsawRewardToken,
                         feeManager: feeManager,
                         uniswapRouter: uniswapRouter,
-                        oracle: USDC_USD_ORACLE,
                         jigsawRewardDuration: elixirStrategyParams[i].jigsawRewardDuration,
                         tokenIn: elixirStrategyParams[i].tokenIn,
                         tokenOut: elixirStrategyParams[i].tokenOut,
@@ -407,8 +404,8 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
 
         bytes[] memory swapPaths = new bytes[](2);
         // @todo decide the swap paths
-         swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
-         swapPaths[1] = abi.encodePacked(deUSD, poolFee, USDC, poolFee, tokenIn);
+        swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+        swapPaths[1] = abi.encodePacked(deUSD, poolFee, USDC, poolFee, tokenIn);
 
         elixirStrategyParams.push(
             ElixirStrategyParams({
