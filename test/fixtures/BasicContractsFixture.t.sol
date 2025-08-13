@@ -68,7 +68,9 @@ abstract contract BasicContractsFixture is Test {
     // collateral to registry mapping
     mapping(address => address) internal registries;
 
-    function init(uint256 blockNumber) public {
+    function init(
+        uint256 blockNumber
+    ) public {
         if (blockNumber == 0) {
             vm.createSelectFork(vm.envString("MAINNET_RPC_URL"));
         } else {
@@ -168,10 +170,6 @@ abstract contract BasicContractsFixture is Test {
         Strings.toHexString(uint160(address(stakerFactory)), 20).write("./deployments.json", ".STAKER_FACTORY");
         Strings.toHexString(uint160(address(feeManager)), 20).write(
             "./deployment-config/00_CommonConfig.json", ".FEE_MANAGER"
-        );
-
-        Strings.toHexString(uint160(address(usdcOracle)), 20).write(
-            "./deployment-config/03_ElixirStrategyConfig.json", ".USDC_USD_ORACLE"
         );
 
         // Ethereum Mainnet UniswapV3 Router
