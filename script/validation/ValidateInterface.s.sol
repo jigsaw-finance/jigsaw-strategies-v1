@@ -5,9 +5,10 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // -- Jigsaw --
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+
+import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IOracle } from "@jigsaw/src/interfaces/oracle/IOracle.sol";
-import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 // -- Aave --
 import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
@@ -34,7 +35,6 @@ import { IPirexEthMin } from "./interfaces/dinero/IPirexEthMin.sol";
  * @notice Validates that an address implements the expected interface by checking there is code at the provided address
  * and calling a few functions.
  */
-
 abstract contract ValidateInterface {
     // -- General validation --
 
@@ -42,9 +42,9 @@ abstract contract ValidateInterface {
         address tokenAddress
     ) internal view {
         require(tokenAddress.code.length > 0, "Token address must have code");
-        IERC20(tokenAddress).balanceOf(address(this));
+        IERC20(tokenAddress).balanceOf(address(1));
         IERC20(tokenAddress).totalSupply();
-        IERC20(tokenAddress).allowance(address(this), address(this));
+        IERC20(tokenAddress).allowance(address(1), address(1));
     }
 
     // -- Jigsaw validation --
@@ -55,7 +55,7 @@ abstract contract ValidateInterface {
         require(manager.code.length > 0, "Manager address must have code");
         IManager(manager).WETH();
         IManager(manager).jUsdOracle();
-        IManager(manager).allowedInvokers(address(this));
+        IManager(manager).allowedInvokers(address(1));
     }
 
     function _validateStakerFactory(
@@ -72,7 +72,7 @@ abstract contract ValidateInterface {
         address lendingPool
     ) internal view {
         require(lendingPool.code.length > 0, "Lending pool address must have code");
-        IPool(lendingPool).getReserveData(address(this));
+        IPool(lendingPool).getReserveData(address(1));
         IPool(lendingPool).ADDRESSES_PROVIDER();
         IPool(lendingPool).getReservesList();
     }
@@ -81,9 +81,9 @@ abstract contract ValidateInterface {
         address rewardsController
     ) internal view {
         require(rewardsController.code.length > 0, "Rewards controller address must have code");
-        IRewardsController(rewardsController).getClaimer(address(this));
-        IRewardsController(rewardsController).getTransferStrategy(address(this));
-        IRewardsController(rewardsController).getRewardOracle(address(this));
+        IRewardsController(rewardsController).getClaimer(address(1));
+        IRewardsController(rewardsController).getTransferStrategy(address(1));
+        IRewardsController(rewardsController).getRewardOracle(address(1));
     }
 
     function _validateAaveToken(
@@ -101,8 +101,8 @@ abstract contract ValidateInterface {
         address pool
     ) internal view {
         require(pool.code.length > 0, "Pool address must have code");
-        IIonPool(pool).balanceOf(address(this));
-        IIonPool(pool).normalizedBalanceOf(address(this));
+        IIonPool(pool).balanceOf(address(1));
+        IIonPool(pool).normalizedBalanceOf(address(1));
     }
 
     // -- Pendle validation --
