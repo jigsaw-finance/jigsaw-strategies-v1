@@ -5,8 +5,15 @@ import { Script, stdJson as StdJson } from "forge-std/Script.sol";
 
 import { AaveV3Strategy } from "../src/aave/AaveV3Strategy.sol";
 import { DineroStrategy } from "../src/dinero/DineroStrategy.sol";
+
+import { ElixirStrategy } from "../src/elixir/ElixirStrategy.sol";
 import { PendleStrategy } from "../src/pendle/PendleStrategy.sol";
 import { ReservoirSavingStrategy } from "../src/reservoir/ReservoirSavingStrategy.sol";
+
+import { AaveV3StrategyV2 } from "../src/aave/AaveV3StrategyV2.sol";
+import { DineroStrategyV2 } from "../src/dinero/DineroStrategyV2.sol";
+import { PendleStrategyV2 } from "../src/pendle/PendleStrategyV2.sol";
+import { ReservoirSavingStrategyV2 } from "../src/reservoir/ReservoirSavingStrategyV2.sol";
 
 import { ValidateInterface } from "./validation/ValidateInterface.s.sol";
 
@@ -45,17 +52,34 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address tokenOut; // The address of the PirexEth receipt token (pxEth)
     }
 
+    struct ElixirStrategyParams {
+        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
+        address tokenIn; // The address of the LP token
+        address tokenOut; // The address of Elixir's receipt token
+        address deUSD; // The Elixir's deUSD stablecoin.
+        address[] initialPools; // The address array of the UniswapV3 pools
+        ElixirStrategy.SwapDirection[] swapDirections;
+        bytes[] swapPaths;
+    }
+
     uint256 constant DEFAULT_REWARDS_DURATION = 75 days;
 
     bytes32 constant AAVE_STRATEGY = keccak256("AaveV3Strategy");
     bytes32 constant PENDLE_STRATEGY = keccak256("PendleStrategy");
     bytes32 constant RESERVOIR_STRATEGY = keccak256("ReservoirSavingStrategy");
     bytes32 constant DINERO_STRATEGY = keccak256("DineroStrategy");
+    bytes32 constant ELIXIR_STRATEGY = keccak256("ElixirStrategy");
+
+    bytes32 constant AAVE_STRATEGY_V2 = keccak256("AaveV3StrategyV2");
+    bytes32 constant PENDLE_STRATEGY_V2 = keccak256("PendleStrategyV2");
+    bytes32 constant RESERVOIR_STRATEGY_V2 = keccak256("ReservoirSavingStrategyV2");
+    bytes32 constant DINERO_STRATEGY_V2 = keccak256("DineroStrategyV2");
 
     AaveStrategyParams[] internal aaveStrategyParams;
     PendleStrategyParams[] internal pendleStrategyParams;
     ReservoirSavingStrategyParams[] internal reservoirSavingStrategyParams;
     DineroStrategyParams[] internal dineroStrategyParams;
+    ElixirStrategyParams[] internal elixirStrategyParams;
 
     modifier broadcast() {
         vm.startBroadcast(vm.envUint("DEPLOYER_PRIVATE_KEY"));
@@ -81,6 +105,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address manager = commonConfig.readAddress(".MANAGER");
         address jigsawRewardToken = commonConfig.readAddress(".JIGSAW_REWARDS");
         address stakerFactory = deployments.readAddress(".STAKER_FACTORY");
+        address feeManager = commonConfig.readAddress(".FEE_MANAGER");
 
         _validateManager(manager);
         _validateErc20(jigsawRewardToken);
@@ -217,6 +242,40 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
             return data;
         }
 
+        if (keccak256(bytes(_strategy)) == ELIXIR_STRATEGY) {
+            string memory elixirConfig = vm.readFile("./deployment-config/03_ElixirStrategyConfig.json");
+            address uniswapRouter = elixirConfig.readAddress(".UNISWAP_ROUTER");
+
+            _validateUniswapRouter(uniswapRouter);
+
+            _populateElixirArray();
+
+            data = new bytes[](elixirStrategyParams.length);
+            for (uint256 i = 0; i < elixirStrategyParams.length; i++) {
+                _validateErc20(elixirStrategyParams[i].tokenIn);
+
+                data[i] = abi.encodeCall(
+                    ElixirStrategy.initialize,
+                    ElixirStrategy.InitializerParams({
+                        owner: owner,
+                        manager: manager,
+                        stakerFactory: stakerFactory,
+                        jigsawRewardToken: jigsawRewardToken,
+                        feeManager: feeManager,
+                        uniswapRouter: uniswapRouter,
+                        jigsawRewardDuration: elixirStrategyParams[i].jigsawRewardDuration,
+                        tokenIn: elixirStrategyParams[i].tokenIn,
+                        tokenOut: elixirStrategyParams[i].tokenOut,
+                        deUSD: elixirStrategyParams[i].deUSD,
+                        initialPools: elixirStrategyParams[i].initialPools,
+                        swapDirections: elixirStrategyParams[i].swapDirections,
+                        swapPaths: elixirStrategyParams[i].swapPaths
+                    })
+                );
+            }
+
+            return data;
+        }
         revert("Unknown strategy");
     }
 
@@ -324,6 +383,39 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
                 tokenIn: 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0, // USD0++
                 rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
+            })
+        );
+    }
+
+    function _populateElixirArray() internal {
+        uint24 poolFee = 100;
+
+        address tokenIn = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // USDT
+        address tokenOut = 0x5C5b196aBE0d54485975D1Ec29617D42D9198326; // sdeUSD
+        address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        address deUSD = 0x15700B564Ca08D9439C58cA5053166E8317aa138;
+
+        address[] memory initialPools = new address[](1);
+        initialPools[0] = 0xe780dF05ED3D1D29B35Edaf9c8F3131e9F4C799e; // UniswapV3 deUSD / USDC Pool
+
+        ElixirStrategy.SwapDirection[] memory swapDirections = new ElixirStrategy.SwapDirection[](2);
+        swapDirections[0] = ElixirStrategy.SwapDirection.FromTokenIn;
+        swapDirections[1] = ElixirStrategy.SwapDirection.ToTokenIn;
+
+        bytes[] memory swapPaths = new bytes[](2);
+        // @todo decide the swap paths
+        swapPaths[0] = abi.encodePacked(tokenIn, poolFee, USDC, poolFee, deUSD);
+        swapPaths[1] = abi.encodePacked(deUSD, poolFee, USDC, poolFee, tokenIn);
+
+        elixirStrategyParams.push(
+            ElixirStrategyParams({
+                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
+                tokenIn: tokenIn, //USDT
+                tokenOut: tokenOut, //sdeUSD
+                deUSD: deUSD, //deUSD
+                initialPools: initialPools,
+                swapDirections: swapDirections,
+                swapPaths: swapPaths
             })
         );
     }
