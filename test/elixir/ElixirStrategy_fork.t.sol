@@ -75,7 +75,6 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
             tokenOut: tokenOut,
             deUSD: deUSD,
             uniswapRouter: uniswapRouter,
-            oracle: address(new SampleOracle()),
             initialPools: pools,
             feeManager: address(feeManager),
             swapDirections: swapDirections,
@@ -149,11 +148,7 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
          * 5. Strategy's total shares  += shares
          */
         assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
-        assertGe(
-            IERC20(tokenOut).balanceOf(userHolding),
-            receiptTokens,
-            "Holding token out balance wrong"
-        );
+        assertGe(IERC20(tokenOut).balanceOf(userHolding), receiptTokens, "Holding token out balance wrong");
         assertEq(
             IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
             expectedShares,
@@ -308,13 +303,8 @@ contract ElixirStrategyTest is Test, BasicContractsFixture {
         pools[0] = USDC_POOL;
         pools[1] = DEUSD_USDC_POOL;
 
-        GenericUniswapV3Oracle newOracle = new GenericUniswapV3Oracle(
-            OWNER,
-            address(strategy.sdeUSD()),
-            address(usdc),
-            address(new SampleOracle()),
-            pools
-        );
+        GenericUniswapV3Oracle newOracle =
+            new GenericUniswapV3Oracle(OWNER, address(strategy.sdeUSD()), address(usdc), pools);
 
         address oldOracle = address(strategy.oracle());
         vm.prank(OWNER);

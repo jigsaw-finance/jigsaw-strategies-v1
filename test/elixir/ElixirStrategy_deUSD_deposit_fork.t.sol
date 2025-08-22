@@ -61,7 +61,6 @@ contract ElixirStrategyDeUsdDepositTest is Test, BasicContractsFixture {
             tokenOut: tokenOut,
             deUSD: deUSD,
             uniswapRouter: uniswapRouter,
-            oracle: address(0),
             initialPools: pools,
             feeManager: address(feeManager),
             swapDirections: swapDirections,
