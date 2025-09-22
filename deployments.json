@@ -1,15 +1,59 @@
 {
-  "STAKER_FACTORY": "",
-  "AaveV3Strategy_IMPL": "",
-  "AaveV3Strategy_PROXIES": "",
-  "DineroStrategy_IMPL": "",
-  "DineroStrategy_PROXIES": "",
-  "IonStrategy_IMPL": "",
-  "IonStrategy_PROXIES": "",
-  "PendleStrategy_IMPL": "",
-  "PendleStrategy_PROXIES": "",
-  "ReservoirSavingStrategy_IMPL": "",
-  "ReservoirSavingStrategy_PROXIES": "",
-  "ElixirStrategy_IMPL": "",
-  "ElixirStrategy_PROXIES": ""
+  "STAKER_FACTORY": "0x45B0c63997b335faEa579f6BA84Ae6cf2A504e8b",
+  "AaveV3Strategy_IMPL": "0xE4DA2a3Fab7A946AE9d39B37c8C551c3B7E22638",
+  "AaveV3Strategy_PROXIES": [
+    {
+      "Strategy": "0x37AAd25a5DA6738E1B7E5Af29604618D00232A9d",
+      "TokenIn": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "TokenInSymbol": "USDC"
+    },
+    {
+      "Strategy": "0x05329BbE8b9DEcf80A09ee84998250e6B137Bda2",
+      "TokenIn": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      "TokenInSymbol": "USDT"
+    },
+    {
+      "Strategy": "0x1CACe39d1D0A43Bb95f40e3F2B623cB0E138318a",
+      "TokenIn": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "TokenInSymbol": "wBTC"
+    },
+    {
+      "Strategy": "0x0EE2B97EA5e8c69bE42539439E052A1C6627bBd7",
+      "TokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "TokenInSymbol": "wETH"
+    },
+    {
+      "Strategy": "0xDD9C98758c39D7b631ac93c6537d950C02DdB13C",
+      "TokenIn": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+      "TokenInSymbol": "wstETH"
+    },
+    {
+      "Strategy": "0x99e15e69ceDd7233E00AcA77c0312072C3FB087c",
+      "TokenIn": "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",
+      "TokenInSymbol": "weETH"
+    }
+  ],
+  "DineroStrategy_IMPL": "0xa7948D45490c363FFef0c4531209472a8c0071Bc",
+  "DineroStrategy_PROXIES": [
+    {
+      "Strategy": "0x883Fc3E0C4719c0A113F2ef4bB19a26781E88E4D",
+      "TokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "TokenInSymbol": "wETH"
+    }
+  ],
+  "PendleStrategy_IMPL": "0x954f081ddA5af104dE425D3E61b2f541Ce3d6878",
+  "PendleStrategy_PROXIES": "[0xA50D2f0ce0E18C2c9957c034A931cdfd1f7EC1eE]",
+  "ReservoirSavingStrategy_IMPL": "0x612b311499Bd992DF1d197e3d262E2b55a40ca04",
+  "ReservoirSavingStrategy_PROXIES": [
+    {
+      "Strategy": "0x0a1754Fab76bd3963F5413523B4054B6670F5434",
+      "TokenIn": "0x09D4214C03D01F49544C0448DBE3A27f768F2b34",
+      "TokenInSymbol": "rUSD"
+    },
+    {
+      "Strategy": "0x8EE9Cc2D6788EEf59593d77733592314BE317209",
+      "TokenIn": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "TokenInSymbol": "USDC"
+    }
+  ]
 }
