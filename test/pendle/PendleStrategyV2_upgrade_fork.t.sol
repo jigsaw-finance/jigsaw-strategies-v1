@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
 import "../fixtures/BasicContractsFixture.t.sol";
+import "../fixtures/StrategyTestUtils.t.sol";
 
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -14,11 +15,12 @@ import { IPMarket, IPYieldToken, IStandardizedYield } from "@pendle/interfaces/I
 import { IPSwapAggregator } from "@pendle/router/swap-aggregator/IPSwapAggregator.sol";
 
 import { PendleStrategy } from "../../src/pendle/PendleStrategy.sol";
+import { PendleStrategyV2 } from "../../src/pendle/PendleStrategyV2.sol";
 
 address constant PENDLE_ROUTER = 0x888888888889758F76e7103c6CbF23ABbF58F946;
 address constant PENDLE_MARKET = 0xF8094570485B124b4f2aBE98909A87511489C162;
 
-contract PendleStrategyTest is Test, BasicContractsFixture {
+contract PendleStrategyV2UpgradeTest is Test, BasicContractsFixture, StrategyTestUtils {
     // Mainnet pufETH
     address internal tokenIn = 0x35D8949372D46B7a3D5A56006AE77B215fc69bC0;
     // Pendle LP token
@@ -95,67 +97,9 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
         vm.stopPrank();
     }
 
-    // Tests if deposit works correctly when authorized
-    function test_pendle_deposit_when_authorized(address user, uint256 _amount) public notOwnerNotZero(user) {
-        uint256 amount = bound(_amount, 1e18, 10e18);
-        address userHolding = initiateUser(user, tokenIn, amount);
-        uint256 tokenInBalanceBefore = IERC20(tokenIn).balanceOf(userHolding);
-        uint256 tokenOutBalanceBefore = IERC20(tokenOut).balanceOf(userHolding);
-
-        // Invest into the tested strategy via strategyManager
-        vm.startPrank(user, user);
-        (uint256 receiptTokens, uint256 tokenInAmount) = strategyManager.invest({
-            _token: tokenIn,
-            _strategy: address(strategy),
-            _amount: amount,
-            _minSharesAmountOut: 0,
-            _data: abi.encode(
-                strategy.getMinAllowedLpOut(amount), // minLpOut
-                defaultApprox, // _guessPtReceivedFromSy
-                TokenInput({
-                    tokenIn: tokenIn,
-                    netTokenIn: amount,
-                    tokenMintSy: tokenIn,
-                    pendleSwap: address(0),
-                    swapData: emptySwap
-                }),
-                emptyLimit
-            )
-        });
-
-        uint256 tokenOutbalanceAfter = IERC20(tokenOut).balanceOf(userHolding);
-        uint256 expectedShares = tokenOutbalanceAfter - tokenOutBalanceBefore;
-        (uint256 investedAmount, uint256 totalShares) = strategy.recipients(userHolding);
-
-        /**
-         * Expected changes after deposit
-         * 1. Holding tokenIn balance =  balance - amount
-         * 2. Holding tokenOut balance += amount
-         * 3. Staker receiptTokens balance += shares
-         * 4. Strategy's invested amount  += amount
-         * 5. Strategy's total shares  += shares
-         */
-        // 1.
-        assertEq(IERC20(tokenIn).balanceOf(userHolding), tokenInBalanceBefore - amount, "Holding tokenIn balance wrong");
-        // 2.
-        assertApproxEqRel(
-            IERC20(tokenOut).balanceOf(userHolding), amount / 2, 0.05e18, "Holding token out balance wrong"
-        );
-        // 3.
-        assertEq(
-            IERC20(address(strategy.receiptToken())).balanceOf(userHolding),
-            expectedShares,
-            "Incorrect receipt tokens minted"
-        );
-        //4.
-        assertEq(investedAmount, amount, "Recipient invested amount mismatch");
-        //5.
-        assertEq(totalShares, expectedShares, "Recipient total shares mismatch");
-
-        // Additional checks
-        assertEq(receiptTokens, expectedShares, "Incorrect receipt tokens returned");
-        assertEq(tokenInAmount, amount, "Incorrect tokenInAmount returned");
-        assertEq(tokenOutbalanceAfter, tokenOutBalanceBefore + totalShares, "Wrong LP balance in Pendle after mint");
+    // Test reinitialization
+    function test_reinitialization() public {
+        _validate_reinitialization();
     }
 
     // Tests if withdrawal works correctly when authorized
@@ -186,6 +130,10 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
 
         skip(100 days);
 
+        // Upgrade to V2
+        _upgradeToV2();
+
+        vm.startPrank(user, user);
         (,, int256 yield, uint256 fee) = strategyManager.claimInvestment({
             _holding: userHolding,
             _token: tokenIn,
@@ -276,5 +224,32 @@ contract PendleStrategyTest is Test, BasicContractsFixture {
         assertEq(rewards[0], userRewards, "User rewards amount wrong");
         assertEq(tokens[0], rewardToken, "Reward token is wrong");
         assertGt(feeAddrRewards, expectedFees, "Fee amount wrong");
+    }
+
+    // Upgrade PendleStrategy to PendleStrategyV2
+    function _upgradeToV2() internal override {
+        vm.startPrank(OWNER, OWNER);
+
+        // Deploy the new implementation of PendleStrategyV2
+        address strategyV2Implementation = address(new PendleStrategyV2());
+
+        // Perform the upgrade
+        bytes memory data = abi.encodeCall(
+            PendleStrategyV2.reinitialize, PendleStrategyV2.ReinitializerParams({ feeManager: address(feeManager) })
+        );
+
+        strategy.upgradeToAndCall(strategyV2Implementation, data);
+        vm.stopPrank();
+    }
+
+    function _getStrategyStateVariables() internal view override returns (StrategyStateVariables memory) {
+        return StrategyStateVariables({
+            owner: strategy.owner(),
+            manager: address(strategy.manager()),
+            rewardToken: strategy.rewardToken(),
+            tokenIn: strategy.tokenIn(),
+            tokenOut: strategy.tokenOut(),
+            sharesDecimals: strategy.sharesDecimals()
+        });
     }
 }

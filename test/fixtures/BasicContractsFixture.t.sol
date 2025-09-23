@@ -7,6 +7,8 @@ import "forge-std/console.sol";
 
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20, IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -30,6 +32,7 @@ import { SampleOracle } from "@jigsaw/test/utils/mocks/SampleOracle.sol";
 import { SampleTokenERC20 } from "@jigsaw/test/utils/mocks/SampleTokenERC20.sol";
 import { StrategyWithoutRewardsMock } from "@jigsaw/test/utils/mocks/StrategyWithoutRewardsMock.sol";
 
+import { FeeManager } from "../../src/extensions/FeeManager.sol";
 import { StakerLight } from "../../src/staker/StakerLight.sol";
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
 
@@ -38,6 +41,7 @@ import { IWETH9 as IWETH } from "../../src/dinero/interfaces/IWETH9.sol";
 abstract contract BasicContractsFixture is Test {
     using StdJson for string;
     using Math for uint256;
+    using SafeERC20 for IERC20Metadata;
 
     address internal constant OWNER = 0xf5a1Dc8f36ce7cf89a82BBd817F74EC56e7fDCd8;
 
@@ -57,13 +61,22 @@ abstract contract BasicContractsFixture is Test {
     StrategyManager internal strategyManager;
     StrategyWithoutRewardsMock internal strategyWithoutRewardsMock;
     StakerLightFactory internal stakerFactory;
+    FeeManager internal feeManager;
+
     address internal jRewards;
 
     // collateral to registry mapping
     mapping(address => address) internal registries;
 
-    function init() public {
-        vm.createSelectFork(vm.envString("MAINNET_RPC_URL"));
+    function init(
+        uint256 blockNumber
+    ) public {
+        if (blockNumber == 0) {
+            vm.createSelectFork(vm.envString("MAINNET_RPC_URL"));
+        } else {
+            vm.createSelectFork(vm.envString("MAINNET_RPC_URL"), blockNumber);
+        }
+
         vm.startPrank(OWNER);
         deal(OWNER, 100_000e18);
 
@@ -84,6 +97,7 @@ abstract contract BasicContractsFixture is Test {
         liquidationManager = new LiquidationManager(OWNER, address(manager));
         stablesManager = new StablesManager(OWNER, address(manager), address(jUsd));
         strategyManager = new StrategyManager(OWNER, address(manager));
+        feeManager = new FeeManager(OWNER, address(manager));
 
         sharesRegistry = new SharesRegistry(
             OWNER,
@@ -154,8 +168,20 @@ abstract contract BasicContractsFixture is Test {
             "./deployment-config/00_CommonConfig.json", ".STRATEGY_MANAGER"
         );
         Strings.toHexString(uint160(address(stakerFactory)), 20).write("./deployments.json", ".STAKER_FACTORY");
+        Strings.toHexString(uint160(address(feeManager)), 20).write(
+            "./deployment-config/00_CommonConfig.json", ".FEE_MANAGER"
+        );
+
+        // Ethereum Mainnet UniswapV3 Router
+        Strings.toHexString(uint160(address(0xE592427A0AEce92De3Edee1F18E0157C05861564)), 20).write(
+            "./deployment-config/03_ElixirStrategyConfig.json", ".UNISWAP_ROUTER"
+        );
 
         vm.stopPrank();
+    }
+
+    function init() public {
+        init(0);
     }
 
     // Utility functions
@@ -179,7 +205,13 @@ abstract contract BasicContractsFixture is Test {
         userHolding = holdingManager.createHolding();
 
         // Deposit to the holding
-        collateralContract.approve(address(holdingManager), _tokenAmount);
+        // TODO (Tigran Arakelyan): Use safeIncreaseAllowance instead of approve
+        // https://docs.openzeppelin.com/contracts/4.x/api/token/erc20#SafeERC20-safeApprove-contract-IERC20-address-uint256-
+        // Meant to be used with tokens that require the approval to be set to zero before setting it to a non-zero
+        // value, such as USDT.
+        // collateralContract.approve(address(holdingManager), _tokenAmount);
+        collateralContract.safeIncreaseAllowance(address(holdingManager), _tokenAmount);
+
         holdingManager.deposit(_token, _tokenAmount);
 
         vm.stopPrank();

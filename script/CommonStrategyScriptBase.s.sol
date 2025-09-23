@@ -5,8 +5,15 @@ import { Script, stdJson as StdJson } from "forge-std/Script.sol";
 
 import { AaveV3Strategy } from "../src/aave/AaveV3Strategy.sol";
 import { DineroStrategy } from "../src/dinero/DineroStrategy.sol";
+
+import { ElixirStrategy } from "../src/elixir/ElixirStrategy.sol";
 import { PendleStrategy } from "../src/pendle/PendleStrategy.sol";
 import { ReservoirSavingStrategy } from "../src/reservoir/ReservoirSavingStrategy.sol";
+
+import { AaveV3StrategyV2 } from "../src/aave/AaveV3StrategyV2.sol";
+import { DineroStrategyV2 } from "../src/dinero/DineroStrategyV2.sol";
+import { PendleStrategyV2 } from "../src/pendle/PendleStrategyV2.sol";
+import { ReservoirSavingStrategyV2 } from "../src/reservoir/ReservoirSavingStrategyV2.sol";
 
 import { ValidateInterface } from "./validation/ValidateInterface.s.sol";
 
@@ -45,8 +52,27 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address tokenOut; // The address of the PirexEth receipt token (pxEth)
     }
 
-    uint256 constant DEFAULT_REWARDS_DURATION = 75 days;
+    struct ElixirStrategyParams {
+        uint256 jigsawRewardDuration; // The address of the initial Jigsaw reward distribution duration for the strategy
+        address tokenIn; // The address of the LP token
+        address tokenOut; // The address of Elixir's receipt token
+        address deUSD; // The Elixir's deUSD stablecoin.
+        address[] initialPools; // The address array of the UniswapV3 pools
+        ElixirStrategy.SwapDirection[] swapDirections;
+        bytes[] swapPaths;
+    }
 
+    uint256 constant DEFAULT_REWARDS_DURATION = 194 days;
+
+    bytes32 constant ELIXIR_STRATEGY = keccak256("ElixirStrategy");
+    bytes32 constant AAVE_STRATEGY_V2 = keccak256("AaveV3StrategyV2");
+    bytes32 constant PENDLE_STRATEGY_V2 = keccak256("PendleStrategyV2");
+    bytes32 constant RESERVOIR_STRATEGY_V2 = keccak256("ReservoirSavingStrategyV2");
+    bytes32 constant DINERO_STRATEGY_V2 = keccak256("DineroStrategyV2");
+
+    ////////////////
+    // DEPRECATED //
+    ////////////////
     bytes32 constant AAVE_STRATEGY = keccak256("AaveV3Strategy");
     bytes32 constant PENDLE_STRATEGY = keccak256("PendleStrategy");
     bytes32 constant RESERVOIR_STRATEGY = keccak256("ReservoirSavingStrategy");
@@ -56,6 +82,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
     PendleStrategyParams[] internal pendleStrategyParams;
     ReservoirSavingStrategyParams[] internal reservoirSavingStrategyParams;
     DineroStrategyParams[] internal dineroStrategyParams;
+    ElixirStrategyParams[] internal elixirStrategyParams;
 
     modifier broadcast() {
         vm.startBroadcast(vm.envUint("DEPLOYER_PRIVATE_KEY"));
@@ -81,6 +108,7 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         address manager = commonConfig.readAddress(".MANAGER");
         address jigsawRewardToken = commonConfig.readAddress(".JIGSAW_REWARDS");
         address stakerFactory = deployments.readAddress(".STAKER_FACTORY");
+        address feeManager = commonConfig.readAddress(".FEE_MANAGER");
 
         _validateManager(manager);
         _validateErc20(jigsawRewardToken);
@@ -105,6 +133,42 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 data[i] = abi.encodeCall(
                     AaveV3Strategy.initialize,
                     AaveV3Strategy.InitializerParams({
+                        owner: owner,
+                        manager: manager,
+                        stakerFactory: stakerFactory,
+                        lendingPool: aaveLendingPool,
+                        rewardsController: aaveRewardsController,
+                        jigsawRewardToken: jigsawRewardToken,
+                        rewardToken: aaveStrategyParams[i].rewardToken,
+                        jigsawRewardDuration: aaveStrategyParams[i].jigsawRewardDuration,
+                        tokenIn: aaveStrategyParams[i].tokenIn,
+                        tokenOut: aaveStrategyParams[i].tokenOut
+                    })
+                );
+            }
+
+            return data;
+        }
+
+        if (keccak256(bytes(_strategy)) == AAVE_STRATEGY_V2) {
+            string memory aaveConfig = vm.readFile("./deployment-config/01_AaveV3StrategyConfig.json");
+            address aaveLendingPool = aaveConfig.readAddress(".LENDING_POOL");
+            address aaveRewardsController = aaveConfig.readAddress(".REWARDS_CONTROLLER");
+
+            _validateAaveLendingPool(aaveLendingPool);
+            _validateAaveRewardsController(aaveRewardsController);
+
+            _populateAaveV2Array();
+
+            data = new bytes[](aaveStrategyParams.length);
+
+            for (uint256 i = 0; i < aaveStrategyParams.length; i++) {
+                _validateErc20(aaveStrategyParams[i].tokenIn);
+                _validateAaveToken(aaveStrategyParams[i].tokenOut);
+
+                data[i] = abi.encodeCall(
+                    AaveV3StrategyV2.initialize,
+                    AaveV3StrategyV2.InitializerParams({
                         owner: owner,
                         manager: manager,
                         stakerFactory: stakerFactory,
@@ -217,114 +281,62 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
             return data;
         }
 
+        if (keccak256(bytes(_strategy)) == ELIXIR_STRATEGY) {
+            string memory elixirConfig = vm.readFile("./deployment-config/03_ElixirStrategyConfig.json");
+            address uniswapRouter = elixirConfig.readAddress(".UNISWAP_ROUTER");
+
+            _validateUniswapRouter(uniswapRouter);
+
+            _populateElixirArray();
+
+            data = new bytes[](elixirStrategyParams.length);
+            for (uint256 i = 0; i < elixirStrategyParams.length; i++) {
+                _validateErc20(elixirStrategyParams[i].tokenIn);
+
+                data[i] = abi.encodeCall(
+                    ElixirStrategy.initialize,
+                    ElixirStrategy.InitializerParams({
+                        owner: owner,
+                        manager: manager,
+                        stakerFactory: stakerFactory,
+                        jigsawRewardToken: jigsawRewardToken,
+                        feeManager: feeManager,
+                        uniswapRouter: uniswapRouter,
+                        jigsawRewardDuration: elixirStrategyParams[i].jigsawRewardDuration,
+                        tokenIn: elixirStrategyParams[i].tokenIn,
+                        tokenOut: elixirStrategyParams[i].tokenOut,
+                        deUSD: elixirStrategyParams[i].deUSD,
+                        initialPools: elixirStrategyParams[i].initialPools,
+                        swapDirections: elixirStrategyParams[i].swapDirections,
+                        swapPaths: elixirStrategyParams[i].swapPaths
+                    })
+                );
+            }
+
+            return data;
+        }
         revert("Unknown strategy");
     }
 
-    function _populateAaveArray() internal {
+    function _populateAaveArray() internal { }
+
+    function _populateAaveV2Array() internal {
         // Populate the individual initialization params per each Aave strategy
         aaveStrategyParams.push(
             AaveStrategyParams({
                 rewardToken: address(0),
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, //USDC
-                tokenOut: 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7, //USDT
-                tokenOut: 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, //wBTC
-                tokenOut: 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, //wETH
-                tokenOut: 0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0, //wstETH
-                tokenOut: 0x0B925eD163218f6662a35e0f0371Ac234f9E9371
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee, //weETH
-                tokenOut: 0xBdfa7b7893081B35Fb54027489e2Bc7A38275129
+                tokenIn: 0x29219dd400f2Bf60E5a23d13Be72B486D4038894, //USDC
+                tokenOut: 0x578Ee1ca3a8E1b54554Da1Bf7C583506C4CD11c6
             })
         );
     }
 
-    function _populateReservoirSavingStrategy() internal {
-        // Populate the initialization params for the ReservoirSavingStrategy, e.g.:
-        reservoirSavingStrategyParams.push(
-            ReservoirSavingStrategyParams({
-                creditEnforcer: 0x04716DB62C085D9e08050fcF6F7D775A03d07720,
-                pegStabilityModule: 0x4809010926aec940b550D34a46A52739f996D75D,
-                savingModule: 0x5475611Dffb8ef4d697Ae39df9395513b6E947d7,
-                rUSD: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34,
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34, // rUSD as tokenIn
-                tokenOut: 0x738d1115B90efa71AE468F1287fc864775e23a31 // srUSD as tokenOut
-             })
-        );
+    function _populateReservoirSavingStrategy() internal { }
 
-        reservoirSavingStrategyParams.push(
-            ReservoirSavingStrategyParams({
-                creditEnforcer: 0x04716DB62C085D9e08050fcF6F7D775A03d07720,
-                pegStabilityModule: 0x4809010926aec940b550D34a46A52739f996D75D,
-                savingModule: 0x5475611Dffb8ef4d697Ae39df9395513b6E947d7,
-                rUSD: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34,
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC as tokenIn
-                tokenOut: 0x738d1115B90efa71AE468F1287fc864775e23a31 // srUSD as tokenOut
-             })
-        );
-    }
+    function _populateDineroArray() internal { }
 
-    function _populateDineroArray() internal {
-        // Populate the initialization params for the DineroStrategy, e.g.:
-        dineroStrategyParams.push(
-            DineroStrategyParams({
-                pirexEth: 0xD664b74274DfEB538d9baC494F3a4760828B02b0,
-                autoPirexEth: 0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6,
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, //wETH
-                tokenOut: 0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6
-            })
-        );
-    }
+    function _populatePendleArray() internal { }
 
-    function _populatePendleArray() internal {
-        pendleStrategyParams.push(
-            PendleStrategyParams({
-                pendleMarket: 0x04EEb15A3A96b679eEd0a5F490ef89Ec5477F045,
-                jigsawRewardDuration: 85 days,
-                tokenIn: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34, // rUSD
-                rewardToken: 0x808507121B80c02388fAd14726482e061B8da827
-            })
-        );
-    }
+    function _populateElixirArray() internal { }
 }

@@ -52,21 +52,53 @@ format: && _timer
 	forge fmt
 
 test-all: && _timer
+	# General tests
 	forge test -vvvv --match-contract AaveV3StrategyTest
 	forge test -vvvv --match-contract DineroStrategyTest
-	forge test -vvvv --match-contract IonStrategyTest
 	forge test -vvvv --match-contract PendleStrategyTest
 	forge test -vvvv --match-contract ReservoirSavingStrategyTest
 	forge test -vvvv --match-contract ReservoirMath
+	forge test -vvvv --match-contract ElixirStrategyTest
+
+	# Deployment tests
 	forge test -vvvv --match-contract DeployAllTest
+
+	# Core/Base tests
+	forge test -vvvv --match-contract StrategyBaseTest
+	forge test -vvvv --match-contract StrategyBaseV2Test
+
+	# Upgrading tests
+	just test-upgrades
+
+test-upgrades: && _timer
+	# Upgrading tests
+	just validate-upgrades
+	forge test -vvvv --match-contract AaveV3StrategyV2UpgradeTest
+	forge test -vvvv --match-contract DineroStrategyV2UpgradeTest
+	forge test -vvvv --match-contract PendleStrategyV2UpgradeTest
+	forge test -vvvv --match-contract ReservoirSavingStrategyV2UpgradeTest
+
+
+validate-upgrades: && _timer
+	# Validating upgrades
+	forge clean && forge build
+	npx @openzeppelin/upgrades-core validate --contract AaveV3StrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
+	npx @openzeppelin/upgrades-core validate --contract DineroStrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
+	npx @openzeppelin/upgrades-core validate --contract PendleStrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
+	npx @openzeppelin/upgrades-core validate --contract ReservoirSavingStrategyV2 --unsafeAllow "constructor, missing-initializer-call"  
 
 
 test-gas: && _timer
     forge test --gas-report
 
 coverage-all: && _timer
-	forge coverage --report lcov --allow-failure
-	genhtml -o coverage --branch-coverage lcov.info --ignore-errors category
+	forge coverage --report lcov --allow-failure --no-match-coverage "(script|test)"
+	genhtml -o coverage --branch-coverage lcov.info --ignore-errors category --rc derive_function_end_line=0
+
+validate strategy: && _timer
+	forge clean
+	forge build
+	npx @openzeppelin/upgrades-core validate --contract {{strategy}} --requireReference --unsafeAllow "constructor"
 
 docs: && _timer
 	forge doc --build
@@ -84,7 +116,7 @@ deploy-stakerFactory: && _timer
 	echo "Deploying Staker Factory on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the StakerFactory
-	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY}
 	
 	# Update deployments.json
 	FACTORY_ADDRESS=$(jq -r '.returns.stakerFactory.value' "broadcast/0_DeployStakerFactory.s.sol/$CHAIN_ID/run-latest.json")
@@ -98,7 +130,7 @@ deploy-impl STRATEGY: && _timer
 	echo "Deploying implementation for " {{STRATEGY}} " on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the implementation
-	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY}
 
 	# Update deployments.json
 	IMPL_ADDRESS=$(jq -r '.returns.implementation.value' "broadcast/1_DeployImpl.s.sol/"$CHAIN_ID"/run-latest.json")
@@ -114,7 +146,7 @@ deploy-proxy STRATEGY: && _timer
 	echo "Deploying proxy for " {{STRATEGY}} " on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the proxy
-	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY}
 	
 	# Save proxy addresses
 	PROXIES=$(jq -c '.returns.proxies.value' "broadcast/2_DeployProxy.s.sol/${CHAIN_ID}/run-latest.json")
@@ -131,7 +163,14 @@ deploy-strategy STRATEGY: && _timer
 	echo "Deploying full strategy " {{STRATEGY}} " on chain " ${CHAIN} "..."
 
 	# Step 1: Deploy implementation
-	just deploy-impl {{STRATEGY}}
+	just deploy-impl {{STRATEGY}} 
 
 	# Step 2: Deploy proxy
-	just deploy-proxy {{STRATEGY}}
+	just deploy-proxy {{STRATEGY}} 
+
+
+deploy-feeManager: && _timer
+	#!/usr/bin/env bash
+	echo "Deploying FeeManager on chain " ${CHAIN} "..."
+	
+	forge script DeployFeeManager --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY}
