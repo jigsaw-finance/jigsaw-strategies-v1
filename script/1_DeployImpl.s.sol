@@ -37,6 +37,7 @@ contract DeployImpl is CommonStrategyScriptBase {
         if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY) return address(new ReservoirSavingStrategy());
         if (keccak256(bytes(_strategy)) == DINERO_STRATEGY) return address(new DineroStrategy());
         if (keccak256(bytes(_strategy)) == ELIXIR_STRATEGY) return address(new ElixirStrategy());
+
         if (keccak256(bytes(_strategy)) == AAVE_STRATEGY_V2) return address(new AaveV3StrategyV2());
         if (keccak256(bytes(_strategy)) == PENDLE_STRATEGY_V2) return address(new PendleStrategyV2());
         if (keccak256(bytes(_strategy)) == RESERVOIR_STRATEGY_V2) return address(new ReservoirSavingStrategyV2());

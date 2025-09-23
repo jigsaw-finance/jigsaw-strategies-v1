@@ -116,7 +116,7 @@ deploy-stakerFactory: && _timer
 	echo "Deploying Staker Factory on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the StakerFactory
-	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+	forge script DeployStakerFactory --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY}
 	
 	# Update deployments.json
 	FACTORY_ADDRESS=$(jq -r '.returns.stakerFactory.value' "broadcast/0_DeployStakerFactory.s.sol/$CHAIN_ID/run-latest.json")
@@ -130,7 +130,7 @@ deploy-impl STRATEGY: && _timer
 	echo "Deploying implementation for " {{STRATEGY}} " on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the implementation
-	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+	forge script DeployImpl -s "run(string memory _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY}
 
 	# Update deployments.json
 	IMPL_ADDRESS=$(jq -r '.returns.implementation.value' "broadcast/1_DeployImpl.s.sol/"$CHAIN_ID"/run-latest.json")
@@ -146,7 +146,7 @@ deploy-proxy STRATEGY: && _timer
 	echo "Deploying proxy for " {{STRATEGY}} " on chain $CHAIN ..."
 
 	# Run the Forge script to deploy the proxy
-	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key $(eval echo \${${CHAIN}_ETHERSCAN_API_KEY})
+	forge script DeployProxy -s "run(string calldata _strategy)" {{STRATEGY}} --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY}
 	
 	# Save proxy addresses
 	PROXIES=$(jq -c '.returns.proxies.value' "broadcast/2_DeployProxy.s.sol/${CHAIN_ID}/run-latest.json")
@@ -163,7 +163,14 @@ deploy-strategy STRATEGY: && _timer
 	echo "Deploying full strategy " {{STRATEGY}} " on chain " ${CHAIN} "..."
 
 	# Step 1: Deploy implementation
-	just deploy-impl {{STRATEGY}} ${CHAIN}
+	just deploy-impl {{STRATEGY}} 
 
 	# Step 2: Deploy proxy
-	just deploy-proxy {{STRATEGY}} ${CHAIN}
+	just deploy-proxy {{STRATEGY}} 
+
+
+deploy-feeManager: && _timer
+	#!/usr/bin/env bash
+	echo "Deploying FeeManager on chain " ${CHAIN} "..."
+	
+	forge script DeployFeeManager --rpc-url $CHAIN --slow -vvvv --broadcast --verify --etherscan-api-key ${ETHERSCAN_API_KEY}
