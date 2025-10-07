@@ -1,0 +1,17 @@
+{
+  "lib/aave-v3-core": {
+    "rev": "b74526a7bc67a3a117a1963fc871b3eb8cea8435"
+  },
+  "lib/aave-v3-periphery": {
+    "rev": "72fdcca18838c2f4e05ecd25bbfb44f0db5383f7"
+  },
+  "lib/jigsaw-protocol-v1": {
+    "rev": "9942ddc7c4f60b3e10ec1b69e0bdd4af711f0a85"
+  },
+  "lib/openzeppelin-contracts-upgradeable": {
+    "rev": "6eb629695a09e39bde5463b822c5319201cf773e"
+  },
+  "lib/pendle-core-v2-public": {
+    "rev": "7e451be619353f57a8ab722234b8f9ebe0632836"
+  }
+}
