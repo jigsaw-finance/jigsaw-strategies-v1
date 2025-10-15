@@ -5,9 +5,9 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // -- Jigsaw --
 import { StakerLightFactory } from "../../src/staker/StakerLightFactory.sol";
+import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import { IManager } from "@jigsaw/src/interfaces/core/IManager.sol";
 import { IOracle } from "@jigsaw/src/interfaces/oracle/IOracle.sol";
-import { ISwapRouter } from "@jigsaw/lib/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 // -- Aave --
 import { IAToken } from "@aave/v3-core/interfaces/IAToken.sol";
@@ -30,11 +30,13 @@ import { ISavingModuleMin } from "./interfaces/reservoir/ISavingModuleMin.sol";
 import { IAutoPxEthMin } from "./interfaces/dinero/IAutoPxEthMin.sol";
 import { IPirexEthMin } from "./interfaces/dinero/IPirexEthMin.sol";
 
+// -- Morpho --
+import { IMetaMorphoMin } from "./interfaces/morpho/IMetaMorphoMin.sol";
+
 /**
  * @notice Validates that an address implements the expected interface by checking there is code at the provided address
  * and calling a few functions.
  */
-
 abstract contract ValidateInterface {
     // -- General validation --
 
@@ -205,5 +207,16 @@ abstract contract ValidateInterface {
         IOracle(oracle).name();
         IOracle(oracle).symbol();
         IOracle(oracle).underlying();
+    }
+
+    // -- Morpho Validation --
+
+    function _validateMorphoVault(
+        address vault
+    ) internal view {
+        IMetaMorphoMin(vault).curator();
+        IMetaMorphoMin(vault).isAllocator(address(123));
+        IMetaMorphoMin(vault).guardian();
+        IMetaMorphoMin(vault).lostAssets();
     }
 }

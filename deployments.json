@@ -11,5 +11,7 @@
   "ReservoirSavingStrategy_IMPL": "",
   "ReservoirSavingStrategy_PROXIES": "",
   "ElixirStrategy_IMPL": "",
-  "ElixirStrategy_PROXIES": ""
+  "ElixirStrategy_PROXIES": "",
+  "MorphoStrategy_IMPL": "",
+  "MorphoStrategy_PROXIES": ""
 }

@@ -15,6 +15,8 @@ import { DineroStrategyV2 } from "../src/dinero/DineroStrategyV2.sol";
 import { PendleStrategyV2 } from "../src/pendle/PendleStrategyV2.sol";
 import { ReservoirSavingStrategyV2 } from "../src/reservoir/ReservoirSavingStrategyV2.sol";
 
+import { MorphoStrategy } from "../src/morpho/MorphoStrategy.sol";
+
 import { ValidateInterface } from "./validation/ValidateInterface.s.sol";
 
 contract CommonStrategyScriptBase is Script, ValidateInterface {
@@ -62,24 +64,35 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
         bytes[] swapPaths;
     }
 
+    struct MorphoStrategyParams {
+        uint256 jigsawRewardDuration;
+        address tokenIn;
+        address tokenOut;
+    }
+
     uint256 constant DEFAULT_REWARDS_DURATION = 75 days;
 
+    // DEPRECATED: USE THE CORRESPONDING V2 STRATEGIES FOR NEW DEPLOYMENTS WHENEVER AVAILABLE.
+    // THE ORIGINAL (V1) STRATEGIES ARE RETAINED ONLY FOR LEGACY SUPPORT.
     bytes32 constant AAVE_STRATEGY = keccak256("AaveV3Strategy");
     bytes32 constant PENDLE_STRATEGY = keccak256("PendleStrategy");
     bytes32 constant RESERVOIR_STRATEGY = keccak256("ReservoirSavingStrategy");
     bytes32 constant DINERO_STRATEGY = keccak256("DineroStrategy");
-    bytes32 constant ELIXIR_STRATEGY = keccak256("ElixirStrategy");
 
     bytes32 constant AAVE_STRATEGY_V2 = keccak256("AaveV3StrategyV2");
     bytes32 constant PENDLE_STRATEGY_V2 = keccak256("PendleStrategyV2");
     bytes32 constant RESERVOIR_STRATEGY_V2 = keccak256("ReservoirSavingStrategyV2");
     bytes32 constant DINERO_STRATEGY_V2 = keccak256("DineroStrategyV2");
 
+    bytes32 constant ELIXIR_STRATEGY = keccak256("ElixirStrategy");
+    bytes32 constant MORPHO_STRATEGY = keccak256("MorphoStrategy");
+
     AaveStrategyParams[] internal aaveStrategyParams;
     PendleStrategyParams[] internal pendleStrategyParams;
     ReservoirSavingStrategyParams[] internal reservoirSavingStrategyParams;
     DineroStrategyParams[] internal dineroStrategyParams;
     ElixirStrategyParams[] internal elixirStrategyParams;
+    MorphoStrategyParams[] internal morphoStrategyParams;
 
     modifier broadcast() {
         vm.startBroadcast(vm.envUint("DEPLOYER_PRIVATE_KEY"));
@@ -274,6 +287,30 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 );
             }
 
+            if (keccak256(bytes(_strategy)) == MORPHO_STRATEGY) {
+                _populateMorphoArray();
+
+                data = new bytes[](morphoStrategyParams.length);
+                for (uint256 i = 0; i < morphoStrategyParams.length; i++) {
+                    _validateErc20(morphoStrategyParams[i].tokenIn);
+                    _validateMorphoVault(morphoStrategyParams[i].tokenOut);
+
+                    data[i] = abi.encodeCall(
+                        MorphoStrategy.initialize,
+                        MorphoStrategy.InitializerParams({
+                            owner: owner,
+                            manager: manager,
+                            stakerFactory: stakerFactory,
+                            jigsawRewardToken: jigsawRewardToken,
+                            feeManager: feeManager,
+                            jigsawRewardDuration: morphoStrategyParams[i].jigsawRewardDuration,
+                            tokenIn: morphoStrategyParams[i].tokenIn,
+                            tokenOut: morphoStrategyParams[i].tokenOut
+                        })
+                    );
+                }
+            }
+
             return data;
         }
         revert("Unknown strategy");
@@ -289,51 +326,6 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 tokenOut: 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
             })
         );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xdAC17F958D2ee523a2206206994597C13D831ec7, //USDT
-                tokenOut: 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, //wBTC
-                tokenOut: 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, //wETH
-                tokenOut: 0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0, //wstETH
-                tokenOut: 0x0B925eD163218f6662a35e0f0371Ac234f9E9371
-            })
-        );
-
-        aaveStrategyParams.push(
-            AaveStrategyParams({
-                rewardToken: address(0),
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee, //weETH
-                tokenOut: 0xBdfa7b7893081B35Fb54027489e2Bc7A38275129
-            })
-        );
     }
 
     function _populateReservoirSavingStrategy() internal {
@@ -346,18 +338,6 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 rUSD: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34,
                 jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
                 tokenIn: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34, // rUSD as tokenIn
-                tokenOut: 0x738d1115B90efa71AE468F1287fc864775e23a31 // srUSD as tokenOut
-             })
-        );
-
-        reservoirSavingStrategyParams.push(
-            ReservoirSavingStrategyParams({
-                creditEnforcer: 0x04716DB62C085D9e08050fcF6F7D775A03d07720,
-                pegStabilityModule: 0x4809010926aec940b550D34a46A52739f996D75D,
-                savingModule: 0x5475611Dffb8ef4d697Ae39df9395513b6E947d7,
-                rUSD: 0x09D4214C03D01F49544C0448DBE3A27f768F2b34,
-                jigsawRewardDuration: DEFAULT_REWARDS_DURATION,
-                tokenIn: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC as tokenIn
                 tokenOut: 0x738d1115B90efa71AE468F1287fc864775e23a31 // srUSD as tokenOut
              })
         );
@@ -416,6 +396,17 @@ contract CommonStrategyScriptBase is Script, ValidateInterface {
                 initialPools: initialPools,
                 swapDirections: swapDirections,
                 swapPaths: swapPaths
+            })
+        );
+    }
+
+    function _populateMorphoArray() internal {
+        morphoStrategyParams.push(
+            MorphoStrategyParams({
+                // @todo update with real values
+                jigsawRewardDuration: 0 days,
+                tokenIn: address(0),
+                tokenOut: address(0)
             })
         );
     }
